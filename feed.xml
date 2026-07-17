@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Tech Learning Daily</title>
+  <link href="https://kaionn.github.io/tech-learning-daily/"/>
+  <link rel="self" href="https://kaionn.github.io/tech-learning-daily/feed.xml"/>
+  <id>https://kaionn.github.io/tech-learning-daily/</id>
+  <updated>2026-07-17T00:00:00+09:00</updated>
+  <author><name>Tech Learning Daily</name></author>
+</feed>

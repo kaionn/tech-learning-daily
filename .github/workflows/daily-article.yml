@@ -1,0 +1,89 @@
+name: Daily article (generate & deploy)
+
+# tech-news-daily の daily-digest.yml と同型の構成:
+# - 生成: claude-code-action が prompts/daily-article.md に従いファイルを生成する（git 操作はしない）
+# - 反映: 本 workflow が main へ commit/push する（GITHUB_TOKEN、PAT 不要）
+# - デプロイ: GITHUB_TOKEN push は他 workflow を発火させないため、本 workflow が Pages まで実行する
+# 認証は CLAUDE_CODE_OAUTH_TOKEN（Pro/Max サブスク、`claude setup-token` で生成した repo secret）。
+# git 書き込み系は --disallowedTools でツール層から物理的に禁止する
+# （tech-news-daily で 2026-07-16/17 に prompt 頼みのガードが突破された教訓）。
+
+on:
+  schedule:
+    - cron: '23 21 * * *' # 毎日 21:23 UTC = 06:23 JST（news の 21:00 とずらす）
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: daily-article
+  cancel-in-progress: false
+
+jobs:
+  generate-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Generate article with Claude Code
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: "Read prompts/daily-article.md and follow its instructions exactly. The repository root is the current working directory."
+          claude_args: |
+            --model claude-sonnet-5
+            --allowedTools "WebSearch,WebFetch,Read,Write,Edit,Glob,Grep,Bash"
+            --disallowedTools "Bash(git add:*),Bash(git commit:*),Bash(git push:*),Bash(git config:*),Bash(git remote:*),Bash(git reset:*),Bash(git rebase:*)"
+
+      - name: Commit and push article
+        id: commit
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # claude-code-action が git 認証設定を自分のトークンで上書きしたまま終了する
+          # （push 時点で失効し Invalid username or token になる）ため、GITHUB_TOKEN に張り直す
+          git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if [ -z "$(git status --porcelain -- index.html archive/ feed.xml topics.md)" ]; then
+            # Claude が禁止ガードを突破して自分で commit した場合と生成失敗を区別する
+            if git log -1 --format='%an' | grep -qi claude; then
+              echo "::error::Claude が生成物を自分で commit している（禁止ガード突破）。直前コミット: $(git log -1 --oneline)"
+            else
+              echo "::error::生成物に変更がない（生成失敗の可能性）"
+            fi
+            exit 1
+          fi
+          TODAY=$(date -u '+%Y-%m-%d')
+          # 最低限の生成品質ガード: index.html が今日の日付を持つこと
+          if ! grep -q "$TODAY" index.html; then
+            echo "::error::index.html に今日の日付 ($TODAY) が無い。生成不良として中断"
+            exit 1
+          fi
+          TITLE=$(sed -n 's|.*<h2 class="article-title">\(.*\)</h2>.*|\1|p' index.html | head -1)
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html archive/ feed.xml topics.md
+          git commit -m "${TODAY} の基礎解説: ${TITLE:-記事}"
+          git pull --rebase origin main
+          git push origin main
+          echo "pushed=true" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/configure-pages@v5
+        if: steps.commit.outputs.pushed == 'true'
+
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.commit.outputs.pushed == 'true'
+        with:
+          path: .
+
+      - id: deployment
+        if: steps.commit.outputs.pushed == 'true'
+        uses: actions/deploy-pages@v4
