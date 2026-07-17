@@ -5,7 +5,7 @@ Your job: pick today's topic from the queue, research it for accuracy, write ONE
 ## Reader Profile (write for this person)
 
 - 日常的に Web アプリケーション（Rails / Go / TypeScript）を実装しているエンジニア
-- ただしインフラ・アーキテクチャ・ミドルウェアの内部動作は初学者
+- ただし日々使っている技術の内部動作・設計原理（インフラ・ミドルウェア・言語ランタイム・ブラウザ・プロトコル等）は初学者
 - 「名前は聞いたことがあるし使ってもいるが、中で何が起きているかは説明できない」状態
 - 通勤中にスマホで読む。1 記事 5〜8 分で読み切れる分量（本文 1,800〜2,800 字目安）
 
@@ -14,7 +14,7 @@ Your job: pick today's topic from the queue, research it for accuracy, write ONE
 Read `topics.md`.
 
 1. If the `## キュー` section has items, take the FIRST one. That is today's topic.
-2. If the queue is empty, self-select: read the titles in `archive/index.html` (avoid anything already covered), then pick the most foundational uncovered topic from these areas — コンテナ / Kubernetes, 負荷試験・パフォーマンス, データベース内部, ネットワーク (DNS/TLS/LB/HTTP), 分散システム・アーキテクチャパターン, キャッシュ・キュー・非同期処理, Observability, クラウドインフラ (AWS/IaC), セキュリティ基礎, CI/CD・デプロイ戦略. Prefer topics that unblock understanding of other topics (e.g. コンテナの仕組み before Kubernetes 応用).
+2. If the queue is empty, self-select: read the titles in `archive/index.html` (avoid anything already covered), then pick the most foundational uncovered topic from these areas — コンテナ / Kubernetes, 負荷試験・パフォーマンス, データベース内部, ネットワーク (DNS/TLS/LB/HTTP), 分散システム・アーキテクチャパターン, キャッシュ・キュー・非同期処理, Observability, クラウドインフラ (AWS/IaC), セキュリティ基礎, CI/CD・デプロイ戦略, 言語処理系・ランタイム (GC・並行処理・型システム), ブラウザ・フロントエンド基盤 (レンダリング・イベントループ・バンドラ), AI/LLM の仕組み, 開発ツールの内部 (git・テスト戦略・ビルドシステム). Prefer topics that unblock understanding of other topics (e.g. コンテナの仕組み before Kubernetes 応用).
 
 A topic line may include a parenthetical like `（知りたい観点: ...）` — treat that as the reader's specific question and make sure the article answers it directly.
 
@@ -68,7 +68,7 @@ Write a complete HTML file to `index.html` with this exact structure:
     <header>
       <h1>Tech Learning Daily</h1>
       <div class="date">YYYY-MM-DD (Day) — 第 {N} 号</div>
-      <div class="tagline">AI が毎朝届ける、インフラとアーキテクチャの基礎解説</div>
+      <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
     </header>
 
     <article class="article">
@@ -158,6 +158,10 @@ Write a complete HTML file to `index.html` with this exact structure:
 - `tag-arch` → Arch (分散システム / 設計パターン / スケーリング)
 - `tag-perf` → Perf (負荷試験 / チューニング / キャパシティ)
 - `tag-obs` → Obs (メトリクス / ログ / トレース / モニタリング)
+- `tag-lang` → Lang (言語処理系 / ランタイム / GC / 並行処理 / 型システム)
+- `tag-frontend` → Frontend (ブラウザの仕組み / レンダリング / バンドラ)
+- `tag-ai` → AI (LLM / 機械学習の基礎 / AI ツールの仕組み)
+- `tag-dev` → Dev (git 内部 / テスト戦略 / ビルド / 開発プラクティス)
 
 ### Difficulty
 

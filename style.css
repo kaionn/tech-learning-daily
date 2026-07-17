@@ -19,6 +19,10 @@
   --accent-arch: #7c3aed;
   --accent-perf: #d97706;
   --accent-obs: #db2777;
+  --accent-lang: #65a30d;
+  --accent-frontend: #e11d48;
+  --accent-ai: #c026d3;
+  --accent-dev: #475569;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -300,6 +304,10 @@ pre.diagram {
 .tag-arch { background: #f3e8ff; color: var(--accent-arch); }
 .tag-perf { background: #fffbeb; color: var(--accent-perf); }
 .tag-obs { background: #fdf2f8; color: var(--accent-obs); }
+.tag-lang { background: #f7fee7; color: var(--accent-lang); }
+.tag-frontend { background: #fff1f2; color: var(--accent-frontend); }
+.tag-ai { background: #fdf4ff; color: var(--accent-ai); }
+.tag-dev { background: #f1f5f9; color: var(--accent-dev); }
 
 /* ---- archive list (archive/index.html) ---- */
 
@@ -430,6 +438,10 @@ footer a {
   .tag-arch { background: #2d1b69; }
   .tag-perf { background: #3d2a0a; }
   .tag-obs { background: #3d0a2d; }
+  .tag-lang { background: #1f3d0a; }
+  .tag-frontend { background: #3d0a14; }
+  .tag-ai { background: #380a3d; }
+  .tag-dev { background: #1e293b; color: #94a3b8; }
 
   .analogy { background: #2a2510; }
   .practical { background: #141a2e; }
