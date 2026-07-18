@@ -4,8 +4,15 @@
   <link href="https://kaionn.github.io/tech-learning-daily/"/>
   <link rel="self" href="https://kaionn.github.io/tech-learning-daily/feed.xml"/>
   <id>https://kaionn.github.io/tech-learning-daily/</id>
-  <updated>2026-07-18T06:30:00+09:00</updated>
+  <updated>2026-07-18T10:13:19+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>CPU limit を超えると遅くなるだけなのに、メモリ limit だと Pod が落ちるのはなぜか？</title>
+    <link href="https://kaionn.github.io/tech-learning-daily/archive/2026-07-18-2.html"/>
+    <id>https://kaionn.github.io/tech-learning-daily/archive/2026-07-18-2.html</id>
+    <updated>2026-07-18T10:13:19+09:00</updated>
+    <summary>CPU limit 超過は CFS による周期ごとのスロットリングで待たされるだけだが、メモリ limit 超過は OOM Killer に強制終了される。requests/limits と QoS クラスの関係も解説。</summary>
+  </entry>
   <entry>
     <title>Pod・Deployment・Service、なぜ 3 つも要るのか？</title>
     <link href="https://kaionn.github.io/tech-learning-daily/archive/2026-07-18.html"/>

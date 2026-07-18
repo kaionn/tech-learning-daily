@@ -17,6 +17,12 @@
       <div class="section-title">Past Issues</div>
 
       <div class="card">
+        <h3><a href="2026-07-18-2.html">CPU limit を超えると遅くなるだけなのに、メモリ limit だと Pod が落ちるのはなぜか？</a></h3>
+        <div class="summary">CPU limit 超過は CFS スロットリングで待たされるだけだが、メモリ limit 超過は OOM Killer に強制終了される。requests/limits の役割の違いと QoS クラスによる eviction 優先順位を解説。</div>
+        <div class="meta"><span class="tag tag-container">Container</span><span>2026-07-18 (Sat)</span></div>
+      </div>
+
+      <div class="card">
         <h3><a href="2026-07-18.html">Pod・Deployment・Service、なぜ 3 つも要るのか？</a></h3>
         <div class="summary">Pod は使い捨ての最小実行単位、Deployment は ReplicaSet 経由で数と更新を管理し、Service は入れ替わる Pod 群を固定 IP の裏に隠す — 3 層に分かれているのは責務が違うからだ。</div>
         <div class="meta"><span class="tag tag-container">Container</span><span>2026-07-18 (Sat)</span></div>
