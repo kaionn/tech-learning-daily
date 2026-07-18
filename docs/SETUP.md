@@ -40,7 +40,7 @@ gh run list --workflow=daily-article.yml -R kaionn/tech-learning-daily
 
 - [ ] run が全 step green（生成 → commit → Pages デプロイ）
 - [ ] main に `YYYY-MM-DD の基礎解説: {タイトル}` コミットが github-actions[bot] 名義で乗っている
-- [ ] https://tech-learning-daily.pages.dev/ に第 1 号（キュー先頭「Kubernetes の全体像」のはず）が表示される
+- [ ] https://learn.kaion-lab.com/ に第 1 号（キュー先頭「Kubernetes の全体像」のはず）が表示される
 - [ ] 記事構造が揃っている: 3 行まとめ / ASCII 図解 / たとえるなら / 実務でどう出会うか / 手を動かす / よくある誤解 / 用語ミニ辞典 / もっと深く（全リンクが個別ページ直リンク）
 - [ ] `topics.md` のキュー先頭が消え `## 消化済み` に移っている
 - [ ] `feed.xml` が well-formed（`python3 -c "import xml.dom.minidom;xml.dom.minidom.parse('feed.xml')"`）

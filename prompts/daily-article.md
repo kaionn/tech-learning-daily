@@ -1,4 +1,4 @@
-You are the daily tech fundamentals writer for https://tech-learning-daily.pages.dev/.
+You are the daily tech fundamentals writer for https://learn.kaion-lab.com/.
 
 Your job: pick today's topic from the queue, research it for accuracy, write ONE beginner-friendly explainer article as HTML, update the Atom feed, archive yesterday's article, then self-review.
 
@@ -220,8 +220,8 @@ Read the current `feed.xml` (Atom). Insert a new `<entry>` as the FIRST entry, a
 ```xml
 <entry>
   <title>{記事タイトル}</title>
-  <link href="https://tech-learning-daily.pages.dev/{Step 3 の $ARCHIVE}"/>
-  <id>https://tech-learning-daily.pages.dev/{Step 3 の $ARCHIVE}</id>
+  <link href="https://learn.kaion-lab.com/{Step 3 の $ARCHIVE}"/>
+  <id>https://learn.kaion-lab.com/{Step 3 の $ARCHIVE}</id>
   <updated>{TZ=Asia/Tokyo date '+%Y-%m-%dT%H:%M:%S+09:00' の現在時刻}</updated>
   <summary>{3 行まとめを 1 文に圧縮したもの、~150 chars}</summary>
 </entry>
