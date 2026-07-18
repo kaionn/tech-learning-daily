@@ -4,8 +4,15 @@
   <link href="https://kaionn.github.io/tech-learning-daily/"/>
   <link rel="self" href="https://kaionn.github.io/tech-learning-daily/feed.xml"/>
   <id>https://kaionn.github.io/tech-learning-daily/</id>
-  <updated>2026-07-18T10:13:19+09:00</updated>
+  <updated>2026-07-18T11:25:56+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>負荷試験で「もう限界」をどの数字で判断するのか？</title>
+    <link href="https://kaionn.github.io/tech-learning-daily/archive/2026-07-18-3.html"/>
+    <id>https://kaionn.github.io/tech-learning-daily/archive/2026-07-18-3.html</id>
+    <updated>2026-07-18T11:25:56+09:00</updated>
+    <summary>スループットだけでは限界は分からず、レイテンシとリトルの法則で同時実行数とつながっている。p95/p99 が急上昇するノック点と、USE メソッドでの飽和リソース特定を解説。</summary>
+  </entry>
   <entry>
     <title>CPU limit を超えると遅くなるだけなのに、メモリ limit だと Pod が落ちるのはなぜか？</title>
     <link href="https://kaionn.github.io/tech-learning-daily/archive/2026-07-18-2.html"/>
