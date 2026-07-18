@@ -15,8 +15,7 @@ on:
 
 permissions:
   contents: write
-  # claude-code-action v1.0.177 以降は GitHub token 交換に OIDC が必須（無いと即失敗する）
-  id-token: write
+  id-token: write # claude-code-action@v1 の GitHub トークン OIDC 交換に必須（GitHub Pages 用ではないので削除しない）
 
 concurrency:
   group: daily-article
