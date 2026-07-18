@@ -388,6 +388,25 @@ header.with-nav {
   margin-bottom: 0.75rem;
 }
 
+header.with-nav .site-name a {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+}
+
+header.with-nav .site-name a:hover {
+  color: var(--primary-600);
+}
+
+.page-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 1.25rem;
+}
+
 .site-nav {
   display: flex;
   justify-content: center;
