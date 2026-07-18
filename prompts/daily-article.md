@@ -229,17 +229,26 @@ Read the current `feed.xml` (Atom). Insert a new `<entry>` as the FIRST entry, a
 
 The link/id MUST use Step 3's `$ARCHIVE` filename (the archive file is created in Step 10, so the link resolves immediately). NEVER replace or remove existing entries — same-day extra runs get their own entry (the `-N` suffix keeps ids unique). Keep at most 14 entries; drop the oldest beyond that.
 
-## Step 7: Update archive/index.html
+## Step 7: Add Entry to data/articles.json
 
-Read the current `archive/index.html`. ALWAYS add a new card entry at the top of the Past Issues section (after `<div class="section-title">Past Issues</div>`) — same-day extra runs add an additional card, never replace an existing one. The href MUST be Step 3's `$ARCHIVE` filename (without the `archive/` prefix):
+Do NOT edit `archive/index.html` — the workflow regenerates it from `data/articles.json` after you finish (`scripts/build_archive.py`). Instead, read `data/articles.json` and prepend ONE new entry as the FIRST element of the array — same-day extra runs prepend an additional entry, never replace an existing one:
 
-```html
-<div class="card">
-  <h3><a href="{Step 3 の $ARCHIVE のファイル名部分}">{記事タイトル}</a></h3>
-  <div class="summary">{1 文サマリー}</div>
-  <div class="meta"><span class="tag tag-{category}">{Category}</span><span>YYYY-MM-DD (Day)</span></div>
-</div>
+```json
+{
+  "file": "{Step 3 の $ARCHIVE のファイル名部分（archive/ プレフィックス無し）}",
+  "date": "YYYY-MM-DD",
+  "title": "{記事タイトル}",
+  "summary": "{1 文サマリー。アーカイブ一覧のカードに表示される}",
+  "category": "{Category Tags の小文字キー: container / infra / db / network / security / arch / perf / obs / lang / frontend / ai / dev のいずれか。新しいカテゴリを発明しない}",
+  "difficulty": "{入門 | 基礎 | 応用}",
+  "readTime": {読了分数の整数},
+  "terms": ["{glossary に載せた用語をそのまま 3〜6 個。アーカイブの用語検索に使われる}"]
+}
 ```
+
+- NEVER remove or modify existing entries.
+- The file MUST remain valid JSON (trailing comma 禁止). Verify: `python3 -c "import json;json.load(open('data/articles.json'))"` must exit 0.
+- The workflow validates category / difficulty / file naming and FAILS the run on violations — stick to the allowed values exactly.
 
 ## Step 8: Update topics.md
 
@@ -248,7 +257,7 @@ Read the current `archive/index.html`. ALWAYS add a new card entry at the top of
 
 ## Step 9: Self-Review (MANDATORY)
 
-Re-read the generated index.html, feed.xml, and topics.md, and verify every point. Fix all violations before finishing (remember: you never run git):
+Re-read the generated index.html, feed.xml, data/articles.json, and topics.md, and verify every point. Fix all violations before finishing (remember: you never run git):
 
 1. DATE: `<title>` 以外に header `.date`・feed.xml 最新 entry が今日の日付を示す。
 2. STRUCTURE: meta-bar / article-title / lead / tldr / body-section×3+ / diagram / analogy / practical / hands-on / misconceptions / glossary / further-reading が全て存在し、定義済みの CSS クラスだけを使っている。
@@ -258,11 +267,12 @@ Re-read the generated index.html, feed.xml, and topics.md, and verify every poin
 6. DIAGRAM: `pre.diagram` の各行が 44 文字以内で、罫線が崩れていない。
 7. FEED: feed.xml is well-formed XML (`python3 -c "import xml.dom.minidom,sys;xml.dom.minidom.parse('feed.xml')"` must exit 0).
 8. TOPICS: topics.md からキューの先頭が消え、消化済みに今日の行が追加されている。
-9. DUPLICATION: archive/index.html に同じトピックの過去記事が無い（続編の場合はタイトルでその旨が分かる）。
+9. DUPLICATION: data/articles.json に同じトピックの過去記事が無い（続編の場合はタイトルでその旨が分かる）。
+10. JSON: data/articles.json が valid JSON（Step 7 の python3 ワンライナーが exit 0）で、先頭 entry の file が Step 3 の `$ARCHIVE` のファイル名部分と一致する。
 
 ## Step 10: Create Today's Archive Page
 
-AFTER the self-review passes (so the copy reflects the final reviewed content), create this article's permanent archive page. This is what makes the feed link and the new card in `archive/index.html` resolve immediately instead of 404-ing until tomorrow. Recompute the filename with the same loop as Step 3 (the file still does not exist at this point, so the loop lands on the same name):
+AFTER the self-review passes (so the copy reflects the final reviewed content), create this article's permanent archive page. This is what makes the feed link and the regenerated archive list resolve immediately instead of 404-ing until tomorrow. Recompute the filename with the same loop as Step 3 (the file still does not exist at this point, so the loop lands on the same name):
 
 ```bash
 TODAY=$(TZ=Asia/Tokyo date '+%Y-%m-%d')
@@ -272,7 +282,7 @@ cp index.html "$ARCHIVE"
 sed -i 's|href="style.css"|href="../style.css"|; s|href="feed.xml"|href="../feed.xml"|; s|href="archive/"|href="./"|' "$ARCHIVE"
 ```
 
-Verify `$ARCHIVE` matches the filename used in the feed entry (Step 6) and the archive/index.html card (Step 7). If they diverge, fix the feed/card to match.
+Verify `$ARCHIVE` matches the filename used in the feed entry (Step 6) and the data/articles.json entry (Step 7). If they diverge, fix the feed/entry to match.
 
 ## Step 11: Done
 
@@ -281,6 +291,7 @@ After Step 10, your job is complete. Leave the modified files in the working tre
 ## Important
 
 - Do NOT run `git add` / `git commit` / `git push` / `git config` / `git remote`. File generation only; the workflow handles all git state changes.
+- Do NOT edit `archive/index.html`. It is a build artifact regenerated by the workflow from `data/articles.json`.
 - The HTML must be valid and use the exact CSS classes defined above.
 - Use &amp; for ampersand in HTML text.
 - 1 日 1 トピック。複数トピックを詰め込まない。深く狭く。

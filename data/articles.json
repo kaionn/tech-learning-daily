@@ -1,0 +1,42 @@
+[
+  {
+    "file": "2026-07-18-4.html",
+    "date": "2026-07-18",
+    "title": "CDN・DNS・Workers・Pages…… Cloudflare は結局何をしているのか？",
+    "summary": "Cloudflare の土台は権威 DNS とリバースプロキシ。anycast による最寄り拠点への自動振り分け、Workers の V8 isolate モデル、Cloudflare Pages と GitHub Pages の構造的な違いを解説。",
+    "category": "network",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": ["権威 DNS サーバー", "anycast", "リバースプロキシ", "isolate", "Pages Functions"]
+  },
+  {
+    "file": "2026-07-18-3.html",
+    "date": "2026-07-18",
+    "title": "負荷試験で「もう限界」をどの数字で判断するのか？",
+    "summary": "スループットだけでは限界は分からない。リトルの法則で同時実行数・スループット・レイテンシがつながっており、p95/p99 が急上昇するノック点と USE メソッドでの飽和リソース特定を解説。",
+    "category": "perf",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": ["スループット", "パーセンタイル（p95・p99）", "リトルの法則", "ノック点（knee point）", "USE メソッド"]
+  },
+  {
+    "file": "2026-07-18-2.html",
+    "date": "2026-07-18",
+    "title": "CPU limit を超えると遅くなるだけなのに、メモリ limit だと Pod が落ちるのはなぜか？",
+    "summary": "CPU limit 超過は CFS スロットリングで待たされるだけだが、メモリ limit 超過は OOM Killer に強制終了される。requests/limits の役割の違いと QoS クラスによる eviction 優先順位を解説。",
+    "category": "container",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": ["requests", "limits", "CFS スロットリング", "OOM Killer", "QoS クラス"]
+  },
+  {
+    "file": "2026-07-18.html",
+    "date": "2026-07-18",
+    "title": "Pod・Deployment・Service、なぜ 3 つも要るのか？",
+    "summary": "Pod は使い捨ての最小実行単位、Deployment は ReplicaSet 経由で数と更新を管理し、Service は入れ替わる Pod 群を固定 IP の裏に隠す — 3 層に分かれているのは責務が違うからだ。",
+    "category": "container",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": ["Pod", "ReplicaSet", "Deployment", "Service", "kube-proxy"]
+  }
+]

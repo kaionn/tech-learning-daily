@@ -38,6 +38,11 @@ jobs:
             --allowedTools "WebSearch,WebFetch,Read,Write,Edit,Glob,Grep,Bash"
             --disallowedTools "Bash(git add:*),Bash(git commit:*),Bash(git push:*),Bash(git config:*),Bash(git remote:*),Bash(git reset:*),Bash(git rebase:*)"
 
+      - name: Rebuild archive index from articles.json
+        # LLM は archive/index.html を編集しない。data/articles.json（一次ソース）から
+        # 決定的に再生成し、スキーマ違反（未知カテゴリ等）はここで run を落とす
+        run: python3 scripts/build_archive.py
+
       - name: Commit and push article
         id: commit
         env:
@@ -47,7 +52,7 @@ jobs:
           # claude-code-action が git 認証設定を自分のトークンで上書きしたまま終了する
           # （push 時点で失効し Invalid username or token になる）ため、GITHUB_TOKEN に張り直す
           git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          if [ -z "$(git status --porcelain -- index.html archive/ feed.xml topics.md)" ]; then
+          if [ -z "$(git status --porcelain -- index.html archive/ data/ feed.xml topics.md)" ]; then
             # Claude が禁止ガードを突破して自分で commit した場合と生成失敗を区別する
             if git log -1 --format='%an' | grep -qi claude; then
               echo "::error::Claude が生成物を自分で commit している（禁止ガード突破）。直前コミット: $(git log -1 --oneline)"
@@ -66,7 +71,7 @@ jobs:
           TITLE=$(sed -n 's|.*<h2 class="article-title">\(.*\)</h2>.*|\1|p' index.html | head -1)
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add index.html archive/ feed.xml topics.md
+          git add index.html archive/ data/ feed.xml topics.md
           git commit -m "${TODAY} の基礎解説: ${TITLE:-記事}"
           git pull --rebase origin main
           git push origin main
