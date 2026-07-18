@@ -37,7 +37,9 @@ If a claim cannot be verified, either drop it or phrase it as a general principl
 
 Run `date -u '+%Y-%m-%d'` and `date -u '+%a'`. Also compute yesterday's date for archiving. Determine the issue number: count entries in `archive/index.html` and add 1 (the placeholder page before issue 1 does not count).
 
-## Step 4: Archive Yesterday's Article
+## Step 4: Archive Yesterday's Article (fallback)
+
+Normally yesterday's run already created `archive/{YESTERDAY}.html` in its own Step 10, so this is a no-op. It only fires if a past run failed after generating index.html but before the archive copy existed.
 
 ```bash
 YESTERDAY=$(date -u -d 'yesterday' '+%Y-%m-%d' 2>/dev/null || date -u -v-1d '+%Y-%m-%d')
@@ -183,7 +185,7 @@ Read the current `feed.xml` (Atom). Insert a new `<entry>` as the FIRST entry, a
 </entry>
 ```
 
-Use TODAY's date (the archive file for today will be created by tomorrow's run). If an entry for today already exists, replace it instead of duplicating. Keep at most 14 entries; drop the oldest beyond that.
+Use TODAY's date (the archive file for today is created in Step 10, so the link resolves immediately). If an entry for today already exists, replace it instead of duplicating. Keep at most 14 entries; drop the oldest beyond that.
 
 ## Step 7: Update archive/index.html
 
@@ -202,7 +204,7 @@ Read the current `archive/index.html`. Add a new card entry at the top of the Pa
 - If today's topic came from the queue: remove its line from `## キュー` and append `- YYYY-MM-DD {トピック}` to the TOP of `## 消化済み`.
 - If self-selected: just append `- YYYY-MM-DD {トピック}（自動選定）` to the TOP of `## 消化済み`.
 
-## Step 9: Self-Review (MANDATORY, final step)
+## Step 9: Self-Review (MANDATORY)
 
 Re-read the generated index.html, feed.xml, and topics.md, and verify every point. Fix all violations before finishing (remember: you never run git):
 
@@ -216,9 +218,19 @@ Re-read the generated index.html, feed.xml, and topics.md, and verify every poin
 8. TOPICS: topics.md からキューの先頭が消え、消化済みに今日の行が追加されている。
 9. DUPLICATION: archive/index.html に同じトピックの過去記事が無い（続編の場合はタイトルでその旨が分かる）。
 
-## Step 10: Done
+## Step 10: Create Today's Archive Page
 
-After the self-review passes, your job is complete. Leave the modified files in the working tree — the GitHub Actions workflow that invoked you will commit them, push to `main`, and deploy GitHub Pages. Do not commit, push, or touch git config yourself.
+AFTER the self-review passes (so the copy reflects the final reviewed content), create today's permanent archive page. This is what makes the feed link and today's card in `archive/index.html` resolve immediately instead of 404-ing until tomorrow:
+
+```bash
+TODAY=$(date -u '+%Y-%m-%d')
+cp index.html "archive/${TODAY}.html"
+sed -i 's|href="style.css"|href="../style.css"|; s|href="feed.xml"|href="../feed.xml"|; s|href="archive/"|href="./"|' "archive/${TODAY}.html"
+```
+
+## Step 11: Done
+
+After Step 10, your job is complete. Leave the modified files in the working tree — the GitHub Actions workflow that invoked you will commit them, push to `main`, and deploy GitHub Pages. Do not commit, push, or touch git config yourself.
 
 ## Important
 

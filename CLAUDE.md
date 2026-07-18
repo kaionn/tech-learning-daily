@@ -32,9 +32,12 @@ tech-learning-daily: ソフトウェア技術の基礎（k8s・負荷試験・DB
 
 `index.html` / `style.css` / `feed.xml` / `prompts/` を変更したら、同セッション内で必ず commit → push まで完了させる。日次 workflow は毎朝 origin/main を前提に生成・push するため、ローカル未 push の変更は公開サイトに反映されないだけでなく、日次 push とローカルが分岐する。
 
+手動 push でのサイト反映は `.github/workflows/deploy-pages.yml`（push トリガー、サイトアセットのパスフィルタ付き）が担う。日次 run の `GITHUB_TOKEN` push はこの workflow を発火させないため二重デプロイにはならない（日次 run は自前でデプロイする）。
+
 ## archive/ の整合性
 
-- 当日分（`index.html` のトップ）は、翌日 run の「昨日分をアーカイブ」ステップで初めて `archive/YYYY-MM-DD.html` 化される。当日中は `archive/index.html` の当日リンクが 404 になるが仕様通り
+- 当日分は生成時（prompt の Step 10）に `archive/YYYY-MM-DD.html` も同時作成されるため、アーカイブリンクは公開直後から解決する（2026-07-18 以前は翌日 run でのアーカイブ化だったため当日 404 が仕様だった）
+- 翌日 run の「昨日分をアーカイブ」ステップ（Step 4）はフォールバック。前日 run が途中失敗した場合のみ実ファイルを補完する
 - 一覧リンクと実ファイルがズレた場合、git コミット履歴が一次ソース（`git show <commit>:index.html` で各日の記事を復元できる）
 
 ## コミット前セルフチェック（手動更新時）

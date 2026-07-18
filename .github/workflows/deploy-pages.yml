@@ -1,0 +1,38 @@
+name: Deploy Pages (manual content push)
+
+# 手動 push（ローカルセッションからのサイトアセット変更）を Pages に反映する。
+# 日次 run（daily-article.yml）は GITHUB_TOKEN で push するため本 workflow は発火せず、
+# 二重デプロイにはならない（日次 run は自前で deploy-pages まで実行する）。
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - index.html
+      - 'archive/**'
+      - style.css
+      - feed.xml
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+      - id: deployment
+        uses: actions/deploy-pages@v4
