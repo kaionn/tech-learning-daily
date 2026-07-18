@@ -41,4 +41,5 @@ jobs:
           # data/articles.json（一次ソース）からアーカイブ一覧を再生成してから deploy する。
           # push 側の再生成漏れがあっても、公開される一覧は常に JSON と一致する
           python3 "$CLEAN/scripts/build_archive.py"
+          python3 "$CLEAN/scripts/build_recent.py"
           npx --yes wrangler@4 pages deploy "$CLEAN" --project-name=tech-learning-daily --branch=main

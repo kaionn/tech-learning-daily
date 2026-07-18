@@ -428,6 +428,25 @@ header.with-nav .site-name a:hover {
   color: var(--primary-600);
 }
 
+.recent-articles {
+  margin-top: 2.5rem;
+}
+
+.recent-more {
+  text-align: right;
+  margin-top: 0.75rem;
+  font-size: 0.9rem;
+}
+
+.recent-more a {
+  color: var(--primary-600);
+  text-decoration: none;
+}
+
+.recent-more a:hover {
+  text-decoration: underline;
+}
+
 .toolbar {
   margin-bottom: 1.75rem;
 }

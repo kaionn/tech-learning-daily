@@ -11,7 +11,7 @@ tech-learning-daily: ソフトウェア技術の基礎（k8s・負荷試験・DB
 `.github/workflows/daily-article.yml`（cron `23 21 * * *` = 06:23 JST、`workflow_dispatch` で手動実行可）が単一 workflow で完結する:
 
 1. **生成 (claude-code-action@v1)**: `prompts/daily-article.md` の指示に従い Claude がファイルを生成・編集する（記事 HTML + `data/articles.json` への 1 エントリ追記。**`archive/index.html` は編集しない**）。**Claude は git 操作を一切しない**（ファイル生成のみ）。prompt 頼みでなく `--disallowedTools` で git 書き込み系をツール層から物理的に拒否している（tech-news-daily で 2026-07-16/17 に prompt のみのガードが突破された教訓）。workflow / prompt を変更する際もこのガードを外さないこと
-2. **アーカイブ一覧の再生成 (workflow step)**: `scripts/build_archive.py` が `data/articles.json`（記事メタデータの一次ソース）から `archive/index.html` を決定的に再生成する。スキーマ違反（未知カテゴリ・難易度・file 命名・重複・実ファイル不在・壊れ JSON）はここで run を fail させる（LLM プロンプトの規則リークをコード側のハード制約で受け止める設計）
+2. **アーカイブ一覧・最近の記事セクションの再生成 (workflow step)**: `scripts/build_archive.py` が `data/articles.json`（記事メタデータの一次ソース）から `archive/index.html` を決定的に再生成する。スキーマ違反（未知カテゴリ・難易度・file 命名・重複・実ファイル不在・壊れ JSON）はここで run を fail させる（LLM プロンプトの規則リークをコード側のハード制約で受け止める設計）。続けて `scripts/build_recent.py` が同じ `data/articles.json` から、当日記事を除く直近最大 4 件で `index.html` の `<!-- recent:start -->`〜`<!-- recent:end -->` 間（「最近の記事」セクション）を再生成する
 3. **反映 (workflow step)**: 生成物（`index.html` / `archive/` / `data/` / `feed.xml` / `topics.md`）に変更があり、`index.html` に当日日付が含まれることを検証してから `github-actions[bot]` 名義で `YYYY-MM-DD の基礎解説: {タイトル}` として main へ commit/push する。変更ゼロ・日付不整合は run を fail させる（失敗が必ず可視化される）
 4. **デプロイ**: `GITHUB_TOKEN` push は他 workflow を発火させないため、同 workflow が wrangler による Cloudflare Pages への deploy を自前実行する（`CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` repo secrets を使用）
 

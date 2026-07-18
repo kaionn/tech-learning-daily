@@ -43,6 +43,9 @@ jobs:
         # 決定的に再生成し、スキーマ違反（未知カテゴリ等）はここで run を落とす
         run: python3 scripts/build_archive.py
 
+      - name: Rebuild recent-articles section on index.html
+        run: python3 scripts/build_recent.py
+
       - name: Commit and push article
         id: commit
         env:
