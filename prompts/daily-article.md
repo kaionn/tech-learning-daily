@@ -33,16 +33,29 @@ If a claim cannot be verified, either drop it or phrase it as a general principl
 - NEVER link to a site's top page, a docs root, or an aggregator/roundup page.
 - If you cannot find a good link for a further-reading item, drop the item. 2 real links beat 4 weak ones.
 
-## Step 3: Determine Today's Date
+## Step 3: Determine Today's Date and Archive Filename
 
-Run `date -u '+%Y-%m-%d'` and `date -u '+%a'`. Also compute yesterday's date for archiving. Determine the issue number: count entries in `archive/index.html` and add 1 (the placeholder page before issue 1 does not count).
+The site operates on JST. Do NOT use `date -u`: the morning cron fires at 21:23 UTC, when the UTC date is still the previous JST day, so a UTC-based date would collide with the previous article.
+
+```bash
+TODAY=$(TZ=Asia/Tokyo date '+%Y-%m-%d')
+DAY=$(TZ=Asia/Tokyo date '+%a')
+# 同日 2 本目以降（おかわり run）はアーカイブ名に連番を付ける
+N=1; ARCHIVE="archive/${TODAY}.html"
+while [ -f "$ARCHIVE" ]; do N=$((N+1)); ARCHIVE="archive/${TODAY}-${N}.html"; done
+echo "$ARCHIVE"
+```
+
+Remember `$ARCHIVE` — the feed entry (Step 6), the archive/index.html card (Step 7), and the archive copy (Step 10) must all use this exact filename. If `$ARCHIVE` has a `-N` suffix, this is a same-day extra run: proceed exactly as normal (consume the next queue topic); the only difference is the filename.
+
+Determine the issue number: count entries in `archive/index.html` and add 1 (the placeholder page before issue 1 does not count; same-day extras each get their own issue number).
 
 ## Step 4: Archive Yesterday's Article (fallback)
 
 Normally yesterday's run already created `archive/{YESTERDAY}.html` in its own Step 10, so this is a no-op. It only fires if a past run failed after generating index.html but before the archive copy existed.
 
 ```bash
-YESTERDAY=$(date -u -d 'yesterday' '+%Y-%m-%d' 2>/dev/null || date -u -v-1d '+%Y-%m-%d')
+YESTERDAY=$(TZ=Asia/Tokyo date -d 'yesterday' '+%Y-%m-%d' 2>/dev/null || TZ=Asia/Tokyo date -v-1d '+%Y-%m-%d')
 if [ -f index.html ] && grep -q "$YESTERDAY" index.html && [ ! -f "archive/${YESTERDAY}.html" ]; then
   cp index.html "archive/${YESTERDAY}.html"
   sed -i 's|href="style.css"|href="../style.css"|; s|href="feed.xml"|href="../feed.xml"|; s|href="archive/"|href="./"|' "archive/${YESTERDAY}.html"
@@ -178,22 +191,22 @@ Read the current `feed.xml` (Atom). Insert a new `<entry>` as the FIRST entry, a
 ```xml
 <entry>
   <title>{記事タイトル}</title>
-  <link href="https://kaionn.github.io/tech-learning-daily/archive/YYYY-MM-DD.html"/>
-  <id>https://kaionn.github.io/tech-learning-daily/archive/YYYY-MM-DD.html</id>
-  <updated>YYYY-MM-DDT06:30:00+09:00</updated>
+  <link href="https://kaionn.github.io/tech-learning-daily/{Step 3 の $ARCHIVE}"/>
+  <id>https://kaionn.github.io/tech-learning-daily/{Step 3 の $ARCHIVE}</id>
+  <updated>{TZ=Asia/Tokyo date '+%Y-%m-%dT%H:%M:%S+09:00' の現在時刻}</updated>
   <summary>{3 行まとめを 1 文に圧縮したもの、~150 chars}</summary>
 </entry>
 ```
 
-Use TODAY's date (the archive file for today is created in Step 10, so the link resolves immediately). If an entry for today already exists, replace it instead of duplicating. Keep at most 14 entries; drop the oldest beyond that.
+The link/id MUST use Step 3's `$ARCHIVE` filename (the archive file is created in Step 10, so the link resolves immediately). NEVER replace or remove existing entries — same-day extra runs get their own entry (the `-N` suffix keeps ids unique). Keep at most 14 entries; drop the oldest beyond that.
 
 ## Step 7: Update archive/index.html
 
-Read the current `archive/index.html`. Add a new card entry at the top of the Past Issues section (after `<div class="section-title">Past Issues</div>`), unless an entry for today already exists:
+Read the current `archive/index.html`. ALWAYS add a new card entry at the top of the Past Issues section (after `<div class="section-title">Past Issues</div>`) — same-day extra runs add an additional card, never replace an existing one. The href MUST be Step 3's `$ARCHIVE` filename (without the `archive/` prefix):
 
 ```html
 <div class="card">
-  <h3><a href="YYYY-MM-DD.html">{記事タイトル}</a></h3>
+  <h3><a href="{Step 3 の $ARCHIVE のファイル名部分}">{記事タイトル}</a></h3>
   <div class="summary">{1 文サマリー}</div>
   <div class="meta"><span class="tag tag-{category}">{Category}</span><span>YYYY-MM-DD (Day)</span></div>
 </div>
@@ -220,13 +233,17 @@ Re-read the generated index.html, feed.xml, and topics.md, and verify every poin
 
 ## Step 10: Create Today's Archive Page
 
-AFTER the self-review passes (so the copy reflects the final reviewed content), create today's permanent archive page. This is what makes the feed link and today's card in `archive/index.html` resolve immediately instead of 404-ing until tomorrow:
+AFTER the self-review passes (so the copy reflects the final reviewed content), create this article's permanent archive page. This is what makes the feed link and the new card in `archive/index.html` resolve immediately instead of 404-ing until tomorrow. Recompute the filename with the same loop as Step 3 (the file still does not exist at this point, so the loop lands on the same name):
 
 ```bash
-TODAY=$(date -u '+%Y-%m-%d')
-cp index.html "archive/${TODAY}.html"
-sed -i 's|href="style.css"|href="../style.css"|; s|href="feed.xml"|href="../feed.xml"|; s|href="archive/"|href="./"|' "archive/${TODAY}.html"
+TODAY=$(TZ=Asia/Tokyo date '+%Y-%m-%d')
+N=1; ARCHIVE="archive/${TODAY}.html"
+while [ -f "$ARCHIVE" ]; do N=$((N+1)); ARCHIVE="archive/${TODAY}-${N}.html"; done
+cp index.html "$ARCHIVE"
+sed -i 's|href="style.css"|href="../style.css"|; s|href="feed.xml"|href="../feed.xml"|; s|href="archive/"|href="./"|' "$ARCHIVE"
 ```
+
+Verify `$ARCHIVE` matches the filename used in the feed entry (Step 6) and the archive/index.html card (Step 7). If they diverge, fix the feed/card to match.
 
 ## Step 11: Done
 

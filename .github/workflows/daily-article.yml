@@ -61,7 +61,8 @@ jobs:
             fi
             exit 1
           fi
-          TODAY=$(date -u '+%Y-%m-%d')
+          # JST 基準（cron は 21:23 UTC 発火で UTC 日付はまだ前日。prompt 側の Step 3 と揃える）
+          TODAY=$(TZ=Asia/Tokyo date '+%Y-%m-%d')
           # 最低限の生成品質ガード: index.html が今日の日付を持つこと
           if ! grep -q "$TODAY" index.html; then
             echo "::error::index.html に今日の日付 ($TODAY) が無い。生成不良として中断"

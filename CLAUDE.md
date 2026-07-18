@@ -18,6 +18,10 @@ tech-learning-daily: ソフトウェア技術の基礎（k8s・負荷試験・DB
 
 稼働確認: `gh run list --workflow=daily-article.yml`。失敗時は `gh run view <id> --log-failed`。手動リトライは `gh workflow run daily-article.yml`。
 
+日付は全て **JST 基準**（`TZ=Asia/Tokyo date`）。cron 発火時点（21:23 UTC）では UTC 日付がまだ前日のため、`date -u` を使うと前日記事と衝突する。prompt / workflow の日付処理を変更する際は必ず JST を維持する。
+
+**同日おかわり run**: `gh workflow run daily-article.yml` を同日に再実行すると、置換ではなく追加の 1 本が生成される（次のキュートピックを消化、アーカイブは `YYYY-MM-DD-2.html` 連番、feed・一覧にも追加）。「今日はもっと読みたい」時はこれを叩くだけでよい（スマホの GitHub アプリの Run workflow でも可）。
+
 ## topics.md（ネタ帳キュー）の運用
 
 - `## キュー` の先頭 1 行を毎朝の run が消化し、`## 消化済み` に日付付きで移す。キューが空なら Claude がカリキュラム領域と過去アーカイブから自走選定する
