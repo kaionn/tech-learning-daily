@@ -1,36 +1,36 @@
 <?xml version="1.0" encoding="utf-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
   <title>Tech Learning Daily</title>
-  <link href="https://learn.kaion-lab.com/"/>
-  <link rel="self" href="https://learn.kaion-lab.com/feed.xml"/>
-  <id>https://learn.kaion-lab.com/</id>
+  <link href="https://tech-learn.kaion-lab.com/"/>
+  <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
+  <id>https://tech-learn.kaion-lab.com/</id>
   <updated>2026-07-18T21:34:30+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
   <entry>
     <title>CDN・DNS・Workers・Pages…… Cloudflare は結局何をしているのか？</title>
-    <link href="https://learn.kaion-lab.com/archive/2026-07-18-4.html"/>
-    <id>https://learn.kaion-lab.com/archive/2026-07-18-4.html</id>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-07-18-4.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-07-18-4.html</id>
     <updated>2026-07-18T21:34:30+09:00</updated>
     <summary>Cloudflare の土台は権威 DNS とリバースプロキシ。anycast による最寄り拠点への自動振り分け、Workers の V8 isolate モデル、Cloudflare Pages と GitHub Pages の構造的な違いを解説。</summary>
   </entry>
   <entry>
     <title>負荷試験で「もう限界」をどの数字で判断するのか？</title>
-    <link href="https://learn.kaion-lab.com/archive/2026-07-18-3.html"/>
-    <id>https://learn.kaion-lab.com/archive/2026-07-18-3.html</id>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-07-18-3.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-07-18-3.html</id>
     <updated>2026-07-18T11:25:56+09:00</updated>
     <summary>スループットだけでは限界は分からず、レイテンシとリトルの法則で同時実行数とつながっている。p95/p99 が急上昇するノック点と、USE メソッドでの飽和リソース特定を解説。</summary>
   </entry>
   <entry>
     <title>CPU limit を超えると遅くなるだけなのに、メモリ limit だと Pod が落ちるのはなぜか？</title>
-    <link href="https://learn.kaion-lab.com/archive/2026-07-18-2.html"/>
-    <id>https://learn.kaion-lab.com/archive/2026-07-18-2.html</id>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-07-18-2.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-07-18-2.html</id>
     <updated>2026-07-18T10:13:19+09:00</updated>
     <summary>CPU limit 超過は CFS による周期ごとのスロットリングで待たされるだけだが、メモリ limit 超過は OOM Killer に強制終了される。requests/limits と QoS クラスの関係も解説。</summary>
   </entry>
   <entry>
     <title>Pod・Deployment・Service、なぜ 3 つも要るのか？</title>
-    <link href="https://learn.kaion-lab.com/archive/2026-07-18.html"/>
-    <id>https://learn.kaion-lab.com/archive/2026-07-18.html</id>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-07-18.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-07-18.html</id>
     <updated>2026-07-18T06:30:00+09:00</updated>
     <summary>Pod は使い捨ての最小実行単位、Deployment は ReplicaSet 経由で数と更新を管理し、Service は固定 IP で入れ替わる Pod を隠す仕組みを解説。</summary>
   </entry>
