@@ -4,6 +4,7 @@
 
 ## キュー
 
+- Cloudflareって何？（知りたい観点: CDN・DNS・Pages・Workers などサービス群の全体像と、GitHub Pages から Cloudflare Pages へ移すと何が変わるのか）
 - Deployment の manifest に設定できる項目一覧（知りたい観点: replicas / strategy / probe / resources 等の主要フィールドを、実際の YAML 断片つきで「この値をこう設定すると挙動がこう変わる」まで具体的に）
 - コンテナと VM は何が違うのか（知りたい観点: 「軽い」と言われる理由と、代わりに失っているもの）
 - ロードバランサーの L4 と L7（知りたい観点: ALB と NLB をどう使い分けるのか）
@@ -19,7 +20,6 @@
 - git の内部構造（知りたい観点: commit・branch の実体と、rebase が「歴史を書き換える」の意味）
 - ガベージコレクションの基本（知りたい観点: GC 停止がレイテンシに刺さる理由と世代別 GC）
 - LLM が動く仕組み（知りたい観点: トークン・推論・コンテキストウィンドウとは結局何か）
-- Cloudflareって何？（知りたい観点: CDN・DNS・Pages・Workers などサービス群の全体像と、GitHub Pages から Cloudflare Pages へ移すと何が変わるのか）
 
 ## 消化済み
 
