@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tech Learning Daily — 創刊準備中</title>
+  <title>Tech Learning Daily — Pod・Deployment・Service、なぜ 3 つも要るのか？</title>
   <link rel="stylesheet" href="style.css">
   <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="feed.xml">
 </head>
@@ -11,13 +11,113 @@
   <div class="container">
     <header>
       <h1>Tech Learning Daily</h1>
+      <div class="date">2026-07-18 (Sat) — 第 1 号</div>
       <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
     </header>
 
-    <div class="card">
-      <h3>創刊準備中</h3>
-      <div class="summary">毎朝 06:30 JST 頃に、インフラ・アーキテクチャをはじめとするソフトウェア技術の基礎を 1 トピックずつ解説する記事が配信される。第 1 号をお楽しみに。</div>
-    </div>
+    <article class="article">
+      <div class="meta-bar">
+        <span class="tag tag-container">Container</span>
+        <span class="difficulty">🌿 基礎</span>
+        <span class="read-time">⏱ 約 7 分</span>
+      </div>
+      <h2 class="article-title">Pod・Deployment・Service、なぜ 3 つも要るのか？</h2>
+      <p class="lead">昨日も <code>kubectl apply -f deployment.yaml</code> を叩いてアプリをデプロイしたはずだ。あのコマンド 1 発の裏で Pod・ReplicaSet・Service という 3 段のオブジェクトが連動して動いていたことを、説明できるだろうか。それぞれ何を担当し、なぜ 1 つに統合されていないのかを見ていく。</p>
+
+      <div class="tldr">
+        <div class="box-title">🎯 3 行まとめ</div>
+        <ul>
+          <li>Pod はコンテナ 1 つ以上をまとめた最小のデプロイ単位で、IP アドレスは使い捨てである</li>
+          <li>Deployment は「あるべき Pod の数」を宣言し、ReplicaSet を介して自己修復とローリングアップデートを担う</li>
+          <li>Service は入れ替わり続ける Pod 群を label セレクタで束ね、固定 IP という安定した入口を提供する</li>
+        </ul>
+      </div>
+
+      <section class="body-section">
+        <h3>Pod — コンテナを直接デプロイしない理由</h3>
+        <p>Kubernetes は <code>docker run</code> のようにコンテナを個別に動かすことをしない。管理できる最小単位は <strong>Pod</strong> であり、1 つ以上のコンテナをまとめて「共有された実行環境」として扱う。Pod 内のコンテナは同じネットワークネームスペース（同じ IP アドレスとポート空間）と、必要に応じて同じストレージボリュームを共有する。</p>
+        <p>ほとんどの Pod はコンテナ 1 つだけを持つ。それでも Pod という層を挟むのは、ログ収集用のサイドカーコンテナのように「常に一緒にスケジュールされ、同じネットワークを共有すべきコンテナ群」を表現する余地を残すためだ。Pod は基本的に使い捨てで、削除・再作成のたびに新しい IP アドレスが割り当てられる。</p>
+      </section>
+
+      <div class="analogy">
+        <div class="box-title">🍱 たとえるなら</div>
+        <p>コールセンターに例えると分かりやすい。<strong>Pod</strong> は個々のオペレーター席そのもの。<strong>Deployment</strong> はシフト管理者で、「常に 3 席稼働させる」という契約を守り、誰かが抜ければ即座に補充し、マニュアルが変われば席を 1 つずつ入れ替えていく。<strong>Service</strong> は代表電話番号で、電話をかける側は「今日どの席の誰が出るか」を一切気にせず、その番号にかけるだけでよい。</p>
+      </div>
+
+      <section class="body-section">
+        <h3>Deployment — 「あるべき状態」を維持し続ける仕組み</h3>
+        <p>Deployment は Pod を直接作らない。実際に Pod 数を維持する役目は <strong>ReplicaSet</strong> という別オブジェクトに委譲されており、Deployment は「今どの ReplicaSet を正としているか」を管理する層になっている。</p>
+        <pre class="diagram">Deployment
+   │ 世代を管理
+   ▼
+ReplicaSet ──┬──▶ Pod (10.1.0.5)
+             ├──▶ Pod (10.1.0.6)
+             └──▶ Pod (10.1.0.7)
+   IP は再作成のたびに変わる</pre>
+        <p>Pod がクラッシュすると ReplicaSet が即座に代わりの Pod を作る（自己修復）。また Pod テンプレート（イメージのバージョンなど）を変更すると、Deployment は新しい ReplicaSet を作り、古い ReplicaSet の Pod を少しずつ減らしながら新しい方を増やす。この入れ替え幅はデフォルトで、同時に停止してよい Pod 数（<code>maxUnavailable</code>）・一時的に増やしてよい Pod 数（<code>maxSurge</code>）ともに希望レプリカ数の 25% に設定されている。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>Service — 入れ替わる Pod を固定 IP の裏に隠す</h3>
+        <p>ここで問題になるのが Pod の IP が使い捨てだという事実だ。ローリングアップデートのたびに Pod の IP が変わるなら、それを呼び出す側のアプリはどうやって接続先を知ればいいのか。この問いに答えるのが <strong>Service</strong> である。</p>
+        <p>Service は label セレクタで対象の Pod 群を指定し、それらをまとめて 1 つの固定 IP アドレス（デフォルトの種類は <code>ClusterIP</code>）の裏に隠す。実体としてリクエストを中継するプロセスが常駐しているわけではなく、各ノード上で動く <strong>kube-proxy</strong> がカーネルのパケット処理ルール（iptables や IPVS など）を書き換え、Service 宛の通信を生きている Pod のいずれかへ直接転送する。Pod が入れ替わっても Service の IP は変わらないため、呼び出し側は Service 名（DNS）を知っていればよい。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>なぜ 1 つに統合しないのか</h3>
+        <p>3 つに分かれているのは責務がそれぞれ異なるからだ。Pod は「何を実行するか」、Deployment（と ReplicaSet）は「何個・どのバージョンで動かすか」、Service は「どう到達可能にするか」を担当する。この分離のおかげで、例えば Deployment をローリングアップデートしている最中でも Service の IP は一切変わらず、呼び出し側のアプリには何の影響も出ない。1 つのオブジェクトに全部を詰め込んでいたら、更新のたびに接続先まで再設計する羽目になっていただろう。</p>
+      </section>
+
+      <div class="practical">
+        <div class="box-title">💼 実務でどう出会うか</div>
+        <p><code>kubectl get pods</code> で見える Pod 名の末尾がランダムな文字列で、再作成されるたびに別物に変わるのはこの仕組みのため。マイクロサービス間の通信で接続先ホスト名に Pod の IP ではなく <code>Service 名.namespace.svc.cluster.local</code> のような DNS 名を使うのも、Pod の使い捨て性を意識した設計だ。デプロイ時に瞬間的な 502/504 が出る場合は、ここで説明した Deployment のローリングアップデートと Service の Endpoint 更新のタイミングのずれ（Pod がまだ準備完了していないのに Service から流量が来る等）が原因であることが多い。</p>
+      </div>
+
+      <div class="hands-on">
+        <div class="box-title">⌨️ 手を動かす（5 分）</div>
+        <p>kind でローカルクラスタを作り、Pod の IP が使い捨てである一方 Service の IP が固定であることを実際に確認する。</p>
+        <pre class="code">kind create cluster --name podtest
+kubectl create deployment web --image=nginx --replicas=2
+kubectl expose deployment web --port=80
+kubectl get pods -o wide
+kubectl get svc web
+kubectl delete pod -l app=web
+sleep 5
+kubectl get pods -o wide
+kubectl get svc web</pre>
+        <p>1 回目と 2 回目の <code>kubectl get pods -o wide</code> で Pod 名と IP が完全に変わっているのに対し、<code>kubectl get svc web</code> の CLUSTER-IP は 2 回とも同じ値のままであることが確認できるはずだ。</p>
+      </div>
+
+      <div class="misconceptions">
+        <div class="box-title">🙅 よくある誤解</div>
+        <ul>
+          <li><span class="wrong">Pod = コンテナ</span> — Pod はコンテナを 1 つ以上まとめて実行するための入れ物であり、コンテナそのものではない。複数コンテナが同じネットワーク・ボリュームを共有する単位。</li>
+          <li><span class="wrong">Deployment を消しても Pod は残る</span> — Deployment → ReplicaSet → Pod は所有者参照でつながっており、Deployment を削除すると配下の ReplicaSet と Pod も連鎖的に削除される。</li>
+          <li><span class="wrong">Service はリクエストを中継する常駐プロセス</span> — Service 自体は「宛先ルール」の集合にすぎず、各ノードの kube-proxy がカーネルのパケット処理ルールを書き換えることで転送を実現している。</li>
+        </ul>
+      </div>
+
+      <div class="glossary">
+        <div class="box-title">📖 用語ミニ辞典</div>
+        <dl>
+          <dt>Pod</dt><dd>1 つ以上のコンテナをまとめ、ネットワークとストレージを共有させる Kubernetes の最小デプロイ単位。</dd>
+          <dt>ReplicaSet</dt><dd>指定した数の Pod を常に維持し続けるコントローラ。Deployment から間接的に管理される。</dd>
+          <dt>Deployment</dt><dd>ReplicaSet の世代を管理し、Pod の自己修復とローリングアップデートを実現する上位オブジェクト。</dd>
+          <dt>Service</dt><dd>label セレクタで束ねた Pod 群に対し、固定 IP と DNS 名による安定した接続先を提供する抽象化。</dd>
+          <dt>kube-proxy</dt><dd>各ノードで動き、Service 宛の通信を実際の Pod へ転送するためのカーネルのパケット処理ルールを管理するコンポーネント。</dd>
+        </dl>
+      </div>
+
+      <div class="further-reading">
+        <div class="box-title">🔗 もっと深く</div>
+        <ul>
+          <li><a href="https://kubernetes.io/docs/concepts/workloads/pods/">Pods | Kubernetes</a> — Pod の公式定義と、共有されるネットワーク・ストレージの範囲を確認できる。</li>
+          <li><a href="https://kubernetes.io/docs/concepts/workloads/controllers/deployment/">Deployments | Kubernetes</a> — ローリングアップデートの maxUnavailable / maxSurge のデフォルト値など詳細仕様。</li>
+          <li><a href="https://kubernetes.io/docs/concepts/services-networking/service/">Service | Kubernetes</a> — Service がなぜ必要かという背景から ClusterIP 以外の種類まで網羅。</li>
+          <li><a href="https://kubernetes.io/docs/reference/networking/virtual-ips/">Virtual IPs and Service Proxies | Kubernetes</a> — kube-proxy が iptables / IPVS でどう仮想 IP を実装しているかの一次資料。</li>
+        </ul>
+      </div>
+    </article>
 
     <footer>
       <p>Generated by Claude Code (GitHub Actions)</p>
