@@ -1,0 +1,2 @@
+# wrangler のローカルキャッシュ（Cloudflare Pages デプロイ時に生成）
+.wrangler/

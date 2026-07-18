@@ -2,17 +2,17 @@
 
 ## プロジェクト概要
 
-tech-learning-daily: ソフトウェア技術の基礎（k8s・負荷試験・DB・ネットワーク・言語ランタイム・ブラウザ・AI・開発ツールの内部など技術系全般）を初学者向けに 1 日 1 トピック解説し、GitHub Pages で公開する静的サイト。tech-news-daily（ニュースダイジェスト）の姉妹サイトで、パイプライン構成は同型。GitHub Actions workflow `daily-article.yml` が claude-code-action で トピック選定 → 調査 → HTML 生成 → main push → Pages デプロイを毎朝自動実行する。
+tech-learning-daily: ソフトウェア技術の基礎（k8s・負荷試験・DB・ネットワーク・言語ランタイム・ブラウザ・AI・開発ツールの内部など技術系全般）を初学者向けに 1 日 1 トピック解説し、Cloudflare Pages で公開する静的サイト。tech-news-daily（ニュースダイジェスト）の姉妹サイトで、パイプライン構成は同型。GitHub Actions workflow `daily-article.yml` が claude-code-action で トピック選定 → 調査 → HTML 生成 → main push → Cloudflare Pages デプロイを毎朝自動実行する。
 
 読者像は「Web アプリは書けるがインフラの内部動作は初学者」のエンジニア（= kaionn 自身）。記事の設計思想は `prompts/daily-article.md` の Reader Profile / Writing Rules が一次ソース。
 
-## デプロイパイプライン（GHA daily-article: 生成→push→Pages）
+## デプロイパイプライン（GHA daily-article: 生成→push→Cloudflare Pages）
 
 `.github/workflows/daily-article.yml`（cron `23 21 * * *` = 06:23 JST、`workflow_dispatch` で手動実行可）が単一 workflow で完結する:
 
 1. **生成 (claude-code-action@v1)**: `prompts/daily-article.md` の指示に従い Claude がファイルを生成・編集する。**Claude は git 操作を一切しない**（ファイル生成のみ）。prompt 頼みでなく `--disallowedTools` で git 書き込み系をツール層から物理的に拒否している（tech-news-daily で 2026-07-16/17 に prompt のみのガードが突破された教訓）。workflow / prompt を変更する際もこのガードを外さないこと
 2. **反映 (workflow step)**: 生成物（`index.html` / `archive/` / `feed.xml` / `topics.md`）に変更があり、`index.html` に当日日付が含まれることを検証してから `github-actions[bot]` 名義で `YYYY-MM-DD の基礎解説: {タイトル}` として main へ commit/push する。変更ゼロ・日付不整合は run を fail させる（失敗が必ず可視化される）
-3. **デプロイ**: `GITHUB_TOKEN` push は他 workflow を発火させないため、同 workflow が `configure-pages` → `upload-pages-artifact` → `deploy-pages` を自前実行する
+3. **デプロイ**: `GITHUB_TOKEN` push は他 workflow を発火させないため、同 workflow が wrangler による Cloudflare Pages への deploy を自前実行する（`CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` repo secrets を使用）
 
 認証は repo secret `CLAUDE_CODE_OAUTH_TOKEN`（Pro/Max サブスクの OAuth トークン、ローカルで `claude setup-token` を実行して生成・失効時も同コマンドで再発行）。PAT は不要。
 
@@ -36,7 +36,7 @@ tech-learning-daily: ソフトウェア技術の基礎（k8s・負荷試験・DB
 
 `index.html` / `style.css` / `feed.xml` / `prompts/` を変更したら、同セッション内で必ず commit → push まで完了させる。日次 workflow は毎朝 origin/main を前提に生成・push するため、ローカル未 push の変更は公開サイトに反映されないだけでなく、日次 push とローカルが分岐する。
 
-手動 push でのサイト反映は `.github/workflows/deploy-pages.yml`（push トリガー、サイトアセットのパスフィルタ付き）が担う。日次 run の `GITHUB_TOKEN` push はこの workflow を発火させないため二重デプロイにはならない（日次 run は自前でデプロイする）。
+手動 push でのサイト反映は `.github/workflows/deploy-site.yml`（push トリガー、サイトアセットのパスフィルタ付き）が担う。日次 run の `GITHUB_TOKEN` push はこの workflow を発火させないため二重デプロイにはならない（日次 run は自前で Cloudflare Pages に反映する）。
 
 ## archive/ の整合性
 
