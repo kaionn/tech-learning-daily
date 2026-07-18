@@ -4,7 +4,6 @@
 
 ## キュー
 
-- Cloudflareって何？（知りたい観点: CDN・DNS・Pages・Workers などサービス群の全体像と、GitHub Pages から Cloudflare Pages へ移すと何が変わるのか）
 - Deployment の manifest に設定できる項目一覧（知りたい観点: replicas / strategy / probe / resources 等の主要フィールドを、実際の YAML 断片つきで「この値をこう設定すると挙動がこう変わる」まで具体的に）
 - コンテナと VM は何が違うのか（知りたい観点: 「軽い」と言われる理由と、代わりに失っているもの）
 - ロードバランサーの L4 と L7（知りたい観点: ALB と NLB をどう使い分けるのか）
@@ -23,6 +22,7 @@
 
 ## 消化済み
 
+- 2026-07-18 Cloudflareって何？（知りたい観点: CDN・DNS・Pages・Workers などサービス群の全体像と、GitHub Pages から Cloudflare Pages へ移すと何が変わるのか）
 - 2026-07-18 負荷試験の基本（知りたい観点: 何を測って、どの数字を見て「もう限界」と判断するのか）
 - 2026-07-18 Pod の流量制限・リソース制限の設定（requests / limits で CPU スロットリングと OOMKill をどう避けるか）
 - 2026-07-18 Kubernetes の全体像（Pod・Deployment・Service は結局それぞれ何者で、なぜ 3 つもあるのか）

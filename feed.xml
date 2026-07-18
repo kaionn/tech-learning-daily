@@ -4,8 +4,15 @@
   <link href="https://kaionn.github.io/tech-learning-daily/"/>
   <link rel="self" href="https://kaionn.github.io/tech-learning-daily/feed.xml"/>
   <id>https://kaionn.github.io/tech-learning-daily/</id>
-  <updated>2026-07-18T11:25:56+09:00</updated>
+  <updated>2026-07-18T21:34:30+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>CDN・DNS・Workers・Pages…… Cloudflare は結局何をしているのか？</title>
+    <link href="https://kaionn.github.io/tech-learning-daily/archive/2026-07-18-4.html"/>
+    <id>https://kaionn.github.io/tech-learning-daily/archive/2026-07-18-4.html</id>
+    <updated>2026-07-18T21:34:30+09:00</updated>
+    <summary>Cloudflare の土台は権威 DNS とリバースプロキシ。anycast による最寄り拠点への自動振り分け、Workers の V8 isolate モデル、Cloudflare Pages と GitHub Pages の構造的な違いを解説。</summary>
+  </entry>
   <entry>
     <title>負荷試験で「もう限界」をどの数字で判断するのか？</title>
     <link href="https://kaionn.github.io/tech-learning-daily/archive/2026-07-18-3.html"/>
