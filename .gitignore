@@ -1,2 +1,5 @@
 # wrangler のローカルキャッシュ（Cloudflare Pages デプロイ時に生成）
 .wrangler/
+
+# Claude Code のローカル state（どの階層でも commit しない。deploy は git archive 経由のため commit すると公開される）
+.claude/

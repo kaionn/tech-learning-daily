@@ -12,6 +12,9 @@ on:
       - 'archive/**'
       - style.css
       - feed.xml
+      - favicon.ico
+      - icon-192.png
+      - apple-touch-icon.png
 
 permissions:
   contents: read

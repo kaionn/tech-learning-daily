@@ -16,7 +16,7 @@ EVERY invocation MUST produce one NEW article. If index.html already shows an ar
 Read `topics.md`.
 
 1. If the `## キュー` section has items, take the FIRST one. That is today's topic.
-2. If the queue is empty, self-select: read the titles in `archive/index.html` (avoid anything already covered), then pick the most foundational uncovered topic from these areas — コンテナ / Kubernetes, 負荷試験・パフォーマンス, データベース内部, ネットワーク (DNS/TLS/LB/HTTP), 分散システム・アーキテクチャパターン, キャッシュ・キュー・非同期処理, Observability, クラウドインフラ (AWS/IaC), セキュリティ基礎, CI/CD・デプロイ戦略, 言語処理系・ランタイム (GC・並行処理・型システム), ブラウザ・フロントエンド基盤 (レンダリング・イベントループ・バンドラ), AI/LLM の仕組み, 開発ツールの内部 (git・テスト戦略・ビルドシステム). Prefer topics that unblock understanding of other topics (e.g. コンテナの仕組み before Kubernetes 応用).
+2. If the queue is empty, self-select: read the titles in `data/articles.json` (avoid anything already covered), then pick the most foundational uncovered topic from these areas — コンテナ / Kubernetes, 負荷試験・パフォーマンス, データベース内部, ネットワーク (DNS/TLS/LB/HTTP), 分散システム・アーキテクチャパターン, キャッシュ・キュー・非同期処理, Observability, クラウドインフラ (AWS/IaC), セキュリティ基礎, CI/CD・デプロイ戦略, 言語処理系・ランタイム (GC・並行処理・型システム), ブラウザ・フロントエンド基盤 (レンダリング・イベントループ・バンドラ), AI/LLM の仕組み, 開発ツールの内部 (git・テスト戦略・ビルドシステム). Prefer topics that unblock understanding of other topics (e.g. コンテナの仕組み before Kubernetes 応用).
 
 A topic line may include a parenthetical like `（知りたい観点: ...）` — treat that as the reader's specific question and make sure the article answers it directly.
 
@@ -48,9 +48,9 @@ while [ -f "$ARCHIVE" ]; do N=$((N+1)); ARCHIVE="archive/${TODAY}-${N}.html"; do
 echo "$ARCHIVE"
 ```
 
-Remember `$ARCHIVE` — the feed entry (Step 6), the archive/index.html card (Step 7), and the archive copy (Step 10) must all use this exact filename. If `$ARCHIVE` has a `-N` suffix, this is a same-day extra run: proceed exactly as normal (consume the next queue topic); the only difference is the filename.
+Remember `$ARCHIVE` — the feed entry (Step 6), the data/articles.json entry (Step 7), and the archive copy (Step 10) must all use this exact filename. If `$ARCHIVE` has a `-N` suffix, this is a same-day extra run: proceed exactly as normal (consume the next queue topic); the only difference is the filename.
 
-Determine the issue number: count entries in `archive/index.html` and add 1 (the placeholder page before issue 1 does not count; same-day extras each get their own issue number).
+Determine the issue number: count entries in `data/articles.json` and add 1 (`python3 -c "import json;print(len(json.load(open('data/articles.json'))))"`; same-day extras each get their own issue number).
 
 ## Step 4: Archive Yesterday's Article (fallback)
 
@@ -79,6 +79,9 @@ Write a complete HTML file to `index.html` with this exact structure:
   <title>Tech Learning Daily — {記事タイトル}</title>
   <link rel="stylesheet" href="style.css">
   <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="feed.xml">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 </head>
 <body>
   <div class="container">

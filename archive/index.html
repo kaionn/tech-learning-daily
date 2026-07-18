@@ -3,47 +3,163 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tech Learning Daily — Past Issues</title>
+  <title>Tech Learning Daily — アーカイブ</title>
+  <meta name="description" content="Tech Learning Daily の全記事アーカイブ。カテゴリ・難易度・キーワードで検索できる。">
   <link rel="stylesheet" href="../style.css">
+  <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="../feed.xml">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 </head>
 <body>
   <div class="container">
-    <header>
-      <h1>Tech Learning Daily</h1>
-      <div class="tagline">過去の記事一覧</div>
+    <header class="with-nav">
+      <h1><a href="../">Tech Learning Daily</a></h1>
+      <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
     </header>
 
-    <div class="section">
-      <div class="section-title">Past Issues</div>
+    <nav class="site-nav">
+      <a href="../">最新号</a>
+      <a href="./" class="active">アーカイブ</a>
+      <a href="../feed.xml">RSS</a>
+    </nav>
 
-      <div class="card">
-        <h3><a href="2026-07-18-4.html">CDN・DNS・Workers・Pages…… Cloudflare は結局何をしているのか？</a></h3>
-        <div class="summary">Cloudflare の土台は権威 DNS とリバースプロキシ。anycast による最寄り拠点への自動振り分け、Workers の V8 isolate モデル、Cloudflare Pages と GitHub Pages の構造的な違いを解説。</div>
-        <div class="meta"><span class="tag tag-network">Network</span><span>2026-07-18 (Sat)</span></div>
+    <div class="toolbar">
+      <div class="search-wrap">
+        <span class="icon">🔍</span>
+        <input id="search" type="search" placeholder="タイトル・サマリ・用語で検索" autocomplete="off">
       </div>
-
-      <div class="card">
-        <h3><a href="2026-07-18-3.html">負荷試験で「もう限界」をどの数字で判断するのか？</a></h3>
-        <div class="summary">スループットだけでは限界は分からない。リトルの法則で同時実行数・スループット・レイテンシがつながっており、p95/p99 が急上昇するノック点と USE メソッドでの飽和リソース特定を解説。</div>
-        <div class="meta"><span class="tag tag-perf">Perf</span><span>2026-07-18 (Sat)</span></div>
+      <div class="chip-row" id="cat-chips">
+        <span class="row-label">カテゴリ</span>
+        <button class="chip on" data-cat="">すべて</button>
+        <button class="chip" data-cat="container">Container <span class="chip-count">2</span></button>
+        <button class="chip" data-cat="network">Network <span class="chip-count">1</span></button>
+        <button class="chip" data-cat="perf">Perf <span class="chip-count">1</span></button>
       </div>
-
-      <div class="card">
-        <h3><a href="2026-07-18-2.html">CPU limit を超えると遅くなるだけなのに、メモリ limit だと Pod が落ちるのはなぜか？</a></h3>
-        <div class="summary">CPU limit 超過は CFS スロットリングで待たされるだけだが、メモリ limit 超過は OOM Killer に強制終了される。requests/limits の役割の違いと QoS クラスによる eviction 優先順位を解説。</div>
-        <div class="meta"><span class="tag tag-container">Container</span><span>2026-07-18 (Sat)</span></div>
+      <div class="chip-row" id="diff-chips">
+        <span class="row-label">難易度</span>
+        <button class="chip on" data-diff="">すべて</button>
+        <button class="chip" data-diff="入門">🌱 入門</button>
+        <button class="chip" data-diff="基礎">🌿 基礎</button>
+        <button class="chip" data-diff="応用">🌳 応用</button>
       </div>
-
-      <div class="card">
-        <h3><a href="2026-07-18.html">Pod・Deployment・Service、なぜ 3 つも要るのか？</a></h3>
-        <div class="summary">Pod は使い捨ての最小実行単位、Deployment は ReplicaSet 経由で数と更新を管理し、Service は入れ替わる Pod 群を固定 IP の裏に隠す — 3 層に分かれているのは責務が違うからだ。</div>
-        <div class="meta"><span class="tag tag-container">Container</span><span>2026-07-18 (Sat)</span></div>
-      </div>
+      <div class="result-info" id="result-info"></div>
     </div>
 
+    <section class="section month" data-month="2026-07">
+      <div class="section-title">2026 年 7 月 <span class="count"></span></div>
+      <div class="card" data-cat="network" data-diff="基礎"
+           data-search="cdn・dns・workers・pages…… cloudflare は結局何をしているのか？ cloudflare の土台は権威 dns とリバースプロキシ。anycast による最寄り拠点への自動振り分け、workers の v8 isolate モデル、cloudflare pages と github pages の構造的な違いを解説。" data-terms="権威 DNS サーバー / anycast / リバースプロキシ / isolate / Pages Functions">
+        <h3><a href="2026-07-18-4.html">CDN・DNS・Workers・Pages…… Cloudflare は結局何をしているのか？</a></h3>
+        <div class="summary">Cloudflare の土台は権威 DNS とリバースプロキシ。anycast による最寄り拠点への自動振り分け、Workers の V8 isolate モデル、Cloudflare Pages と GitHub Pages の構造的な違いを解説。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-network">Network</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-07-18</span></div>
+      </div>
+      <div class="card" data-cat="perf" data-diff="基礎"
+           data-search="負荷試験で「もう限界」をどの数字で判断するのか？ スループットだけでは限界は分からない。リトルの法則で同時実行数・スループット・レイテンシがつながっており、p95/p99 が急上昇するノック点と use メソッドでの飽和リソース特定を解説。" data-terms="スループット / パーセンタイル（p95・p99） / リトルの法則 / ノック点（knee point） / USE メソッド">
+        <h3><a href="2026-07-18-3.html">負荷試験で「もう限界」をどの数字で判断するのか？</a></h3>
+        <div class="summary">スループットだけでは限界は分からない。リトルの法則で同時実行数・スループット・レイテンシがつながっており、p95/p99 が急上昇するノック点と USE メソッドでの飽和リソース特定を解説。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-perf">Perf</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-07-18</span></div>
+      </div>
+      <div class="card" data-cat="container" data-diff="基礎"
+           data-search="cpu limit を超えると遅くなるだけなのに、メモリ limit だと pod が落ちるのはなぜか？ cpu limit 超過は cfs スロットリングで待たされるだけだが、メモリ limit 超過は oom killer に強制終了される。requests/limits の役割の違いと qos クラスによる eviction 優先順位を解説。" data-terms="requests / limits / CFS スロットリング / OOM Killer / QoS クラス">
+        <h3><a href="2026-07-18-2.html">CPU limit を超えると遅くなるだけなのに、メモリ limit だと Pod が落ちるのはなぜか？</a></h3>
+        <div class="summary">CPU limit 超過は CFS スロットリングで待たされるだけだが、メモリ limit 超過は OOM Killer に強制終了される。requests/limits の役割の違いと QoS クラスによる eviction 優先順位を解説。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-container">Container</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-07-18</span></div>
+      </div>
+      <div class="card" data-cat="container" data-diff="基礎"
+           data-search="pod・deployment・service、なぜ 3 つも要るのか？ pod は使い捨ての最小実行単位、deployment は replicaset 経由で数と更新を管理し、service は入れ替わる pod 群を固定 ip の裏に隠す — 3 層に分かれているのは責務が違うからだ。" data-terms="Pod / ReplicaSet / Deployment / Service / kube-proxy">
+        <h3><a href="2026-07-18.html">Pod・Deployment・Service、なぜ 3 つも要るのか？</a></h3>
+        <div class="summary">Pod は使い捨ての最小実行単位、Deployment は ReplicaSet 経由で数と更新を管理し、Service は入れ替わる Pod 群を固定 IP の裏に隠す — 3 層に分かれているのは責務が違うからだ。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-container">Container</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-07-18</span></div>
+      </div>
+    </section>
+
+    <div class="empty" id="empty">該当する記事がない。検索語を短くするか、フィルタを外してみて。</div>
+
     <footer>
+      <p>Generated by Claude Code (GitHub Actions)</p>
       <a href="../" class="archive-link">最新号へ戻る</a>
     </footer>
   </div>
+
+  <script>
+    (function () {
+      var searchEl = document.getElementById('search');
+      var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));
+      var months = Array.prototype.slice.call(document.querySelectorAll('.month'));
+      var info = document.getElementById('result-info');
+      var empty = document.getElementById('empty');
+      var cat = '';
+      var diff = '';
+
+      var more = document.getElementById('chip-more');
+      if (more) {
+        more.addEventListener('click', function () {
+          document.querySelectorAll('[data-overflow]').forEach(function (c) { c.hidden = false; });
+          more.remove();
+        });
+      }
+
+      function setupChips(rowId, attr, onChange) {
+        var row = document.getElementById(rowId);
+        row.addEventListener('click', function (e) {
+          var btn = e.target.closest('.chip');
+          if (!btn || btn.id === 'chip-more') return;
+          row.querySelectorAll('.chip').forEach(function (c) { c.classList.remove('on'); });
+          btn.classList.add('on');
+          onChange(btn.getAttribute(attr) || '');
+          apply();
+        });
+      }
+      setupChips('cat-chips', 'data-cat', function (v) { cat = v; });
+      setupChips('diff-chips', 'data-diff', function (v) { diff = v; });
+
+      function apply() {
+        var q = searchEl.value.trim().toLowerCase();
+        var visible = 0;
+
+        cards.forEach(function (card) {
+          var okCat = !cat || card.getAttribute('data-cat') === cat;
+          var okDiff = !diff || card.getAttribute('data-diff') === diff;
+          var okQ = true;
+          var termHitText = '';
+
+          if (q) {
+            var inBody = card.getAttribute('data-search').indexOf(q) !== -1;
+            var terms = card.getAttribute('data-terms') || '';
+            var inTerms = terms.toLowerCase().indexOf(q) !== -1;
+            okQ = inBody || inTerms;
+            if (okQ && inTerms) termHitText = '📖 用語ミニ辞典: ' + terms;
+          }
+
+          var show = okCat && okDiff && okQ;
+          card.style.display = show ? '' : 'none';
+          var hitEl = card.querySelector('.term-hit');
+          hitEl.textContent = termHitText;
+          hitEl.classList.toggle('show', !!termHitText);
+          if (show) visible++;
+        });
+
+        months.forEach(function (m) {
+          var count = 0;
+          m.querySelectorAll('.card').forEach(function (c) { if (c.style.display !== 'none') count++; });
+          m.style.display = count ? '' : 'none';
+          m.querySelector('.count').textContent = '— ' + count + ' 本';
+        });
+
+        empty.classList.toggle('show', visible === 0);
+        info.textContent = (q || cat || diff)
+          ? visible + ' 本がヒット（全 ' + cards.length + ' 本）'
+          : '全 ' + cards.length + ' 本';
+      }
+
+      searchEl.addEventListener('input', apply);
+      apply();
+    })();
+  </script>
 </body>
 </html>
