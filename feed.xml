@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-07-18T21:34:30+09:00</updated>
+  <updated>2026-07-19T07:16:55+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>Deployment の manifest、`replicas` の下に並ぶ設定は何をしているのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-07-19.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-07-19.html</id>
+    <updated>2026-07-19T07:16:55+09:00</updated>
+    <summary>maxSurge/maxUnavailable のデフォルト 25% がロールアウト中の可用性を決め、readinessProbe と livenessProbe は失敗時の挙動が別物、progressDeadlineSeconds は自動停止しない停滞検知であることを解説。</summary>
+  </entry>
   <entry>
     <title>CDN・DNS・Workers・Pages…… Cloudflare は結局何をしているのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-07-18-4.html"/>

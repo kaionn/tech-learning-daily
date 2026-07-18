@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-07-19.html",
+    "date": "2026-07-19",
+    "title": "Deployment の manifest、`replicas` の下に並ぶ設定は何をしているのか？",
+    "summary": "maxSurge/maxUnavailable のデフォルト 25% がロールアウト中の可用性とキャパシティを両側から縛り、readinessProbe と livenessProbe は失敗時の挙動が別物であることを、実際の YAML 断片で解説。",
+    "category": "container",
+    "difficulty": "基礎",
+    "readTime": 8,
+    "terms": ["RollingUpdate", "maxSurge", "maxUnavailable", "readinessProbe", "livenessProbe", "progressDeadlineSeconds"]
+  },
+  {
     "file": "2026-07-18-4.html",
     "date": "2026-07-18",
     "title": "CDN・DNS・Workers・Pages…… Cloudflare は結局何をしているのか？",

@@ -30,7 +30,7 @@
       <div class="chip-row" id="cat-chips">
         <span class="row-label">カテゴリ</span>
         <button class="chip on" data-cat="">すべて</button>
-        <button class="chip" data-cat="container">Container <span class="chip-count">2</span></button>
+        <button class="chip" data-cat="container">Container <span class="chip-count">3</span></button>
         <button class="chip" data-cat="network">Network <span class="chip-count">1</span></button>
         <button class="chip" data-cat="perf">Perf <span class="chip-count">1</span></button>
       </div>
@@ -46,6 +46,13 @@
 
     <section class="section month" data-month="2026-07">
       <div class="section-title">2026 年 7 月 <span class="count"></span></div>
+      <div class="card" data-cat="container" data-diff="基礎"
+           data-search="deployment の manifest、`replicas` の下に並ぶ設定は何をしているのか？ maxsurge/maxunavailable のデフォルト 25% がロールアウト中の可用性とキャパシティを両側から縛り、readinessprobe と livenessprobe は失敗時の挙動が別物であることを、実際の yaml 断片で解説。" data-terms="RollingUpdate / maxSurge / maxUnavailable / readinessProbe / livenessProbe / progressDeadlineSeconds">
+        <h3><a href="2026-07-19.html">Deployment の manifest、`replicas` の下に並ぶ設定は何をしているのか？</a></h3>
+        <div class="summary">maxSurge/maxUnavailable のデフォルト 25% がロールアウト中の可用性とキャパシティを両側から縛り、readinessProbe と livenessProbe は失敗時の挙動が別物であることを、実際の YAML 断片で解説。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-container">Container</span><span>🌿 基礎</span><span>⏱ 約 8 分</span><span>2026-07-19</span></div>
+      </div>
       <div class="card" data-cat="network" data-diff="基礎"
            data-search="cdn・dns・workers・pages…… cloudflare は結局何をしているのか？ cloudflare の土台は権威 dns とリバースプロキシ。anycast による最寄り拠点への自動振り分け、workers の v8 isolate モデル、cloudflare pages と github pages の構造的な違いを解説。" data-terms="権威 DNS サーバー / anycast / リバースプロキシ / isolate / Pages Functions">
         <h3><a href="2026-07-18-4.html">CDN・DNS・Workers・Pages…… Cloudflare は結局何をしているのか？</a></h3>
