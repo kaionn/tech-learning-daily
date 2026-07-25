@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-07-19T07:16:55+09:00</updated>
+  <updated>2026-07-25T09:47:14+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>コンテナはなぜ VM より「軽い」のか？ 手放しているものは何か</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-07-25.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-07-25.html</id>
+    <updated>2026-07-25T09:47:14+09:00</updated>
+    <summary>VM はカーネルごとゲスト OS を積むがコンテナはホストカーネルを共有し名前空間と cgroup で区切るだけ。軽さの理由と、カーネル共有ゆえの隔離の弱さ、Mac の Docker Desktop が裏で VM を使う理由を解説。</summary>
+  </entry>
   <entry>
     <title>Deployment の manifest、`replicas` の下に並ぶ設定は何をしているのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-07-19.html"/>

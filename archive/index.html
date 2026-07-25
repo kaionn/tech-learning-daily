@@ -30,7 +30,7 @@
       <div class="chip-row" id="cat-chips">
         <span class="row-label">カテゴリ</span>
         <button class="chip on" data-cat="">すべて</button>
-        <button class="chip" data-cat="container">Container <span class="chip-count">3</span></button>
+        <button class="chip" data-cat="container">Container <span class="chip-count">4</span></button>
         <button class="chip" data-cat="network">Network <span class="chip-count">1</span></button>
         <button class="chip" data-cat="perf">Perf <span class="chip-count">1</span></button>
       </div>
@@ -46,6 +46,13 @@
 
     <section class="section month" data-month="2026-07">
       <div class="section-title">2026 年 7 月 <span class="count"></span></div>
+      <div class="card" data-cat="container" data-diff="基礎"
+           data-search="コンテナはなぜ vm より「軽い」のか？ 手放しているものは何か vm はカーネルごとゲスト os を積むがコンテナはホストカーネルを共有し名前空間と cgroup で区切るだけ。軽さの理由と、カーネル共有ゆえの隔離の弱さ、mac の docker desktop が裏で vm を使う理由を解説。" data-terms="名前空間（namespace） / cgroup / ハイパーバイザー / ゲスト OS / コンテナランタイム">
+        <h3><a href="2026-07-25.html">コンテナはなぜ VM より「軽い」のか？ 手放しているものは何か</a></h3>
+        <div class="summary">VM はカーネルごとゲスト OS を積むがコンテナはホストカーネルを共有し名前空間と cgroup で区切るだけ。軽さの理由と、カーネル共有ゆえの隔離の弱さ、Mac の Docker Desktop が裏で VM を使う理由を解説。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-container">Container</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-07-25</span></div>
+      </div>
       <div class="card" data-cat="container" data-diff="基礎"
            data-search="deployment の manifest、`replicas` の下に並ぶ設定は何をしているのか？ maxsurge/maxunavailable のデフォルト 25% がロールアウト中の可用性とキャパシティを両側から縛り、readinessprobe と livenessprobe は失敗時の挙動が別物であることを、実際の yaml 断片で解説。" data-terms="RollingUpdate / maxSurge / maxUnavailable / readinessProbe / livenessProbe / progressDeadlineSeconds">
         <h3><a href="2026-07-19.html">Deployment の manifest、`replicas` の下に並ぶ設定は何をしているのか？</a></h3>
