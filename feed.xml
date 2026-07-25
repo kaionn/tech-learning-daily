@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-07-25T18:45:40+09:00</updated>
+  <updated>2026-07-25T18:53:51+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>freee はなぜ、経理の自動化を一気に AI エージェントまで進めなかったのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-07-25-3.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-07-25-3.html</id>
+    <updated>2026-07-25T18:53:51+09:00</updated>
+    <summary>freee の経理自動化はルールベースの自動登録 → AI-OCR → LLM エージェント(freee-mcp)と裁量を段階的に広げてきた。裁量が広がるほど権限制御・監査ログが必須になる設計判断を解説。</summary>
+  </entry>
   <entry>
     <title>「トークン」「推論」「コンテキストウィンドウ」、LLM の中で結局何が起きているのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-07-25-2.html"/>
