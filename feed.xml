@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-07-25T18:53:51+09:00</updated>
+  <updated>2026-07-25T18:59:27+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>「精度 94% の OCR」を製品機能にするとき、UI は何を設計すべきか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-07-25-4.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-07-25-4.html</id>
+    <updated>2026-07-25T18:59:27+09:00</updated>
+    <summary>OCR の「精度」はデータセット平均の指標であり、1 件ごとの信頼度を示す confidence score とは別物。confidence に基づくレビューキュー設計としきい値の考え方、マルチモーダル LLM への移行で変わる前提を解説。</summary>
+  </entry>
   <entry>
     <title>freee はなぜ、経理の自動化を一気に AI エージェントまで進めなかったのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-07-25-3.html"/>

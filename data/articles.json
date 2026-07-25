@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-07-25-4.html",
+    "date": "2026-07-25",
+    "title": "「精度 94% の OCR」を製品機能にするとき、UI は何を設計すべきか？",
+    "summary": "OCR の「精度」はデータセット平均の指標であり、1 件ごとの信頼度を示す confidence score とは別物。confidence に基づくレビューキュー設計としきい値の考え方、マルチモーダル LLM への移行で変わる前提を解説。",
+    "category": "ai",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": ["精度（accuracy）", "confidence score", "ヒューマンインザループ", "マルチモーダル LLM", "レビューキュー"]
+  },
+  {
     "file": "2026-07-25-3.html",
     "date": "2026-07-25",
     "title": "freee はなぜ、経理の自動化を一気に AI エージェントまで進めなかったのか？",
