@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-07-26T07:17:49+09:00</updated>
+  <updated>2026-07-27T07:17:47+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>ALB と NLB、同じ「ロードバランサー」なのに何が違うのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-07-27.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-07-27.html</id>
+    <updated>2026-07-27T07:17:47+09:00</updated>
+    <summary>ALB は L7 で HTTP の中身を読んでルーティングし、NLB は L4 で TCP/UDP の接続だけを見て振り分ける。idle timeout・deregistration delay・cross-zone load balancing のデフォルト値と使い分けの判断基準を解説。</summary>
+  </entry>
   <entry>
     <title>AI エージェントに自律実行を任せるとき、権限・証跡・コストはどう設計するのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-07-26.html"/>

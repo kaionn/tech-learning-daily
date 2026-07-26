@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-07-27.html",
+    "date": "2026-07-27",
+    "title": "ALB と NLB、同じ「ロードバランサー」なのに何が違うのか？",
+    "summary": "ALB は L7 で HTTP の中身を読んでルーティングし、NLB は L4 で TCP/UDP の接続だけを見て振り分ける。idle timeout・deregistration delay・cross-zone load balancing のデフォルト値の違いと使い分けの判断基準を解説。",
+    "category": "network",
+    "difficulty": "基礎",
+    "readTime": 8,
+    "terms": ["OSI 参照モデル", "トランスポート層（L4）", "アプリケーション層（L7）", "フローハッシュ", "デレジストレーション遅延", "クロスゾーン負荷分散"]
+  },
+  {
     "file": "2026-07-26.html",
     "date": "2026-07-26",
     "title": "AI エージェントに自律実行を任せるとき、権限・証跡・コストはどう設計するのか？",

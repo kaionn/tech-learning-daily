@@ -32,7 +32,7 @@
         <button class="chip on" data-cat="">すべて</button>
         <button class="chip" data-cat="ai">AI <span class="chip-count">4</span></button>
         <button class="chip" data-cat="container">Container <span class="chip-count">4</span></button>
-        <button class="chip" data-cat="network">Network <span class="chip-count">1</span></button>
+        <button class="chip" data-cat="network">Network <span class="chip-count">2</span></button>
         <button class="chip" data-cat="perf">Perf <span class="chip-count">1</span></button>
       </div>
       <div class="chip-row" id="diff-chips">
@@ -47,6 +47,13 @@
 
     <section class="section month" data-month="2026-07">
       <div class="section-title">2026 年 7 月 <span class="count"></span></div>
+      <div class="card" data-cat="network" data-diff="基礎"
+           data-search="alb と nlb、同じ「ロードバランサー」なのに何が違うのか？ alb は l7 で http の中身を読んでルーティングし、nlb は l4 で tcp/udp の接続だけを見て振り分ける。idle timeout・deregistration delay・cross-zone load balancing のデフォルト値の違いと使い分けの判断基準を解説。" data-terms="OSI 参照モデル / トランスポート層（L4） / アプリケーション層（L7） / フローハッシュ / デレジストレーション遅延 / クロスゾーン負荷分散">
+        <h3><a href="2026-07-27.html">ALB と NLB、同じ「ロードバランサー」なのに何が違うのか？</a></h3>
+        <div class="summary">ALB は L7 で HTTP の中身を読んでルーティングし、NLB は L4 で TCP/UDP の接続だけを見て振り分ける。idle timeout・deregistration delay・cross-zone load balancing のデフォルト値の違いと使い分けの判断基準を解説。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-network">Network</span><span>🌿 基礎</span><span>⏱ 約 8 分</span><span>2026-07-27</span></div>
+      </div>
       <div class="card" data-cat="ai" data-diff="応用"
            data-search="ai エージェントに自律実行を任せるとき、権限・証跡・コストはどう設計するのか？ 自律実行する llm エージェントは oauth スコープで権限を最小化し、破壊的操作の手前にガードレールと監査ログを置く必要がある。プロンプトキャッシュの料金倍率でコストを抑える設計も解説。" data-terms="OAuth スコープ / 最小権限の原則 / Human-in-the-Loop / プロンプトキャッシュ / 監査ログ / ガードレール">
         <h3><a href="2026-07-26.html">AI エージェントに自律実行を任せるとき、権限・証跡・コストはどう設計するのか？</a></h3>
