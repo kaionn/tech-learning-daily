@@ -33,6 +33,7 @@
         <button class="chip" data-cat="ai">AI <span class="chip-count">4</span></button>
         <button class="chip" data-cat="container">Container <span class="chip-count">4</span></button>
         <button class="chip" data-cat="network">Network <span class="chip-count">2</span></button>
+        <button class="chip" data-cat="db">DB <span class="chip-count">1</span></button>
         <button class="chip" data-cat="perf">Perf <span class="chip-count">1</span></button>
       </div>
       <div class="chip-row" id="diff-chips">
@@ -47,6 +48,13 @@
 
     <section class="section month" data-month="2026-07">
       <div class="section-title">2026 年 7 月 <span class="count"></span></div>
+      <div class="card" data-cat="db" data-diff="基礎"
+           data-search="db のインデックスはなぜ速いのか？ b+tree の中を覗く b+tree は 1 ノードに数百キーを詰めて木を横に広く浅く保つことで検索を o(log n) に抑える一方、インデックスが増えるほど書き込みのたびに複数の木を更新し、ページ分割が連鎖するコストを払うことになる。" data-terms="B+Tree / リーフノード / ファンアウト / クラスタ化インデックス / セカンダリインデックス / ページ分割">
+        <h3><a href="2026-07-28.html">DB のインデックスはなぜ速いのか？ B+Tree の中を覗く</a></h3>
+        <div class="summary">B+Tree は 1 ノードに数百キーを詰めて木を横に広く浅く保つことで検索を O(log N) に抑える一方、インデックスが増えるほど書き込みのたびに複数の木を更新し、ページ分割が連鎖するコストを払うことになる。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-db">DB</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-07-28</span></div>
+      </div>
       <div class="card" data-cat="network" data-diff="基礎"
            data-search="alb と nlb、同じ「ロードバランサー」なのに何が違うのか？ alb は l7 で http の中身を読んでルーティングし、nlb は l4 で tcp/udp の接続だけを見て振り分ける。idle timeout・deregistration delay・cross-zone load balancing のデフォルト値の違いと使い分けの判断基準を解説。" data-terms="OSI 参照モデル / トランスポート層（L4） / アプリケーション層（L7） / フローハッシュ / デレジストレーション遅延 / クロスゾーン負荷分散">
         <h3><a href="2026-07-27.html">ALB と NLB、同じ「ロードバランサー」なのに何が違うのか？</a></h3>
