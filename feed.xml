@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-07-28T07:32:50+09:00</updated>
+  <updated>2026-07-29T07:31:00+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>コネクションプールが枯渇すると、なぜアプリ全体が固まるのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-07-29.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-07-29.html</id>
+    <updated>2026-07-29T07:31:00+09:00</updated>
+    <summary>DB 接続の確立コストを省くのがコネクションプールだが、枯渇時はアプリ側プールは待ち行列とタイムアウト例外、DB サーバー自体の上限超過は待たせず即座に接続拒否と挙動が異なる。検知にはプールのメトリクス監視が必要。</summary>
+  </entry>
   <entry>
     <title>DB のインデックスはなぜ速いのか？ B+Tree の中を覗く</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-07-28.html"/>
