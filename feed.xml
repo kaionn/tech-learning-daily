@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-07-29T07:31:00+09:00</updated>
+  <updated>2026-07-30T07:18:00+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>ブラウザに URL を打ってから、IP に辿り着くまで何が起きているのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-07-30.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-07-30.html</id>
+    <updated>2026-07-30T07:18:00+09:00</updated>
+    <summary>名前解決はブラウザ・OS・再帰的リゾルバの3段キャッシュをまず確認し、無ければルート→TLD→権威DNSサーバーへの委任の連鎖をたどる。「DNSの浸透」は単一の伝播処理ではなくTTLによる各リゾルバの個別キャッシュだと解説。</summary>
+  </entry>
   <entry>
     <title>コネクションプールが枯渇すると、なぜアプリ全体が固まるのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-07-29.html"/>
