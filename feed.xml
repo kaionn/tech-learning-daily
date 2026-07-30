@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-07-30T07:18:00+09:00</updated>
+  <updated>2026-07-31T07:35:35+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>HTTPS の鍵マークは、いったい何を保証しているのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-07-31.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-07-31.html</id>
+    <updated>2026-07-31T07:35:35+09:00</updated>
+    <summary>TLS ハンドシェイクは相手の本人確認（証明書チェーン）と今回限りの鍵の合意（ECDHE）の2つを行う。TLS 1.3で鍵交換が使い捨てになった理由と、前方秘匿性が過去の通信を将来の秘密鍵漏洩から守る仕組みを解説。</summary>
+  </entry>
   <entry>
     <title>ブラウザに URL を打ってから、IP に辿り着くまで何が起きているのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-07-30.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-07-18-2.html</id>
     <updated>2026-07-18T10:13:19+09:00</updated>
     <summary>CPU limit 超過は CFS による周期ごとのスロットリングで待たされるだけだが、メモリ limit 超過は OOM Killer に強制終了される。requests/limits と QoS クラスの関係も解説。</summary>
-  </entry>
-  <entry>
-    <title>Pod・Deployment・Service、なぜ 3 つも要るのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-07-18.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-07-18.html</id>
-    <updated>2026-07-18T06:30:00+09:00</updated>
-    <summary>Pod は使い捨ての最小実行単位、Deployment は ReplicaSet 経由で数と更新を管理し、Service は固定 IP で入れ替わる Pod を隠す仕組みを解説。</summary>
   </entry>
 </feed>
