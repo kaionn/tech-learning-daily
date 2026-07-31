@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-07-31T07:35:35+09:00</updated>
+  <updated>2026-08-01T07:23:16+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>キャッシュの有効期限が切れた瞬間、裏で何が起きているのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-08-01.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-08-01.html</id>
+    <updated>2026-08-01T07:23:16+09:00</updated>
+    <summary>TTL は新鮮さとオリジン負荷のトレードオフを秒数にしたもの。Vary によるキャッシュキー設計を誤ると誤配信が起き、TTL失効直後の同時アクセスはキャッシュスタンピードを招く。stale-while-revalidateが古い値を返しつつ裏で再検証しこれを防ぐ仕組みを解説。</summary>
+  </entry>
   <entry>
     <title>HTTPS の鍵マークは、いったい何を保証しているのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-07-31.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-07-18-3.html</id>
     <updated>2026-07-18T11:25:56+09:00</updated>
     <summary>スループットだけでは限界は分からず、レイテンシとリトルの法則で同時実行数とつながっている。p95/p99 が急上昇するノック点と、USE メソッドでの飽和リソース特定を解説。</summary>
-  </entry>
-  <entry>
-    <title>CPU limit を超えると遅くなるだけなのに、メモリ limit だと Pod が落ちるのはなぜか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-07-18-2.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-07-18-2.html</id>
-    <updated>2026-07-18T10:13:19+09:00</updated>
-    <summary>CPU limit 超過は CFS による周期ごとのスロットリングで待たされるだけだが、メモリ limit 超過は OOM Killer に強制終了される。requests/limits と QoS クラスの関係も解説。</summary>
   </entry>
 </feed>

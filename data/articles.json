@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-08-01.html",
+    "date": "2026-08-01",
+    "title": "キャッシュの有効期限が切れた瞬間、裏で何が起きているのか？",
+    "summary": "TTL は新鮮さとオリジン負荷のトレードオフであり、Vary によるキャッシュキー設計を誤ると誤配信が起きる。TTL失効直後の同時アクセスが招くキャッシュスタンピードを、stale-while-revalidateがどう防ぐかを解説。",
+    "category": "arch",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": ["TTL", "キャッシュキー", "Vary ヘッダー", "キャッシュスタンピード", "stale-while-revalidate"]
+  },
+  {
     "file": "2026-07-31.html",
     "date": "2026-07-31",
     "title": "HTTPS の鍵マークは、いったい何を保証しているのか？",
