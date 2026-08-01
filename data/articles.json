@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-08-02.html",
+    "date": "2026-08-02",
+    "title": "同じ注文が二回処理された。メッセージキューの「重複」はなぜ起こるのか？",
+    "summary": "SQSやRabbitMQは失うより重複させるat-least-once配信を採用しており、重複はブローカーがack有無しか見ていないために起きる仕様である。冪等性キーによる無害化と、FIFOキューでも消費側の冪等性が必要な理由を解説。",
+    "category": "arch",
+    "difficulty": "基礎",
+    "readTime": 8,
+    "terms": ["at-least-once 配信", "冪等性", "visibility timeout", "未確認メッセージ (unacked message)", "冪等性キー"]
+  },
+  {
     "file": "2026-08-01.html",
     "date": "2026-08-01",
     "title": "キャッシュの有効期限が切れた瞬間、裏で何が起きているのか？",

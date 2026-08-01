@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-08-01T07:23:16+09:00</updated>
+  <updated>2026-08-02T07:20:02+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>同じ注文が二回処理された。メッセージキューの「重複」はなぜ起こるのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-08-02.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-08-02.html</id>
+    <updated>2026-08-02T07:20:02+09:00</updated>
+    <summary>SQS や RabbitMQ は「失うより重複させる」at-least-once配信を採用しており、重複はブローカーがack有無しか見ていないために起きる仕様である。冪等性キーによる無害化と、FIFOキューでも消費側の冪等性が必要な理由を解説。</summary>
+  </entry>
   <entry>
     <title>キャッシュの有効期限が切れた瞬間、裏で何が起きているのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-08-01.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-07-18-4.html</id>
     <updated>2026-07-18T21:34:30+09:00</updated>
     <summary>Cloudflare の土台は権威 DNS とリバースプロキシ。anycast による最寄り拠点への自動振り分け、Workers の V8 isolate モデル、Cloudflare Pages と GitHub Pages の構造的な違いを解説。</summary>
-  </entry>
-  <entry>
-    <title>負荷試験で「もう限界」をどの数字で判断するのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-07-18-3.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-07-18-3.html</id>
-    <updated>2026-07-18T11:25:56+09:00</updated>
-    <summary>スループットだけでは限界は分からず、レイテンシとリトルの法則で同時実行数とつながっている。p95/p99 が急上昇するノック点と、USE メソッドでの飽和リソース特定を解説。</summary>
   </entry>
 </feed>
