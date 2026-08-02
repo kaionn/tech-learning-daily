@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-08-02T07:20:02+09:00</updated>
+  <updated>2026-08-03T07:15:00+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>メトリクス・ログ・トレース、同じ障害を見るのになぜ3つ要るのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-08-03.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-08-03.html</id>
+    <updated>2026-08-03T07:15:00+09:00</updated>
+    <summary>メトリクスは個々のリクエストを捨てて集計するから安く常時収集できる一方、どのリクエストが遅いかは分からない。ログはtrace-idで結びつけて初めてトレースという1本の経路になる仕組みを解説。</summary>
+  </entry>
   <entry>
     <title>同じ注文が二回処理された。メッセージキューの「重複」はなぜ起こるのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-08-02.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-07-19.html</id>
     <updated>2026-07-19T07:16:55+09:00</updated>
     <summary>maxSurge/maxUnavailable のデフォルト 25% がロールアウト中の可用性を決め、readinessProbe と livenessProbe は失敗時の挙動が別物、progressDeadlineSeconds は自動停止しない停滞検知であることを解説。</summary>
-  </entry>
-  <entry>
-    <title>CDN・DNS・Workers・Pages…… Cloudflare は結局何をしているのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-07-18-4.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-07-18-4.html</id>
-    <updated>2026-07-18T21:34:30+09:00</updated>
-    <summary>Cloudflare の土台は権威 DNS とリバースプロキシ。anycast による最寄り拠点への自動振り分け、Workers の V8 isolate モデル、Cloudflare Pages と GitHub Pages の構造的な違いを解説。</summary>
   </entry>
 </feed>
