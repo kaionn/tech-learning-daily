@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-08-04.html",
+    "date": "2026-08-04",
+    "title": "Pod を消しただけなのに、なぜ 502 が数件だけ出るのか？",
+    "summary": "Pod削除は「エンドポイント除去」と「SIGTERM送信」が同時並行で進む設計上の競合状態であり、伝播ラグの間に着弾したリクエストがデプロイ後の数件の502を生む。preStopフックによる時間稼ぎと、それでも防げないケースを解説。",
+    "category": "container",
+    "difficulty": "応用",
+    "readTime": 8,
+    "terms": ["deletionTimestamp", "EndpointSlice", "preStop フック", "terminationGracePeriodSeconds", "SIGKILL"]
+  },
+  {
     "file": "2026-08-03.html",
     "date": "2026-08-03",
     "title": "メトリクス・ログ・トレース、同じ障害を見るのになぜ3つ要るのか？",

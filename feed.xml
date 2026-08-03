@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-08-03T07:15:00+09:00</updated>
+  <updated>2026-08-04T07:31:47+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>Pod を消しただけなのに、なぜ 502 が数件だけ出るのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-08-04.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-08-04.html</id>
+    <updated>2026-08-04T07:31:47+09:00</updated>
+    <summary>Pod削除は「エンドポイント除去」と「SIGTERM送信」が同時並行で進む設計上の競合状態であり、伝播ラグの間に着弾したリクエストがデプロイ後の数件の502を生む。preStopフックで送信を遅らせる定石対策を解説。</summary>
+  </entry>
   <entry>
     <title>メトリクス・ログ・トレース、同じ障害を見るのになぜ3つ要るのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-08-03.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-07-25.html</id>
     <updated>2026-07-25T09:47:14+09:00</updated>
     <summary>VM はカーネルごとゲスト OS を積むがコンテナはホストカーネルを共有し名前空間と cgroup で区切るだけ。軽さの理由と、カーネル共有ゆえの隔離の弱さ、Mac の Docker Desktop が裏で VM を使う理由を解説。</summary>
-  </entry>
-  <entry>
-    <title>Deployment の manifest、`replicas` の下に並ぶ設定は何をしているのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-07-19.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-07-19.html</id>
-    <updated>2026-07-19T07:16:55+09:00</updated>
-    <summary>maxSurge/maxUnavailable のデフォルト 25% がロールアウト中の可用性を決め、readinessProbe と livenessProbe は失敗時の挙動が別物、progressDeadlineSeconds は自動停止しない停滞検知であることを解説。</summary>
   </entry>
 </feed>
