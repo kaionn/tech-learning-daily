@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-08-04T07:31:47+09:00</updated>
+  <updated>2026-08-05T07:35:37+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>シングルスレッドの JavaScript は、なぜ非同期 I/O を同時に捌けるのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-08-05.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-08-05.html</id>
+    <updated>2026-08-05T07:35:37+09:00</updated>
+    <summary>JSのコールスタックは1本で並行に見えるのはI/Oの実体がOSやスレッドプールで進むからだ。マイクロタスクとマクロタスクの優先順位、Node.jsのlibuvがネットワークI/Oとファイル/DNSを別々に処理する仕組みを解説。</summary>
+  </entry>
   <entry>
     <title>Pod を消しただけなのに、なぜ 502 が数件だけ出るのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-08-04.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-07-25-2.html</id>
     <updated>2026-07-25T18:45:40+09:00</updated>
     <summary>LLM は文章を BPE でトークン化し、次の 1 トークンの確率を逐次予測する自己回帰生成で文章を作る。Attention の計算量とKVキャッシュのメモリがコンテキストウィンドウに上限がある理由を解説。</summary>
-  </entry>
-  <entry>
-    <title>コンテナはなぜ VM より「軽い」のか？ 手放しているものは何か</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-07-25.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-07-25.html</id>
-    <updated>2026-07-25T09:47:14+09:00</updated>
-    <summary>VM はカーネルごとゲスト OS を積むがコンテナはホストカーネルを共有し名前空間と cgroup で区切るだけ。軽さの理由と、カーネル共有ゆえの隔離の弱さ、Mac の Docker Desktop が裏で VM を使う理由を解説。</summary>
   </entry>
 </feed>

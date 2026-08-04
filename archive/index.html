@@ -35,6 +35,7 @@
         <button class="chip" data-cat="network">Network <span class="chip-count">4</span></button>
         <button class="chip" data-cat="arch">Arch <span class="chip-count">2</span></button>
         <button class="chip" data-cat="db">DB <span class="chip-count">2</span></button>
+        <button class="chip" data-cat="lang">Lang <span class="chip-count">1</span></button>
         <button class="chip" data-cat="obs">Obs <span class="chip-count">1</span></button>
         <button class="chip" data-cat="perf">Perf <span class="chip-count">1</span></button>
       </div>
@@ -50,6 +51,13 @@
 
     <section class="section month" data-month="2026-08">
       <div class="section-title">2026 年 8 月 <span class="count"></span></div>
+      <div class="card" data-cat="lang" data-diff="基礎"
+           data-search="シングルスレッドの javascript は、なぜ非同期 i/o を同時に捌けるのか？ jsのコールスタックは1本で並行に見えるのはi/oの実体がosやスレッドプールで進むからだ。マイクロタスクとマクロタスクの優先順位、node.jsのlibuvがネットワークi/oとファイル/dnsを別々に処理する仕組みを解説。" data-terms="コールスタック / マイクロタスク / マクロタスク / イベントループ / libuv / スレッドプール">
+        <h3><a href="2026-08-05.html">シングルスレッドの JavaScript は、なぜ非同期 I/O を同時に捌けるのか？</a></h3>
+        <div class="summary">JSのコールスタックは1本で並行に見えるのはI/Oの実体がOSやスレッドプールで進むからだ。マイクロタスクとマクロタスクの優先順位、Node.jsのlibuvがネットワークI/Oとファイル/DNSを別々に処理する仕組みを解説。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-lang">Lang</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-08-05</span></div>
+      </div>
       <div class="card" data-cat="container" data-diff="応用"
            data-search="pod を消しただけなのに、なぜ 502 が数件だけ出るのか？ pod削除は「エンドポイント除去」と「sigterm送信」が同時並行で進む設計上の競合状態であり、伝播ラグの間に着弾したリクエストがデプロイ後の数件の502を生む。prestopフックによる時間稼ぎと、それでも防げないケースを解説。" data-terms="deletionTimestamp / EndpointSlice / preStop フック / terminationGracePeriodSeconds / SIGKILL">
         <h3><a href="2026-08-04.html">Pod を消しただけなのに、なぜ 502 が数件だけ出るのか？</a></h3>
