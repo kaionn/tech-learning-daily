@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-08-06.html",
+    "date": "2026-08-06",
+    "title": "git のコミットとブランチ、実体は何なのか？rebase が「歴史を書き換える」とはどういうことか",
+    "summary": "gitのオブジェクトは内容から計算したハッシュで住所が決まる内容アドレス型ストレージで、commitはtreeへの参照。branchは41バイトのポインタにすぎず、rebaseは新しいコミットを作って参照を貼り替えているだけと解説。",
+    "category": "dev",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": ["blob", "tree", "コミットオブジェクト", "SHA-1", "ref", "reflog"]
+  },
+  {
     "file": "2026-08-05.html",
     "date": "2026-08-05",
     "title": "シングルスレッドの JavaScript は、なぜ非同期 I/O を同時に捌けるのか？",

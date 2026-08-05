@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-08-05T07:35:37+09:00</updated>
+  <updated>2026-08-06T07:34:21+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>git のコミットとブランチ、実体は何なのか？rebase が「歴史を書き換える」とはどういうことか</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-08-06.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-08-06.html</id>
+    <updated>2026-08-06T07:34:21+09:00</updated>
+    <summary>gitのオブジェクトは内容から計算したハッシュで住所が決まる内容アドレス型ストレージで、commitはtreeへの参照。branchは41バイトのポインタにすぎず、rebaseは新しいコミットを作って参照を貼り替えているだけと解説。</summary>
+  </entry>
   <entry>
     <title>シングルスレッドの JavaScript は、なぜ非同期 I/O を同時に捌けるのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-08-05.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-07-25-3.html</id>
     <updated>2026-07-25T18:53:51+09:00</updated>
     <summary>freee の経理自動化はルールベースの自動登録 → AI-OCR → LLM エージェント(freee-mcp)と裁量を段階的に広げてきた。裁量が広がるほど権限制御・監査ログが必須になる設計判断を解説。</summary>
-  </entry>
-  <entry>
-    <title>「トークン」「推論」「コンテキストウィンドウ」、LLM の中で結局何が起きているのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-07-25-2.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-07-25-2.html</id>
-    <updated>2026-07-25T18:45:40+09:00</updated>
-    <summary>LLM は文章を BPE でトークン化し、次の 1 トークンの確率を逐次予測する自己回帰生成で文章を作る。Attention の計算量とKVキャッシュのメモリがコンテキストウィンドウに上限がある理由を解説。</summary>
   </entry>
 </feed>
