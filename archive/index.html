@@ -35,8 +35,8 @@
         <button class="chip" data-cat="network">Network <span class="chip-count">4</span></button>
         <button class="chip" data-cat="arch">Arch <span class="chip-count">2</span></button>
         <button class="chip" data-cat="db">DB <span class="chip-count">2</span></button>
+        <button class="chip" data-cat="lang">Lang <span class="chip-count">2</span></button>
         <button class="chip" data-cat="dev">Dev <span class="chip-count">1</span></button>
-        <button class="chip" data-cat="lang">Lang <span class="chip-count">1</span></button>
         <button class="chip" data-cat="obs">Obs <span class="chip-count">1</span></button>
         <button class="chip" data-cat="perf" data-overflow="1" hidden>Perf <span class="chip-count">1</span></button>
         <button class="chip chip-more" id="chip-more">+ 1 件</button>
@@ -53,6 +53,13 @@
 
     <section class="section month" data-month="2026-08">
       <div class="section-title">2026 年 8 月 <span class="count"></span></div>
+      <div class="card" data-cat="lang" data-diff="基礎"
+           data-search="なぜ gc は世界を止めるのか？「ほとんどのオブジェクトは若くして死ぬ」に賭けた世代別 gc gcがアプリを一時停止させるのは生死判定中の参照書き換えを防ぐためで、並行化しても区間自体はゼロにならない。世代別gcは「大半のオブジェクトは若くして死ぬ」という経験則に賭け、新しい世代だけを頻繁に軽く掃除する仕組みを解説。" data-terms="GCルート / Stop-the-World / 世代仮説 / マイナーGC / メジャーGC / ライトバリア">
+        <h3><a href="2026-08-07.html">なぜ GC は世界を止めるのか？「ほとんどのオブジェクトは若くして死ぬ」に賭けた世代別 GC</a></h3>
+        <div class="summary">GCがアプリを一時停止させるのは生死判定中の参照書き換えを防ぐためで、並行化しても区間自体はゼロにならない。世代別GCは「大半のオブジェクトは若くして死ぬ」という経験則に賭け、新しい世代だけを頻繁に軽く掃除する仕組みを解説。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-lang">Lang</span><span>🌿 基礎</span><span>⏱ 約 8 分</span><span>2026-08-07</span></div>
+      </div>
       <div class="card" data-cat="dev" data-diff="基礎"
            data-search="git のコミットとブランチ、実体は何なのか？rebase が「歴史を書き換える」とはどういうことか gitのオブジェクトは内容から計算したハッシュで住所が決まる内容アドレス型ストレージで、commitはtreeへの参照。branchは41バイトのポインタにすぎず、rebaseは新しいコミットを作って参照を貼り替えているだけと解説。" data-terms="blob / tree / コミットオブジェクト / SHA-1 / ref / reflog">
         <h3><a href="2026-08-06.html">git のコミットとブランチ、実体は何なのか？rebase が「歴史を書き換える」とはどういうことか</a></h3>

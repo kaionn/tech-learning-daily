@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-08-06T07:34:21+09:00</updated>
+  <updated>2026-08-07T10:06:54+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>なぜ GC は世界を止めるのか？「ほとんどのオブジェクトは若くして死ぬ」に賭けた世代別 GC</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-08-07.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-08-07.html</id>
+    <updated>2026-08-07T10:06:54+09:00</updated>
+    <summary>GCがアプリを一時停止させるのは生死判定中の参照書き換えを防ぐためで、並行化しても区間自体はゼロにならない。世代別GCは「大半のオブジェクトは若くして死ぬ」という経験則に賭け、新しい世代だけを頻繁に軽く掃除する仕組みを解説。</summary>
+  </entry>
   <entry>
     <title>git のコミットとブランチ、実体は何なのか？rebase が「歴史を書き換える」とはどういうことか</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-08-06.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-07-25-4.html</id>
     <updated>2026-07-25T18:59:27+09:00</updated>
     <summary>OCR の「精度」はデータセット平均の指標であり、1 件ごとの信頼度を示す confidence score とは別物。confidence に基づくレビューキュー設計としきい値の考え方、マルチモーダル LLM への移行で変わる前提を解説。</summary>
-  </entry>
-  <entry>
-    <title>freee はなぜ、経理の自動化を一気に AI エージェントまで進めなかったのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-07-25-3.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-07-25-3.html</id>
-    <updated>2026-07-25T18:53:51+09:00</updated>
-    <summary>freee の経理自動化はルールベースの自動登録 → AI-OCR → LLM エージェント(freee-mcp)と裁量を段階的に広げてきた。裁量が広がるほど権限制御・監査ログが必須になる設計判断を解説。</summary>
   </entry>
 </feed>
