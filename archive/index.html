@@ -39,7 +39,8 @@
         <button class="chip" data-cat="dev">Dev <span class="chip-count">1</span></button>
         <button class="chip" data-cat="obs">Obs <span class="chip-count">1</span></button>
         <button class="chip" data-cat="perf" data-overflow="1" hidden>Perf <span class="chip-count">1</span></button>
-        <button class="chip chip-more" id="chip-more">+ 1 件</button>
+        <button class="chip" data-cat="security" data-overflow="1" hidden>Security <span class="chip-count">1</span></button>
+        <button class="chip chip-more" id="chip-more">+ 2 件</button>
       </div>
       <div class="chip-row" id="diff-chips">
         <span class="row-label">難易度</span>
@@ -53,6 +54,13 @@
 
     <section class="section month" data-month="2026-08">
       <div class="section-title">2026 年 8 月 <span class="count"></span></div>
+      <div class="card" data-cat="security" data-diff="基礎"
+           data-search="「google でログイン」を押した瞬間、裏で何がやり取りされているのか？ oauth 2.0の認可コードフローはurlに乗る認可コードとtls内でしか動かないアクセストークンを分離し、コード横取りをstateとredirect_uriの検証で防ぐ。pkceとopenid connectのid tokenの役割も解説。" data-terms="認可コード / state パラメータ / PKCE / ID Token / アクセストークン">
+        <h3><a href="2026-08-08.html">「Google でログイン」を押した瞬間、裏で何がやり取りされているのか？</a></h3>
+        <div class="summary">OAuth 2.0の認可コードフローはURLに乗る認可コードとTLS内でしか動かないアクセストークンを分離し、コード横取りをstateとredirect_uriの検証で防ぐ。PKCEとOpenID ConnectのID Tokenの役割も解説。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-security">Security</span><span>🌿 基礎</span><span>⏱ 約 8 分</span><span>2026-08-08</span></div>
+      </div>
       <div class="card" data-cat="lang" data-diff="基礎"
            data-search="なぜ gc は世界を止めるのか？「ほとんどのオブジェクトは若くして死ぬ」に賭けた世代別 gc gcがアプリを一時停止させるのは生死判定中の参照書き換えを防ぐためで、並行化しても区間自体はゼロにならない。世代別gcは「大半のオブジェクトは若くして死ぬ」という経験則に賭け、新しい世代だけを頻繁に軽く掃除する仕組みを解説。" data-terms="GCルート / Stop-the-World / 世代仮説 / マイナーGC / メジャーGC / ライトバリア">
         <h3><a href="2026-08-07.html">なぜ GC は世界を止めるのか？「ほとんどのオブジェクトは若くして死ぬ」に賭けた世代別 GC</a></h3>

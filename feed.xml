@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-08-07T10:06:54+09:00</updated>
+  <updated>2026-08-08T07:02:08+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>「Google でログイン」を押した瞬間、裏で何がやり取りされているのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-08-08.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-08-08.html</id>
+    <updated>2026-08-08T07:02:08+09:00</updated>
+    <summary>OAuth 2.0 の認可コードフローはURLに乗る認可コードとTLS内でしか動かないアクセストークンを分離し、コード横取りをstateとredirect_uri検証で防ぐ。PKCEとOpenID ConnectのID Tokenの役割も解説。</summary>
+  </entry>
   <entry>
     <title>なぜ GC は世界を止めるのか？「ほとんどのオブジェクトは若くして死ぬ」に賭けた世代別 GC</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-08-07.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-07-26.html</id>
     <updated>2026-07-26T07:17:49+09:00</updated>
     <summary>自律実行する LLM エージェントは OAuth スコープで権限を最小化し、破壊的操作の手前にガードレールと監査ログを置く必要がある。プロンプトキャッシュの料金倍率でコストを抑える設計も解説。</summary>
-  </entry>
-  <entry>
-    <title>「精度 94% の OCR」を製品機能にするとき、UI は何を設計すべきか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-07-25-4.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-07-25-4.html</id>
-    <updated>2026-07-25T18:59:27+09:00</updated>
-    <summary>OCR の「精度」はデータセット平均の指標であり、1 件ごとの信頼度を示す confidence score とは別物。confidence に基づくレビューキュー設計としきい値の考え方、マルチモーダル LLM への移行で変わる前提を解説。</summary>
   </entry>
 </feed>

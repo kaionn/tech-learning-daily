@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-08-08.html",
+    "date": "2026-08-08",
+    "title": "「Google でログイン」を押した瞬間、裏で何がやり取りされているのか？",
+    "summary": "OAuth 2.0の認可コードフローはURLに乗る認可コードとTLS内でしか動かないアクセストークンを分離し、コード横取りをstateとredirect_uriの検証で防ぐ。PKCEとOpenID ConnectのID Tokenの役割も解説。",
+    "category": "security",
+    "difficulty": "基礎",
+    "readTime": 8,
+    "terms": ["認可コード", "state パラメータ", "PKCE", "ID Token", "アクセストークン"]
+  },
+  {
     "file": "2026-08-07.html",
     "date": "2026-08-07",
     "title": "なぜ GC は世界を止めるのか？「ほとんどのオブジェクトは若くして死ぬ」に賭けた世代別 GC",
