@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-08-08T07:02:08+09:00</updated>
+  <updated>2026-08-09T06:52:29+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>CSS は head に、JS は defer で読むべきなのはなぜか？ ブラウザの描画パイプラインを覗く</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-08-09.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-08-09.html</id>
+    <updated>2026-08-09T06:52:29+09:00</updated>
+    <summary>HTMLパーサーはscriptタグでdefer/asyncが無い限り止まり、CSSOMはスタイルシート全体を読むまで完成しないためレンダーブロッキングになる。transform・opacityの変更だけがレイアウトとペイントを飛ばしコンポジットで完結する理由を解説。</summary>
+  </entry>
   <entry>
     <title>「Google でログイン」を押した瞬間、裏で何がやり取りされているのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-08-08.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-07-27.html</id>
     <updated>2026-07-27T07:17:47+09:00</updated>
     <summary>ALB は L7 で HTTP の中身を読んでルーティングし、NLB は L4 で TCP/UDP の接続だけを見て振り分ける。idle timeout・deregistration delay・cross-zone load balancing のデフォルト値と使い分けの判断基準を解説。</summary>
-  </entry>
-  <entry>
-    <title>AI エージェントに自律実行を任せるとき、権限・証跡・コストはどう設計するのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-07-26.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-07-26.html</id>
-    <updated>2026-07-26T07:17:49+09:00</updated>
-    <summary>自律実行する LLM エージェントは OAuth スコープで権限を最小化し、破壊的操作の手前にガードレールと監査ログを置く必要がある。プロンプトキャッシュの料金倍率でコストを抑える設計も解説。</summary>
   </entry>
 </feed>

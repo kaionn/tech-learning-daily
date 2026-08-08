@@ -37,10 +37,11 @@
         <button class="chip" data-cat="db">DB <span class="chip-count">2</span></button>
         <button class="chip" data-cat="lang">Lang <span class="chip-count">2</span></button>
         <button class="chip" data-cat="dev">Dev <span class="chip-count">1</span></button>
-        <button class="chip" data-cat="obs">Obs <span class="chip-count">1</span></button>
+        <button class="chip" data-cat="frontend">Frontend <span class="chip-count">1</span></button>
+        <button class="chip" data-cat="obs" data-overflow="1" hidden>Obs <span class="chip-count">1</span></button>
         <button class="chip" data-cat="perf" data-overflow="1" hidden>Perf <span class="chip-count">1</span></button>
         <button class="chip" data-cat="security" data-overflow="1" hidden>Security <span class="chip-count">1</span></button>
-        <button class="chip chip-more" id="chip-more">+ 2 件</button>
+        <button class="chip chip-more" id="chip-more">+ 3 件</button>
       </div>
       <div class="chip-row" id="diff-chips">
         <span class="row-label">難易度</span>
@@ -54,6 +55,13 @@
 
     <section class="section month" data-month="2026-08">
       <div class="section-title">2026 年 8 月 <span class="count"></span></div>
+      <div class="card" data-cat="frontend" data-diff="基礎"
+           data-search="css は head に、js は defer で読むべきなのはなぜか？ ブラウザの描画パイプラインを覗く htmlパーサーはscriptタグでdefer/asyncが無い限り止まり、cssomはスタイルシート全体を読むまで完成しないためレンダーブロッキングになる。transform・opacityの変更だけがレイアウトとペイントを飛ばしコンポジットで完結する理由を解説。" data-terms="DOM / CSSOM / レンダーツリー / リフロー / コンポジット / レンダーブロッキング">
+        <h3><a href="2026-08-09.html">CSS は head に、JS は defer で読むべきなのはなぜか？ ブラウザの描画パイプラインを覗く</a></h3>
+        <div class="summary">HTMLパーサーはscriptタグでdefer/asyncが無い限り止まり、CSSOMはスタイルシート全体を読むまで完成しないためレンダーブロッキングになる。transform・opacityの変更だけがレイアウトとペイントを飛ばしコンポジットで完結する理由を解説。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-frontend">Frontend</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-08-09</span></div>
+      </div>
       <div class="card" data-cat="security" data-diff="基礎"
            data-search="「google でログイン」を押した瞬間、裏で何がやり取りされているのか？ oauth 2.0の認可コードフローはurlに乗る認可コードとtls内でしか動かないアクセストークンを分離し、コード横取りをstateとredirect_uriの検証で防ぐ。pkceとopenid connectのid tokenの役割も解説。" data-terms="認可コード / state パラメータ / PKCE / ID Token / アクセストークン">
         <h3><a href="2026-08-08.html">「Google でログイン」を押した瞬間、裏で何がやり取りされているのか？</a></h3>
