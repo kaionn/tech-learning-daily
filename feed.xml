@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-08-09T06:52:29+09:00</updated>
+  <updated>2026-08-10T06:55:49+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>AWS コンソールでポチッと直しただけなのに、なぜ terraform plan が差分まみれになるのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-08-10.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-08-10.html</id>
+    <updated>2026-08-10T06:55:49+09:00</updated>
+    <summary>Terraformは設定ファイルと実クラウドを直接比べず、両者をつなぐstateを介して動く。コンソール変更が起こすドリフトの検知の仕組みと、S3+DynamoDBからS3単体のuse_lockfileへ進化したステートロックの実装を解説。</summary>
+  </entry>
   <entry>
     <title>CSS は head に、JS は defer で読むべきなのはなぜか？ ブラウザの描画パイプラインを覗く</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-08-09.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-07-28.html</id>
     <updated>2026-07-28T07:32:50+09:00</updated>
     <summary>B+Tree は 1 ノードに数百キーを詰めて木を浅く保つことで検索を高速化する一方、インデックスが増えるほど書き込みのたびに複数の木を更新し、ページ分割が連鎖するコストを払うことになる。</summary>
-  </entry>
-  <entry>
-    <title>ALB と NLB、同じ「ロードバランサー」なのに何が違うのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-07-27.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-07-27.html</id>
-    <updated>2026-07-27T07:17:47+09:00</updated>
-    <summary>ALB は L7 で HTTP の中身を読んでルーティングし、NLB は L4 で TCP/UDP の接続だけを見て振り分ける。idle timeout・deregistration delay・cross-zone load balancing のデフォルト値と使い分けの判断基準を解説。</summary>
   </entry>
 </feed>

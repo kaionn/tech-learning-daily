@@ -38,10 +38,11 @@
         <button class="chip" data-cat="lang">Lang <span class="chip-count">2</span></button>
         <button class="chip" data-cat="dev">Dev <span class="chip-count">1</span></button>
         <button class="chip" data-cat="frontend">Frontend <span class="chip-count">1</span></button>
+        <button class="chip" data-cat="infra" data-overflow="1" hidden>Infra <span class="chip-count">1</span></button>
         <button class="chip" data-cat="obs" data-overflow="1" hidden>Obs <span class="chip-count">1</span></button>
         <button class="chip" data-cat="perf" data-overflow="1" hidden>Perf <span class="chip-count">1</span></button>
         <button class="chip" data-cat="security" data-overflow="1" hidden>Security <span class="chip-count">1</span></button>
-        <button class="chip chip-more" id="chip-more">+ 3 件</button>
+        <button class="chip chip-more" id="chip-more">+ 4 件</button>
       </div>
       <div class="chip-row" id="diff-chips">
         <span class="row-label">難易度</span>
@@ -55,6 +56,13 @@
 
     <section class="section month" data-month="2026-08">
       <div class="section-title">2026 年 8 月 <span class="count"></span></div>
+      <div class="card" data-cat="infra" data-diff="基礎"
+           data-search="aws コンソールでポチッと直しただけなのに、なぜ terraform plan が差分まみれになるのか？ terraformは設定ファイルと実クラウドを直接比べず、stateという記録を介して動く。コンソールでの直接変更が起こすドリフトの検知の仕組みと、s3+dynamodbからs3単体のuse_lockfileへ進化したステートロックの実装を解説。" data-terms="tfstate / ドリフト / リフレッシュ / ステートロック / force-unlock">
+        <h3><a href="2026-08-10.html">AWS コンソールでポチッと直しただけなのに、なぜ terraform plan が差分まみれになるのか？</a></h3>
+        <div class="summary">Terraformは設定ファイルと実クラウドを直接比べず、stateという記録を介して動く。コンソールでの直接変更が起こすドリフトの検知の仕組みと、S3+DynamoDBからS3単体のuse_lockfileへ進化したステートロックの実装を解説。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-infra">Infra</span><span>🌿 基礎</span><span>⏱ 約 8 分</span><span>2026-08-10</span></div>
+      </div>
       <div class="card" data-cat="frontend" data-diff="基礎"
            data-search="css は head に、js は defer で読むべきなのはなぜか？ ブラウザの描画パイプラインを覗く htmlパーサーはscriptタグでdefer/asyncが無い限り止まり、cssomはスタイルシート全体を読むまで完成しないためレンダーブロッキングになる。transform・opacityの変更だけがレイアウトとペイントを飛ばしコンポジットで完結する理由を解説。" data-terms="DOM / CSSOM / レンダーツリー / リフロー / コンポジット / レンダーブロッキング">
         <h3><a href="2026-08-09.html">CSS は head に、JS は defer で読むべきなのはなぜか？ ブラウザの描画パイプラインを覗く</a></h3>
