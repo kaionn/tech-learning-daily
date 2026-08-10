@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-08-11.html",
+    "date": "2026-08-11",
+    "title": "在庫チェックしてから1つ引いただけなのに、なぜ在庫が負になるのか？",
+    "summary": "PostgreSQLのデフォルトRead Committedは文ごとに新しいスナップショットを取るだけで、読んでから書くまでの割り込みは防がない。Repeatable Readでも防げないwrite skewと、Serializableがリトライ前提になる理由を解説。",
+    "category": "db",
+    "difficulty": "基礎",
+    "readTime": 8,
+    "terms": ["MVCC", "スナップショット", "ロストアップデート", "write skew（書き込みスキュー）", "SELECT ... FOR UPDATE"]
+  },
+  {
     "file": "2026-08-10.html",
     "date": "2026-08-10",
     "title": "AWS コンソールでポチッと直しただけなのに、なぜ terraform plan が差分まみれになるのか？",

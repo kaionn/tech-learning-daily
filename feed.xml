@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-08-10T06:55:49+09:00</updated>
+  <updated>2026-08-11T07:02:57+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>在庫チェックしてから1つ引いただけなのに、なぜ在庫が負になるのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-08-11.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-08-11.html</id>
+    <updated>2026-08-11T07:02:57+09:00</updated>
+    <summary>PostgreSQLのデフォルトRead Committedは文ごとに新しいスナップショットを取るだけで、読んでから書くまでの割り込みは防がない。Repeatable Readでも防げないwrite skewと、Serializableがリトライ前提になる理由を解説。</summary>
+  </entry>
   <entry>
     <title>AWS コンソールでポチッと直しただけなのに、なぜ terraform plan が差分まみれになるのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-08-10.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-07-29.html</id>
     <updated>2026-07-29T07:31:00+09:00</updated>
     <summary>DB 接続の確立コストを省くのがコネクションプールだが、枯渇時はアプリ側プールは待ち行列とタイムアウト例外、DB サーバー自体の上限超過は待たせず即座に接続拒否と挙動が異なる。検知にはプールのメトリクス監視が必要。</summary>
-  </entry>
-  <entry>
-    <title>DB のインデックスはなぜ速いのか？ B+Tree の中を覗く</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-07-28.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-07-28.html</id>
-    <updated>2026-07-28T07:32:50+09:00</updated>
-    <summary>B+Tree は 1 ノードに数百キーを詰めて木を浅く保つことで検索を高速化する一方、インデックスが増えるほど書き込みのたびに複数の木を更新し、ページ分割が連鎖するコストを払うことになる。</summary>
   </entry>
 </feed>
