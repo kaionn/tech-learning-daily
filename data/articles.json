@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-08-12.html",
+    "date": "2026-08-12",
+    "title": "「ロールバックして」が一瞬で終わる時と終わらない時があるのはなぜか？",
+    "summary": "Rolling Updateのロールバックは逆方向のロールアウトで進むのと同じだけ時間がかかるが、Blue-Greenは経路の切り戻し、Canaryは重みを0に戻すだけで済む。DBスキーマ変更はexpand/contractパターンが無いと戻せない理由も解説。",
+    "category": "infra",
+    "difficulty": "基礎",
+    "readTime": 8,
+    "terms": ["ロールアウト（rollout）", "setWeight", "終了猶予時間（termination wait time）", "AnalysisRun", "expand/contract パターン"]
+  },
+  {
     "file": "2026-08-11.html",
     "date": "2026-08-11",
     "title": "在庫チェックしてから1つ引いただけなのに、なぜ在庫が負になるのか？",

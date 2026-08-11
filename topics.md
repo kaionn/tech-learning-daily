@@ -6,6 +6,7 @@
 
 ## 消化済み
 
+- 2026-08-12 デプロイ戦略（Blue-Green / Canary / Rolling Update）とロールバックの速さの違い（自動選定）
 - 2026-08-11 DB のトランザクション分離レベル（知りたい観点: Read Committed のデフォルト挙動、ロストアップデート、write skew、Serializable がなぜリトライ前提になるのか）（自動選定）
 - 2026-08-10 Terraform の state ファイルはなぜ必要か（ドリフト・ステートロック）（自動選定）
 - 2026-08-09 ブラウザの描画パイプライン（知りたい観点: CSSOM がレンダーブロッキングになる理由と、script の defer/async・transform/opacity が軽い理由）（自動選定）

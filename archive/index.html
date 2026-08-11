@@ -35,10 +35,10 @@
         <button class="chip" data-cat="network">Network <span class="chip-count">4</span></button>
         <button class="chip" data-cat="db">DB <span class="chip-count">3</span></button>
         <button class="chip" data-cat="arch">Arch <span class="chip-count">2</span></button>
+        <button class="chip" data-cat="infra">Infra <span class="chip-count">2</span></button>
         <button class="chip" data-cat="lang">Lang <span class="chip-count">2</span></button>
         <button class="chip" data-cat="dev">Dev <span class="chip-count">1</span></button>
-        <button class="chip" data-cat="frontend">Frontend <span class="chip-count">1</span></button>
-        <button class="chip" data-cat="infra" data-overflow="1" hidden>Infra <span class="chip-count">1</span></button>
+        <button class="chip" data-cat="frontend" data-overflow="1" hidden>Frontend <span class="chip-count">1</span></button>
         <button class="chip" data-cat="obs" data-overflow="1" hidden>Obs <span class="chip-count">1</span></button>
         <button class="chip" data-cat="perf" data-overflow="1" hidden>Perf <span class="chip-count">1</span></button>
         <button class="chip" data-cat="security" data-overflow="1" hidden>Security <span class="chip-count">1</span></button>
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-08">
       <div class="section-title">2026 年 8 月 <span class="count"></span></div>
+      <div class="card" data-cat="infra" data-diff="基礎"
+           data-search="「ロールバックして」が一瞬で終わる時と終わらない時があるのはなぜか？ rolling updateのロールバックは逆方向のロールアウトで進むのと同じだけ時間がかかるが、blue-greenは経路の切り戻し、canaryは重みを0に戻すだけで済む。dbスキーマ変更はexpand/contractパターンが無いと戻せない理由も解説。" data-terms="ロールアウト（rollout） / setWeight / 終了猶予時間（termination wait time） / AnalysisRun / expand/contract パターン">
+        <h3><a href="2026-08-12.html">「ロールバックして」が一瞬で終わる時と終わらない時があるのはなぜか？</a></h3>
+        <div class="summary">Rolling Updateのロールバックは逆方向のロールアウトで進むのと同じだけ時間がかかるが、Blue-Greenは経路の切り戻し、Canaryは重みを0に戻すだけで済む。DBスキーマ変更はexpand/contractパターンが無いと戻せない理由も解説。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-infra">Infra</span><span>🌿 基礎</span><span>⏱ 約 8 分</span><span>2026-08-12</span></div>
+      </div>
       <div class="card" data-cat="db" data-diff="基礎"
            data-search="在庫チェックしてから1つ引いただけなのに、なぜ在庫が負になるのか？ postgresqlのデフォルトread committedは文ごとに新しいスナップショットを取るだけで、読んでから書くまでの割り込みは防がない。repeatable readでも防げないwrite skewと、serializableがリトライ前提になる理由を解説。" data-terms="MVCC / スナップショット / ロストアップデート / write skew（書き込みスキュー） / SELECT ... FOR UPDATE">
         <h3><a href="2026-08-11.html">在庫チェックしてから1つ引いただけなのに、なぜ在庫が負になるのか？</a></h3>
