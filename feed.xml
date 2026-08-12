@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-08-12T07:12:18+09:00</updated>
+  <updated>2026-08-13T07:10:36+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>同じ API を叩いているのに、なぜ CORS エラーが出たり出なかったりするのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-08-13.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-08-13.html</id>
+    <updated>2026-08-13T07:10:36+09:00</updated>
+    <summary>CORS はブラウザだけが強制する同一オリジンポリシーの例外許可であり、シンプルリクエストはサーバーで処理済みのままレスポンスだけが隠される。プリフライトのキャッシュとCredentials・ワイルドカードの非互換も解説。</summary>
+  </entry>
   <entry>
     <title>「ロールバックして」が一瞬で終わる時と終わらない時があるのはなぜか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-08-12.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-07-31.html</id>
     <updated>2026-07-31T07:35:35+09:00</updated>
     <summary>TLS ハンドシェイクは相手の本人確認（証明書チェーン）と今回限りの鍵の合意（ECDHE）の2つを行う。TLS 1.3で鍵交換が使い捨てになった理由と、前方秘匿性が過去の通信を将来の秘密鍵漏洩から守る仕組みを解説。</summary>
-  </entry>
-  <entry>
-    <title>ブラウザに URL を打ってから、IP に辿り着くまで何が起きているのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-07-30.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-07-30.html</id>
-    <updated>2026-07-30T07:18:00+09:00</updated>
-    <summary>名前解決はブラウザ・OS・再帰的リゾルバの3段キャッシュをまず確認し、無ければルート→TLD→権威DNSサーバーへの委任の連鎖をたどる。「DNSの浸透」は単一の伝播処理ではなくTTLによる各リゾルバの個別キャッシュだと解説。</summary>
   </entry>
 </feed>

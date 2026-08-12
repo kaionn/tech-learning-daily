@@ -37,11 +37,11 @@
         <button class="chip" data-cat="arch">Arch <span class="chip-count">2</span></button>
         <button class="chip" data-cat="infra">Infra <span class="chip-count">2</span></button>
         <button class="chip" data-cat="lang">Lang <span class="chip-count">2</span></button>
-        <button class="chip" data-cat="dev">Dev <span class="chip-count">1</span></button>
+        <button class="chip" data-cat="security">Security <span class="chip-count">2</span></button>
+        <button class="chip" data-cat="dev" data-overflow="1" hidden>Dev <span class="chip-count">1</span></button>
         <button class="chip" data-cat="frontend" data-overflow="1" hidden>Frontend <span class="chip-count">1</span></button>
         <button class="chip" data-cat="obs" data-overflow="1" hidden>Obs <span class="chip-count">1</span></button>
         <button class="chip" data-cat="perf" data-overflow="1" hidden>Perf <span class="chip-count">1</span></button>
-        <button class="chip" data-cat="security" data-overflow="1" hidden>Security <span class="chip-count">1</span></button>
         <button class="chip chip-more" id="chip-more">+ 4 件</button>
       </div>
       <div class="chip-row" id="diff-chips">
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-08">
       <div class="section-title">2026 年 8 月 <span class="count"></span></div>
+      <div class="card" data-cat="security" data-diff="基礎"
+           data-search="同じ api を叩いているのに、なぜ cors エラーが出たり出なかったりするのか？ corsはブラウザだけが強制する同一オリジンポリシーの例外許可であり、シンプルリクエストはサーバーで処理済みのままレスポンスだけが隠される。プリフライトのキャッシュとcredentials・ワイルドカードの非互換も解説。" data-terms="同一オリジンポリシー / シンプルリクエスト / プリフライトリクエスト / Access-Control-Allow-Origin / 資格情報付きリクエスト">
+        <h3><a href="2026-08-13.html">同じ API を叩いているのに、なぜ CORS エラーが出たり出なかったりするのか？</a></h3>
+        <div class="summary">CORSはブラウザだけが強制する同一オリジンポリシーの例外許可であり、シンプルリクエストはサーバーで処理済みのままレスポンスだけが隠される。プリフライトのキャッシュとCredentials・ワイルドカードの非互換も解説。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-security">Security</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-08-13</span></div>
+      </div>
       <div class="card" data-cat="infra" data-diff="基礎"
            data-search="「ロールバックして」が一瞬で終わる時と終わらない時があるのはなぜか？ rolling updateのロールバックは逆方向のロールアウトで進むのと同じだけ時間がかかるが、blue-greenは経路の切り戻し、canaryは重みを0に戻すだけで済む。dbスキーマ変更はexpand/contractパターンが無いと戻せない理由も解説。" data-terms="ロールアウト（rollout） / setWeight / 終了猶予時間（termination wait time） / AnalysisRun / expand/contract パターン">
         <h3><a href="2026-08-12.html">「ロールバックして」が一瞬で終わる時と終わらない時があるのはなぜか？</a></h3>
