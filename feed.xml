@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-08-13T07:10:36+09:00</updated>
+  <updated>2026-08-14T07:10:56+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>JWT はなぜ、改ざんには気づけるのに失効はできないのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-08-14.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-08-14.html</id>
+    <updated>2026-08-14T07:10:56+09:00</updated>
+    <summary>JWTのSignatureはbase64urlエンコードにすぎず暗号化ではなく、Payloadは誰でも読める。algをトークン任せにする検証はアルゴリズム混同攻撃を許し、ステートレス検証ゆえにexpまで失効できない理由と短命化+refresh tokenでの対処を解説。</summary>
+  </entry>
   <entry>
     <title>同じ API を叩いているのに、なぜ CORS エラーが出たり出なかったりするのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-08-13.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-08-01.html</id>
     <updated>2026-08-01T07:23:16+09:00</updated>
     <summary>TTL は新鮮さとオリジン負荷のトレードオフを秒数にしたもの。Vary によるキャッシュキー設計を誤ると誤配信が起き、TTL失効直後の同時アクセスはキャッシュスタンピードを招く。stale-while-revalidateが古い値を返しつつ裏で再検証しこれを防ぐ仕組みを解説。</summary>
-  </entry>
-  <entry>
-    <title>HTTPS の鍵マークは、いったい何を保証しているのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-07-31.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-07-31.html</id>
-    <updated>2026-07-31T07:35:35+09:00</updated>
-    <summary>TLS ハンドシェイクは相手の本人確認（証明書チェーン）と今回限りの鍵の合意（ECDHE）の2つを行う。TLS 1.3で鍵交換が使い捨てになった理由と、前方秘匿性が過去の通信を将来の秘密鍵漏洩から守る仕組みを解説。</summary>
   </entry>
 </feed>

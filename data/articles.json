@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-08-14.html",
+    "date": "2026-08-14",
+    "title": "JWT はなぜ、改ざんには気づけるのに失効はできないのか？",
+    "summary": "JWTのSignatureはbase64urlエンコードにすぎず暗号化ではなく、Payloadは誰でも読める。algをトークン任せにする検証はアルゴリズム混同攻撃を許し、ステートレス検証ゆえにexpまで失効できない理由と短命化+refresh tokenでの対処を解説。",
+    "category": "security",
+    "difficulty": "基礎",
+    "readTime": 8,
+    "terms": ["JWT（JSON Web Token）", "署名（Signature）", "アルゴリズム混同攻撃", "クレーム", "リフレッシュトークン"]
+  },
+  {
     "file": "2026-08-13.html",
     "date": "2026-08-13",
     "title": "同じ API を叩いているのに、なぜ CORS エラーが出たり出なかったりするのか？",
