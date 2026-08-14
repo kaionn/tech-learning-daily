@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-08-15.html",
+    "date": "2026-08-15",
+    "title": "書き込み直後に読み取りレプリカへ問い合わせると、なぜ古いデータが返るのか？",
+    "summary": "DBはWALを先にディスクへ確定させてからデータファイルへ反映し、レプリケーションはこのWALを転送・再生している。ストリーミングレプリケーションは既定で非同期なためレプリケーションラグが生じ、read-your-writesが崩れる理由とsynchronous_commitでの対処を解説。",
+    "category": "db",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": ["WAL（Write-Ahead Log）", "ストリーミングレプリケーション", "レプリケーションラグ", "synchronous_commit", "read-your-writes"]
+  },
+  {
     "file": "2026-08-14.html",
     "date": "2026-08-14",
     "title": "JWT はなぜ、改ざんには気づけるのに失効はできないのか？",
