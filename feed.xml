@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-08-15T06:44:51+09:00</updated>
+  <updated>2026-08-16T06:41:13+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>ローカルでは一瞬なのに、CI の docker build はなぜ毎回フルビルドになるのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-08-16.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-08-16.html</id>
+    <updated>2026-08-16T06:41:13+09:00</updated>
+    <summary>COPY/ADDはファイル内容のチェックサム、RUNはコマンド文字列でキャッシュを判定し、一度ミスすると以降の全レイヤーが連鎖的に無効化される。CIランナーは前回ビルドを保持しないため常にフルビルドになる理由とレジストリキャッシュでの対処を解説。</summary>
+  </entry>
   <entry>
     <title>書き込み直後に読み取りレプリカへ問い合わせると、なぜ古いデータが返るのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-08-15.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-08-03.html</id>
     <updated>2026-08-03T07:15:00+09:00</updated>
     <summary>メトリクスは個々のリクエストを捨てて集計するから安く常時収集できる一方、どのリクエストが遅いかは分からない。ログはtrace-idで結びつけて初めてトレースという1本の経路になる仕組みを解説。</summary>
-  </entry>
-  <entry>
-    <title>同じ注文が二回処理された。メッセージキューの「重複」はなぜ起こるのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-08-02.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-08-02.html</id>
-    <updated>2026-08-02T07:20:02+09:00</updated>
-    <summary>SQS や RabbitMQ は「失うより重複させる」at-least-once配信を採用しており、重複はブローカーがack有無しか見ていないために起きる仕様である。冪等性キーによる無害化と、FIFOキューでも消費側の冪等性が必要な理由を解説。</summary>
   </entry>
 </feed>
