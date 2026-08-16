@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-08-16T06:41:13+09:00</updated>
+  <updated>2026-08-17T06:45:21+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>HTTP/2 は接続を1本にまとめたのに、なぜ遅くなることがあるのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-08-17.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-08-17.html</id>
+    <updated>2026-08-17T06:45:21+09:00</updated>
+    <summary>HTTP/1.1はアプリ層のHead-of-Line Blockingをブラウザが複数TCP接続で回避してきたが、HTTP/2はストリーム多重化で1本の接続に集約した。その代償として生まれたTCP層のHead-of-Line BlockingとHTTP/3による解決を解説。</summary>
+  </entry>
   <entry>
     <title>ローカルでは一瞬なのに、CI の docker build はなぜ毎回フルビルドになるのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-08-16.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-08-04.html</id>
     <updated>2026-08-04T07:31:47+09:00</updated>
     <summary>Pod削除は「エンドポイント除去」と「SIGTERM送信」が同時並行で進む設計上の競合状態であり、伝播ラグの間に着弾したリクエストがデプロイ後の数件の502を生む。preStopフックで送信を遅らせる定石対策を解説。</summary>
-  </entry>
-  <entry>
-    <title>メトリクス・ログ・トレース、同じ障害を見るのになぜ3つ要るのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-08-03.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-08-03.html</id>
-    <updated>2026-08-03T07:15:00+09:00</updated>
-    <summary>メトリクスは個々のリクエストを捨てて集計するから安く常時収集できる一方、どのリクエストが遅いかは分からない。ログはtrace-idで結びつけて初めてトレースという1本の経路になる仕組みを解説。</summary>
   </entry>
 </feed>

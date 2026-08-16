@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-08-17.html",
+    "date": "2026-08-17",
+    "title": "HTTP/2 は接続を1本にまとめたのに、なぜ遅くなることがあるのか？",
+    "summary": "HTTP/1.1はアプリ層のHead-of-Line Blockingをブラウザが複数TCP接続で回避してきたが、HTTP/2はストリーム多重化で1本の接続に集約した。その代償として生まれたTCP層のHead-of-Line BlockingとHTTP/3による解決を解説。",
+    "category": "network",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": ["ストリーム", "HPACK", "Head-of-Line Blocking", "ALPN", "バイナリフレーミングレイヤー"]
+  },
+  {
     "file": "2026-08-16.html",
     "date": "2026-08-16",
     "title": "ローカルでは一瞬なのに、CI の docker build はなぜ毎回フルビルドになるのか？",
