@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-08-17T06:45:21+09:00</updated>
+  <updated>2026-08-18T06:47:48+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>「1分100リクエストまで」のはずが、なぜ一瞬で200件通ってしまうのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-08-18.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-08-18.html</id>
+    <updated>2026-08-18T06:47:48+09:00</updated>
+    <summary>固定ウィンドウカウンタはウィンドウ境界をまたぐと定義の最大2倍のリクエストを通してしまう。トークンバケット・リーキーバケット・スライディングウィンドウカウンタの違いと、分散環境でのレースコンディション対策を解説。</summary>
+  </entry>
   <entry>
     <title>HTTP/2 は接続を1本にまとめたのに、なぜ遅くなることがあるのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-08-17.html"/>
