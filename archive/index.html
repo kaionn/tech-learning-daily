@@ -30,7 +30,7 @@
       <div class="chip-row" id="cat-chips">
         <span class="row-label">カテゴリ</span>
         <button class="chip on" data-cat="">すべて</button>
-        <button class="chip" data-cat="container">Container <span class="chip-count">6</span></button>
+        <button class="chip" data-cat="container">Container <span class="chip-count">7</span></button>
         <button class="chip" data-cat="network">Network <span class="chip-count">5</span></button>
         <button class="chip" data-cat="ai">AI <span class="chip-count">4</span></button>
         <button class="chip" data-cat="db">DB <span class="chip-count">4</span></button>
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-08">
       <div class="section-title">2026 年 8 月 <span class="count"></span></div>
+      <div class="card" data-cat="container" data-diff="基礎"
+           data-search="clusterip に ping が通らないのに、なぜ curl は届くのか？ clusteripは実在しない仮想ipで、実体は各ノードのkube-proxyが書き込むiptablesのdnatルールにすぎない。endpointsliceとreadiness probeの関係、tcpは通りicmp(ping)だけが失敗する理由を解説。" data-terms="ClusterIP / kube-proxy / EndpointSlice / DNAT / readiness probe">
+        <h3><a href="2026-08-19.html">ClusterIP に ping が通らないのに、なぜ curl は届くのか？</a></h3>
+        <div class="summary">ClusterIPは実在しない仮想IPで、実体は各ノードのkube-proxyが書き込むiptablesのDNATルールにすぎない。EndpointSliceとreadiness probeの関係、TCPは通りICMP(ping)だけが失敗する理由を解説。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-container">Container</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-08-19</span></div>
+      </div>
       <div class="card" data-cat="arch" data-diff="基礎"
            data-search="「1分100リクエストまで」のはずが、なぜ一瞬で200件通ってしまうのか？ 固定ウィンドウカウンタはウィンドウ境界をまたぐと定義の最大2倍のリクエストを通してしまう。トークンバケット・リーキーバケット・スライディングウィンドウカウンタの違いと、分散環境でのレースコンディション対策を解説。" data-terms="固定ウィンドウカウンタ / トークンバケット / リーキーバケット / スライディングウィンドウカウンタ / Retry-After ヘッダー">
         <h3><a href="2026-08-18.html">「1分100リクエストまで」のはずが、なぜ一瞬で200件通ってしまうのか？</a></h3>

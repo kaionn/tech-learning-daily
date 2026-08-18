@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-08-19.html",
+    "date": "2026-08-19",
+    "title": "ClusterIP に ping が通らないのに、なぜ curl は届くのか？",
+    "summary": "ClusterIPは実在しない仮想IPで、実体は各ノードのkube-proxyが書き込むiptablesのDNATルールにすぎない。EndpointSliceとreadiness probeの関係、TCPは通りICMP(ping)だけが失敗する理由を解説。",
+    "category": "container",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": ["ClusterIP", "kube-proxy", "EndpointSlice", "DNAT", "readiness probe"]
+  },
+  {
     "file": "2026-08-18.html",
     "date": "2026-08-18",
     "title": "「1分100リクエストまで」のはずが、なぜ一瞬で200件通ってしまうのか？",

@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-08-18T06:47:48+09:00</updated>
+  <updated>2026-08-19T06:46:35+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>ClusterIP に ping が通らないのに、なぜ curl は届くのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-08-19.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-08-19.html</id>
+    <updated>2026-08-19T06:46:35+09:00</updated>
+    <summary>ClusterIP は実在しない仮想IPで、実体は各ノードのkube-proxyが書き込むiptablesのDNATルールにすぎない。EndpointSliceとreadiness probeの関係、TCPは通りICMP(ping)だけが失敗する理由を解説。</summary>
+  </entry>
   <entry>
     <title>「1分100リクエストまで」のはずが、なぜ一瞬で200件通ってしまうのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-08-18.html"/>
@@ -96,19 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-08-06.html</id>
     <updated>2026-08-06T07:34:21+09:00</updated>
     <summary>gitのオブジェクトは内容から計算したハッシュで住所が決まる内容アドレス型ストレージで、commitはtreeへの参照。branchは41バイトのポインタにすぎず、rebaseは新しいコミットを作って参照を貼り替えているだけと解説。</summary>
-  </entry>
-  <entry>
-    <title>シングルスレッドの JavaScript は、なぜ非同期 I/O を同時に捌けるのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-08-05.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-08-05.html</id>
-    <updated>2026-08-05T07:35:37+09:00</updated>
-    <summary>JSのコールスタックは1本で並行に見えるのはI/Oの実体がOSやスレッドプールで進むからだ。マイクロタスクとマクロタスクの優先順位、Node.jsのlibuvがネットワークI/Oとファイル/DNSを別々に処理する仕組みを解説。</summary>
-  </entry>
-  <entry>
-    <title>Pod を消しただけなのに、なぜ 502 が数件だけ出るのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-08-04.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-08-04.html</id>
-    <updated>2026-08-04T07:31:47+09:00</updated>
-    <summary>Pod削除は「エンドポイント除去」と「SIGTERM送信」が同時並行で進む設計上の競合状態であり、伝播ラグの間に着弾したリクエストがデプロイ後の数件の502を生む。preStopフックで送信を遅らせる定石対策を解説。</summary>
   </entry>
 </feed>
