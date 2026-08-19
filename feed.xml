@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-08-19T06:46:35+09:00</updated>
+  <updated>2026-08-20T06:45:53+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>`as HTMLInputElement` と書いたのに、なぜ実行時に `null` で落ちるのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-08-20.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-08-20.html</id>
+    <updated>2026-08-20T06:45:53+09:00</updated>
+    <summary>TypeScript の型注釈はコンパイル時に消去され、実行時には一切残らない。as が実行時チェックを伴わない申告にすぎない理由と、構造的型付けが名前ではなく形で互換性を判断する設計を解説。</summary>
+  </entry>
   <entry>
     <title>ClusterIP に ping が通らないのに、なぜ curl は届くのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-08-19.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-08-07.html</id>
     <updated>2026-08-07T10:06:54+09:00</updated>
     <summary>GCがアプリを一時停止させるのは生死判定中の参照書き換えを防ぐためで、並行化しても区間自体はゼロにならない。世代別GCは「大半のオブジェクトは若くして死ぬ」という経験則に賭け、新しい世代だけを頻繁に軽く掃除する仕組みを解説。</summary>
-  </entry>
-  <entry>
-    <title>git のコミットとブランチ、実体は何なのか？rebase が「歴史を書き換える」とはどういうことか</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-08-06.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-08-06.html</id>
-    <updated>2026-08-06T07:34:21+09:00</updated>
-    <summary>gitのオブジェクトは内容から計算したハッシュで住所が決まる内容アドレス型ストレージで、commitはtreeへの参照。branchは41バイトのポインタにすぎず、rebaseは新しいコミットを作って参照を貼り替えているだけと解説。</summary>
   </entry>
 </feed>

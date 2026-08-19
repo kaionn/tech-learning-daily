@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-08-20.html",
+    "date": "2026-08-20",
+    "title": "`as HTMLInputElement` と書いたのに、なぜ実行時に `null` で落ちるのか？",
+    "summary": "TypeScriptの型注釈はコンパイル時に消去され、実行時には一切残らない。asが実行時チェックを伴わない申告にすぎない理由と、構造的型付けが名前ではなく形で互換性を判断する設計、外部境界の値を守れない限界を解説。",
+    "category": "lang",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": ["型消去（type erasure）", "型アサーション（as）", "構造的型付け", "名前的型付け", "ランタイムバリデーション"]
+  },
+  {
     "file": "2026-08-19.html",
     "date": "2026-08-19",
     "title": "ClusterIP に ping が通らないのに、なぜ curl は届くのか？",

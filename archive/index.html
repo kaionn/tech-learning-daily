@@ -35,9 +35,9 @@
         <button class="chip" data-cat="ai">AI <span class="chip-count">4</span></button>
         <button class="chip" data-cat="db">DB <span class="chip-count">4</span></button>
         <button class="chip" data-cat="arch">Arch <span class="chip-count">3</span></button>
+        <button class="chip" data-cat="lang">Lang <span class="chip-count">3</span></button>
         <button class="chip" data-cat="security">Security <span class="chip-count">3</span></button>
         <button class="chip" data-cat="infra">Infra <span class="chip-count">2</span></button>
-        <button class="chip" data-cat="lang">Lang <span class="chip-count">2</span></button>
         <button class="chip" data-cat="dev" data-overflow="1" hidden>Dev <span class="chip-count">1</span></button>
         <button class="chip" data-cat="frontend" data-overflow="1" hidden>Frontend <span class="chip-count">1</span></button>
         <button class="chip" data-cat="obs" data-overflow="1" hidden>Obs <span class="chip-count">1</span></button>
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-08">
       <div class="section-title">2026 年 8 月 <span class="count"></span></div>
+      <div class="card" data-cat="lang" data-diff="基礎"
+           data-search="`as htmlinputelement` と書いたのに、なぜ実行時に `null` で落ちるのか？ typescriptの型注釈はコンパイル時に消去され、実行時には一切残らない。asが実行時チェックを伴わない申告にすぎない理由と、構造的型付けが名前ではなく形で互換性を判断する設計、外部境界の値を守れない限界を解説。" data-terms="型消去（type erasure） / 型アサーション（as） / 構造的型付け / 名前的型付け / ランタイムバリデーション">
+        <h3><a href="2026-08-20.html">`as HTMLInputElement` と書いたのに、なぜ実行時に `null` で落ちるのか？</a></h3>
+        <div class="summary">TypeScriptの型注釈はコンパイル時に消去され、実行時には一切残らない。asが実行時チェックを伴わない申告にすぎない理由と、構造的型付けが名前ではなく形で互換性を判断する設計、外部境界の値を守れない限界を解説。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-lang">Lang</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-08-20</span></div>
+      </div>
       <div class="card" data-cat="container" data-diff="基礎"
            data-search="clusterip に ping が通らないのに、なぜ curl は届くのか？ clusteripは実在しない仮想ipで、実体は各ノードのkube-proxyが書き込むiptablesのdnatルールにすぎない。endpointsliceとreadiness probeの関係、tcpは通りicmp(ping)だけが失敗する理由を解説。" data-terms="ClusterIP / kube-proxy / EndpointSlice / DNAT / readiness probe">
         <h3><a href="2026-08-19.html">ClusterIP に ping が通らないのに、なぜ curl は届くのか？</a></h3>
