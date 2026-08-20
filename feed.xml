@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-08-20T06:45:53+09:00</updated>
+  <updated>2026-08-21T06:50:45+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>同じ「アラート」なのに、なぜ叩き起こされる時とチケットで済む時があるのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-08-21.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-08-21.html</id>
+    <updated>2026-08-21T06:50:45+09:00</updated>
+    <summary>SLIは良いイベント/全イベントの比率、SLOは意図的に100%未満で設定する目標、エラーバジェットはその残高。バーンレートとマルチウィンドウ・マルチバーンレートアラートが緊急招集とチケットを切り分ける仕組みを解説。</summary>
+  </entry>
   <entry>
     <title>`as HTMLInputElement` と書いたのに、なぜ実行時に `null` で落ちるのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-08-20.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-08-08.html</id>
     <updated>2026-08-08T07:02:08+09:00</updated>
     <summary>OAuth 2.0 の認可コードフローはURLに乗る認可コードとTLS内でしか動かないアクセストークンを分離し、コード横取りをstateとredirect_uri検証で防ぐ。PKCEとOpenID ConnectのID Tokenの役割も解説。</summary>
-  </entry>
-  <entry>
-    <title>なぜ GC は世界を止めるのか？「ほとんどのオブジェクトは若くして死ぬ」に賭けた世代別 GC</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-08-07.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-08-07.html</id>
-    <updated>2026-08-07T10:06:54+09:00</updated>
-    <summary>GCがアプリを一時停止させるのは生死判定中の参照書き換えを防ぐためで、並行化しても区間自体はゼロにならない。世代別GCは「大半のオブジェクトは若くして死ぬ」という経験則に賭け、新しい世代だけを頻繁に軽く掃除する仕組みを解説。</summary>
   </entry>
 </feed>

@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-08-21.html",
+    "date": "2026-08-21",
+    "title": "同じ「アラート」なのに、なぜ叩き起こされる時とチケットで済む時があるのか？",
+    "summary": "SLIは良いイベント/全イベントの比率、SLOは意図的に100%未満で設定する目標、エラーバジェットはその残高。バーンレートとマルチウィンドウ・マルチバーンレートアラートが緊急招集とチケットを切り分ける仕組みを解説。",
+    "category": "obs",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": ["SLI（Service Level Indicator）", "SLO（Service Level Objective）", "SLA（Service Level Agreement）", "エラーバジェット", "バーンレート"]
+  },
+  {
     "file": "2026-08-20.html",
     "date": "2026-08-20",
     "title": "`as HTMLInputElement` と書いたのに、なぜ実行時に `null` で落ちるのか？",
