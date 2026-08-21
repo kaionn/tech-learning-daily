@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-08-21T06:50:45+09:00</updated>
+  <updated>2026-08-22T06:47:33+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>etcd は 1 台落ちても平気なのに、なぜ過半数を割ると書き込みが止まるのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-08-22.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-08-22.html</id>
+    <updated>2026-08-22T06:47:33+09:00</updated>
+    <summary>etcdはRaftという合意アルゴリズムで書き込みを複製する。過半数(クォーラム)にログが届いた時点で初めて確定し、過半数を割ると新規の書き込みも読み取りも止まる仕組みと、奇数台構成が推奨される理由を解説。</summary>
+  </entry>
   <entry>
     <title>同じ「アラート」なのに、なぜ叩き起こされる時とチケットで済む時があるのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-08-21.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-08-09.html</id>
     <updated>2026-08-09T06:52:29+09:00</updated>
     <summary>HTMLパーサーはscriptタグでdefer/asyncが無い限り止まり、CSSOMはスタイルシート全体を読むまで完成しないためレンダーブロッキングになる。transform・opacityの変更だけがレイアウトとペイントを飛ばしコンポジットで完結する理由を解説。</summary>
-  </entry>
-  <entry>
-    <title>「Google でログイン」を押した瞬間、裏で何がやり取りされているのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-08-08.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-08-08.html</id>
-    <updated>2026-08-08T07:02:08+09:00</updated>
-    <summary>OAuth 2.0 の認可コードフローはURLに乗る認可コードとTLS内でしか動かないアクセストークンを分離し、コード横取りをstateとredirect_uri検証で防ぐ。PKCEとOpenID ConnectのID Tokenの役割も解説。</summary>
   </entry>
 </feed>

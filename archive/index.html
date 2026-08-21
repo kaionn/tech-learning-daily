@@ -33,8 +33,8 @@
         <button class="chip" data-cat="container">Container <span class="chip-count">7</span></button>
         <button class="chip" data-cat="network">Network <span class="chip-count">5</span></button>
         <button class="chip" data-cat="ai">AI <span class="chip-count">4</span></button>
+        <button class="chip" data-cat="arch">Arch <span class="chip-count">4</span></button>
         <button class="chip" data-cat="db">DB <span class="chip-count">4</span></button>
-        <button class="chip" data-cat="arch">Arch <span class="chip-count">3</span></button>
         <button class="chip" data-cat="lang">Lang <span class="chip-count">3</span></button>
         <button class="chip" data-cat="security">Security <span class="chip-count">3</span></button>
         <button class="chip" data-cat="infra">Infra <span class="chip-count">2</span></button>
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-08">
       <div class="section-title">2026 年 8 月 <span class="count"></span></div>
+      <div class="card" data-cat="arch" data-diff="応用"
+           data-search="etcd は 1 台落ちても平気なのに、なぜ過半数を割ると書き込みが止まるのか？ raftは書き込みが過半数(クォーラム)に複製されるまで確定させない。奇数台構成が推奨される理由と、過半数を割ったetcdが読み取りも書き込みも止める仕組みを解説。" data-terms="Raft / クォーラム（過半数） / Leader / Follower / Candidate / ハートビート / election timeout / コミット">
+        <h3><a href="2026-08-22.html">etcd は 1 台落ちても平気なのに、なぜ過半数を割ると書き込みが止まるのか？</a></h3>
+        <div class="summary">Raftは書き込みが過半数(クォーラム)に複製されるまで確定させない。奇数台構成が推奨される理由と、過半数を割ったetcdが読み取りも書き込みも止める仕組みを解説。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-arch">Arch</span><span>🌳 応用</span><span>⏱ 約 8 分</span><span>2026-08-22</span></div>
+      </div>
       <div class="card" data-cat="obs" data-diff="基礎"
            data-search="同じ「アラート」なのに、なぜ叩き起こされる時とチケットで済む時があるのか？ sliは良いイベント/全イベントの比率、sloは意図的に100%未満で設定する目標、エラーバジェットはその残高。バーンレートとマルチウィンドウ・マルチバーンレートアラートが緊急招集とチケットを切り分ける仕組みを解説。" data-terms="SLI（Service Level Indicator） / SLO（Service Level Objective） / SLA（Service Level Agreement） / エラーバジェット / バーンレート">
         <h3><a href="2026-08-21.html">同じ「アラート」なのに、なぜ叩き起こされる時とチケットで済む時があるのか？</a></h3>
