@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-08-23.html",
+    "date": "2026-08-23",
+    "title": "使っていない関数を import しただけなのに、なぜバンドルから消えるのか？",
+    "summary": "ES Modulesのimport/exportは静的な構文制約を持つためバンドラは実行せず依存グラフを組み立てられるが、CommonJSのrequire()は動的評価のため静的解析ができない。webpackのusedExports→sideEffects→minifyという3段階の仕組みと、sideEffectsの誤設定でアプリが壊れる罠を解説。",
+    "category": "frontend",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": ["ES Modules（ESM）", "CommonJS", "静的解析", "sideEffects", "デッドコード除去（dead code elimination）"]
+  },
+  {
     "file": "2026-08-22.html",
     "date": "2026-08-22",
     "title": "etcd は 1 台落ちても平気なのに、なぜ過半数を割ると書き込みが止まるのか？",

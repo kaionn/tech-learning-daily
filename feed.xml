@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-08-22T06:47:33+09:00</updated>
+  <updated>2026-08-23T06:42:09+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>使っていない関数を import しただけなのに、なぜバンドルから消えるのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-08-23.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-08-23.html</id>
+    <updated>2026-08-23T06:42:09+09:00</updated>
+    <summary>ES Modulesのimport/exportは静的な構文制約を持つためバンドラは実行せず依存グラフを組み立てられるが、CommonJSのrequire()は動的評価のため静的解析ができない。webpackのusedExports→sideEffects→minifyという3段階と、その罠を解説。</summary>
+  </entry>
   <entry>
     <title>etcd は 1 台落ちても平気なのに、なぜ過半数を割ると書き込みが止まるのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-08-22.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-08-10.html</id>
     <updated>2026-08-10T06:55:49+09:00</updated>
     <summary>Terraformは設定ファイルと実クラウドを直接比べず、両者をつなぐstateを介して動く。コンソール変更が起こすドリフトの検知の仕組みと、S3+DynamoDBからS3単体のuse_lockfileへ進化したステートロックの実装を解説。</summary>
-  </entry>
-  <entry>
-    <title>CSS は head に、JS は defer で読むべきなのはなぜか？ ブラウザの描画パイプラインを覗く</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-08-09.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-08-09.html</id>
-    <updated>2026-08-09T06:52:29+09:00</updated>
-    <summary>HTMLパーサーはscriptタグでdefer/asyncが無い限り止まり、CSSOMはスタイルシート全体を読むまで完成しないためレンダーブロッキングになる。transform・opacityの変更だけがレイアウトとペイントを飛ばしコンポジットで完結する理由を解説。</summary>
   </entry>
 </feed>
