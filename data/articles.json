@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-08-25.html",
+    "date": "2026-08-25",
+    "title": "サーバーは正常に動いているのに、なぜ一部のリクエストだけ timeout になるのか？",
+    "summary": "TCP接続はSYNキューとAcceptキューの2段の待ち行列を経て確立し、backlogとnet.core.somaxconnで決まる上限を超えると多くの場合RSTも返さず黙って破棄される。CPU/メモリに余裕があっても一部だけtimeoutする現象の仕組みを解説。",
+    "category": "network",
+    "difficulty": "基礎",
+    "readTime": 8,
+    "terms": ["3ウェイハンドシェイク", "SYNキュー", "Acceptキュー", "backlog", "net.core.somaxconn", "TIME-WAIT"]
+  },
+  {
     "file": "2026-08-24.html",
     "date": "2026-08-24",
     "title": "パスワードのハッシュ、入れるたびに結果が違うのに、なぜログインは検証できるのか？",
