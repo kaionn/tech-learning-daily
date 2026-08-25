@@ -37,10 +37,10 @@
         <button class="chip" data-cat="db">DB <span class="chip-count">4</span></button>
         <button class="chip" data-cat="security">Security <span class="chip-count">4</span></button>
         <button class="chip" data-cat="lang">Lang <span class="chip-count">3</span></button>
-        <button class="chip" data-cat="frontend">Frontend <span class="chip-count">2</span></button>
+        <button class="chip" data-cat="dev">Dev <span class="chip-count">2</span></button>
+        <button class="chip" data-cat="frontend" data-overflow="1" hidden>Frontend <span class="chip-count">2</span></button>
         <button class="chip" data-cat="infra" data-overflow="1" hidden>Infra <span class="chip-count">2</span></button>
         <button class="chip" data-cat="obs" data-overflow="1" hidden>Obs <span class="chip-count">2</span></button>
-        <button class="chip" data-cat="dev" data-overflow="1" hidden>Dev <span class="chip-count">1</span></button>
         <button class="chip" data-cat="perf" data-overflow="1" hidden>Perf <span class="chip-count">1</span></button>
         <button class="chip chip-more" id="chip-more">+ 4 件</button>
       </div>
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-08">
       <div class="section-title">2026 年 8 月 <span class="count"></span></div>
+      <div class="card" data-cat="dev" data-diff="基礎"
+           data-search="なぜ「単体テストを厚く、e2e を薄く」と言われるのか？ テストピラミッドは単体テストを多数・高速に、e2eを少数・低速に配分する考え方。e2eが遅くflakyになりやすく原因特定も難しい理由と、google発の70/20/10という目安、崩れた「アイスクリームコーン」状態の危険性を解説。" data-terms="テストピラミッド / 単体テスト（unit test） / 統合テスト（integration test） / テストダブル / flaky（不安定なテスト） / アイスクリームコーン">
+        <h3><a href="2026-08-26.html">なぜ「単体テストを厚く、E2E を薄く」と言われるのか？</a></h3>
+        <div class="summary">テストピラミッドは単体テストを多数・高速に、E2Eを少数・低速に配分する考え方。E2Eが遅くflakyになりやすく原因特定も難しい理由と、Google発の70/20/10という目安、崩れた「アイスクリームコーン」状態の危険性を解説。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-dev">Dev</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-08-26</span></div>
+      </div>
       <div class="card" data-cat="network" data-diff="基礎"
            data-search="サーバーは正常に動いているのに、なぜ一部のリクエストだけ timeout になるのか？ tcp接続はsynキューとacceptキューの2段の待ち行列を経て確立し、backlogとnet.core.somaxconnで決まる上限を超えると多くの場合rstも返さず黙って破棄される。cpu/メモリに余裕があっても一部だけtimeoutする現象の仕組みを解説。" data-terms="3ウェイハンドシェイク / SYNキュー / Acceptキュー / backlog / net.core.somaxconn / TIME-WAIT">
         <h3><a href="2026-08-25.html">サーバーは正常に動いているのに、なぜ一部のリクエストだけ timeout になるのか？</a></h3>
