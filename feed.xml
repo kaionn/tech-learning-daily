@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-08-27T09:54:07+09:00</updated>
+  <updated>2026-08-28T14:32:12+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>Rails のフォームに、なぜ見えない authenticity_token が埋め込まれているのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-08-28.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-08-28.html</id>
+    <updated>2026-08-28T14:32:12+09:00</updated>
+    <summary>CSRFはログイン済みブラウザが自動送信するクッキーを悪用し、別サイトから本人になりすましたリクエストを送らせる攻撃で、CORSはレスポンスの読み取り制限にすぎず防げない。RailsのauthenticityTokenとSameSite属性の役割分担を解説。</summary>
+  </entry>
   <entry>
     <title>「犬」と「猫」は近く、「犬」と「車」は遠いと、コンピュータはどうやって知るのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-08-27.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-08-15.html</id>
     <updated>2026-08-15T06:44:51+09:00</updated>
     <summary>DBはWALを先にディスクへ確定させてからデータファイルへ反映し、レプリケーションはこのWALを転送・再生している。ストリーミングレプリケーションは既定で非同期なためレプリケーションラグが生じ、read-your-writesが崩れる理由とsynchronous_commitでの対処を解説。</summary>
-  </entry>
-  <entry>
-    <title>JWT はなぜ、改ざんには気づけるのに失効はできないのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-08-14.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-08-14.html</id>
-    <updated>2026-08-14T07:10:56+09:00</updated>
-    <summary>JWTのSignatureはbase64urlエンコードにすぎず暗号化ではなく、Payloadは誰でも読める。algをトークン任せにする検証はアルゴリズム混同攻撃を許し、ステートレス検証ゆえにexpまで失効できない理由と短命化+refresh tokenでの対処を解説。</summary>
   </entry>
 </feed>

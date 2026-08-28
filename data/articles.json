@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-08-28.html",
+    "date": "2026-08-28",
+    "title": "Rails のフォームに、なぜ見えない authenticity_token が埋め込まれているのか？",
+    "summary": "CSRFはログイン済みブラウザが自動送信するクッキーを悪用し、別サイトから本人になりすましたリクエストを送らせる攻撃。CORSがレスポンスの読み取り制限にすぎず防げない理由と、RailsのauthenticityToken（synchronizer token pattern）・double submit cookie・SameSite属性の役割分担を解説。",
+    "category": "security",
+    "difficulty": "基礎",
+    "readTime": 8,
+    "terms": ["CSRF（クロスサイトリクエストフォージェリ）", "synchronizer token pattern", "authenticity_token", "double submit cookie", "SameSite 属性"]
+  },
+  {
     "file": "2026-08-27.html",
     "date": "2026-08-27",
     "title": "「犬」と「猫」は近く、「犬」と「車」は遠いと、コンピュータはどうやって知るのか？",
