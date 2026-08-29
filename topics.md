@@ -6,6 +6,7 @@
 
 ## 消化済み
 
+- 2026-08-30 Kubernetes の Ingress の仕組み（知りたい観点: Ingress リソースと Ingress Controller の役割分担、Service だけでは複数ドメインをさばけない理由）（自動選定）
 - 2026-08-29 サーキットブレーカーとリトライ戦略（指数バックオフ+jitter、リトライストームがなぜ起こるか）（自動選定）
 - 2026-08-28 CSRF（クロスサイトリクエストフォージェリ）の仕組みとRailsのauthenticity_token・SameSite属性による防御（自動選定）
 - 2026-08-27 embeddingとコサイン類似度、ベクトル検索・RAGの仕組み（自動選定）

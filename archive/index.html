@@ -30,7 +30,7 @@
       <div class="chip-row" id="cat-chips">
         <span class="row-label">カテゴリ</span>
         <button class="chip on" data-cat="">すべて</button>
-        <button class="chip" data-cat="container">Container <span class="chip-count">7</span></button>
+        <button class="chip" data-cat="container">Container <span class="chip-count">8</span></button>
         <button class="chip" data-cat="network">Network <span class="chip-count">6</span></button>
         <button class="chip" data-cat="ai">AI <span class="chip-count">5</span></button>
         <button class="chip" data-cat="arch">Arch <span class="chip-count">5</span></button>
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-08">
       <div class="section-title">2026 年 8 月 <span class="count"></span></div>
+      <div class="card" data-cat="container" data-diff="基礎"
+           data-search="ingress を apply したのに、なぜ何も起きないのか？ ingressはhost/パスの振り分けルールを宣言するapiオブジェクトにすぎず、ingress controllerが別途動いていないと何も起きない。serviceがl4止まりな理由、tls終端後は平文になる挙動、後継gateway apiへの移行方針を解説。" data-terms="Ingress / Ingress Controller / IngressClass / pathType / TLS 終端（TLS termination） / Gateway API">
+        <h3><a href="2026-08-30.html">Ingress を apply したのに、なぜ何も起きないのか？</a></h3>
+        <div class="summary">IngressはHost/パスの振り分けルールを宣言するAPIオブジェクトにすぎず、Ingress Controllerが別途動いていないと何も起きない。ServiceがL4止まりな理由、TLS終端後は平文になる挙動、後継Gateway APIへの移行方針を解説。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-container">Container</span><span>🌿 基礎</span><span>⏱ 約 8 分</span><span>2026-08-30</span></div>
+      </div>
       <div class="card" data-cat="arch" data-diff="基礎"
            data-search="障害が起きたサービスに、なぜリトライを重ねるほどとどめを刺してしまうのか？ 過負荷になった依存先へ大量のクライアントが同時にリトライするとリトライ嵐が起き、依存先の回復を妨げる。awsのjitter付きバックオフとazureのcircuit breakerパターンを組み合わせて防ぐ設計を解説。" data-terms="リトライストーム（retry storm） / 指数バックオフ（exponential backoff） / jitter（ジッター） / Circuit Breaker（サーキットブレーカー） / Half-Open">
         <h3><a href="2026-08-29.html">障害が起きたサービスに、なぜリトライを重ねるほどとどめを刺してしまうのか？</a></h3>

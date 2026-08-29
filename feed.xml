@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-08-29T12:13:11+09:00</updated>
+  <updated>2026-08-30T08:27:53+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>Ingress を apply したのに、なぜ何も起きないのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-08-30.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-08-30.html</id>
+    <updated>2026-08-30T08:27:53+09:00</updated>
+    <summary>Ingressはルールを宣言するAPIオブジェクトにすぎず、Ingress Controllerが別途動いていないと何も起きない。ServiceがL4止まりのためドメインごとに振り分けられず、TLSはIngressで終端し先は平文になる挙動、後継のGateway APIへの移行方針を解説。</summary>
+  </entry>
   <entry>
     <title>障害が起きたサービスに、なぜリトライを重ねるほどとどめを刺してしまうのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-08-29.html"/>
@@ -96,19 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-08-17.html</id>
     <updated>2026-08-17T06:45:21+09:00</updated>
     <summary>HTTP/1.1はアプリ層のHead-of-Line Blockingをブラウザが複数TCP接続で回避してきたが、HTTP/2はストリーム多重化で1本の接続に集約した。その代償として生まれたTCP層のHead-of-Line BlockingとHTTP/3による解決を解説。</summary>
-  </entry>
-  <entry>
-    <title>ローカルでは一瞬なのに、CI の docker build はなぜ毎回フルビルドになるのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-08-16.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-08-16.html</id>
-    <updated>2026-08-16T06:41:13+09:00</updated>
-    <summary>COPY/ADDはファイル内容のチェックサム、RUNはコマンド文字列でキャッシュを判定し、一度ミスすると以降の全レイヤーが連鎖的に無効化される。CIランナーは前回ビルドを保持しないため常にフルビルドになる理由とレジストリキャッシュでの対処を解説。</summary>
-  </entry>
-  <entry>
-    <title>書き込み直後に読み取りレプリカへ問い合わせると、なぜ古いデータが返るのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-08-15.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-08-15.html</id>
-    <updated>2026-08-15T06:44:51+09:00</updated>
-    <summary>DBはWALを先にディスクへ確定させてからデータファイルへ反映し、レプリケーションはこのWALを転送・再生している。ストリーミングレプリケーションは既定で非同期なためレプリケーションラグが生じ、read-your-writesが崩れる理由とsynchronous_commitでの対処を解説。</summary>
   </entry>
 </feed>

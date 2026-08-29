@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-08-30.html",
+    "date": "2026-08-30",
+    "title": "Ingress を apply したのに、なぜ何も起きないのか？",
+    "summary": "IngressはHost/パスの振り分けルールを宣言するAPIオブジェクトにすぎず、Ingress Controllerが別途動いていないと何も起きない。ServiceがL4止まりな理由、TLS終端後は平文になる挙動、後継Gateway APIへの移行方針を解説。",
+    "category": "container",
+    "difficulty": "基礎",
+    "readTime": 8,
+    "terms": ["Ingress", "Ingress Controller", "IngressClass", "pathType", "TLS 終端（TLS termination）", "Gateway API"]
+  },
+  {
     "file": "2026-08-29.html",
     "date": "2026-08-29",
     "title": "障害が起きたサービスに、なぜリトライを重ねるほどとどめを刺してしまうのか？",
