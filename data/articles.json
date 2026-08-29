@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-08-29.html",
+    "date": "2026-08-29",
+    "title": "障害が起きたサービスに、なぜリトライを重ねるほどとどめを刺してしまうのか？",
+    "summary": "過負荷になった依存先へ大量のクライアントが同時にリトライするとリトライ嵐が起き、依存先の回復を妨げる。AWSのjitter付きバックオフとAzureのCircuit Breakerパターンを組み合わせて防ぐ設計を解説。",
+    "category": "arch",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": ["リトライストーム（retry storm）", "指数バックオフ（exponential backoff）", "jitter（ジッター）", "Circuit Breaker（サーキットブレーカー）", "Half-Open"]
+  },
+  {
     "file": "2026-08-28.html",
     "date": "2026-08-28",
     "title": "Rails のフォームに、なぜ見えない authenticity_token が埋め込まれているのか？",

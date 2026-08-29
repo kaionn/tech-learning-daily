@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-08-28T14:32:12+09:00</updated>
+  <updated>2026-08-29T12:13:11+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>障害が起きたサービスに、なぜリトライを重ねるほどとどめを刺してしまうのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-08-29.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-08-29.html</id>
+    <updated>2026-08-29T12:13:11+09:00</updated>
+    <summary>過負荷になった依存先へ大量のクライアントが同時にリトライするとリトライ嵐が起き、依存先の回復を妨げる。AWSのjitter付きバックオフとAzureのCircuit Breakerパターンを組み合わせて防ぐ設計を解説。</summary>
+  </entry>
   <entry>
     <title>Rails のフォームに、なぜ見えない authenticity_token が埋め込まれているのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-08-28.html"/>
