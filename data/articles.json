@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-08-31.html",
+    "date": "2026-08-31",
+    "title": "インデックスを貼ったのに、なぜ EXPLAIN は Seq Scan のままなのか？",
+    "summary": "プランナーはインデックスの有無ではなく候補プランごとの見積りコストで実行計画を選ぶ。ANALYZEが集める統計情報pg_statsから選択率を推定する仕組みと、統計が古いと見積りが実態とズレる理由を解説。",
+    "category": "db",
+    "difficulty": "基礎",
+    "readTime": 8,
+    "terms": ["EXPLAIN", "コスト（cost）", "選択率（selectivity）", "pg_stats（統計情報）", "ANALYZE / autovacuum"]
+  },
+  {
     "file": "2026-08-30.html",
     "date": "2026-08-30",
     "title": "Ingress を apply したのに、なぜ何も起きないのか？",

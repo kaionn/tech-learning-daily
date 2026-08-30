@@ -34,8 +34,8 @@
         <button class="chip" data-cat="network">Network <span class="chip-count">6</span></button>
         <button class="chip" data-cat="ai">AI <span class="chip-count">5</span></button>
         <button class="chip" data-cat="arch">Arch <span class="chip-count">5</span></button>
+        <button class="chip" data-cat="db">DB <span class="chip-count">5</span></button>
         <button class="chip" data-cat="security">Security <span class="chip-count">5</span></button>
-        <button class="chip" data-cat="db">DB <span class="chip-count">4</span></button>
         <button class="chip" data-cat="lang">Lang <span class="chip-count">3</span></button>
         <button class="chip" data-cat="dev">Dev <span class="chip-count">2</span></button>
         <button class="chip" data-cat="frontend" data-overflow="1" hidden>Frontend <span class="chip-count">2</span></button>
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-08">
       <div class="section-title">2026 年 8 月 <span class="count"></span></div>
+      <div class="card" data-cat="db" data-diff="基礎"
+           data-search="インデックスを貼ったのに、なぜ explain は seq scan のままなのか？ プランナーはインデックスの有無ではなく候補プランごとの見積りコストで実行計画を選ぶ。analyzeが集める統計情報pg_statsから選択率を推定する仕組みと、統計が古いと見積りが実態とズレる理由を解説。" data-terms="EXPLAIN / コスト（cost） / 選択率（selectivity） / pg_stats（統計情報） / ANALYZE / autovacuum">
+        <h3><a href="2026-08-31.html">インデックスを貼ったのに、なぜ EXPLAIN は Seq Scan のままなのか？</a></h3>
+        <div class="summary">プランナーはインデックスの有無ではなく候補プランごとの見積りコストで実行計画を選ぶ。ANALYZEが集める統計情報pg_statsから選択率を推定する仕組みと、統計が古いと見積りが実態とズレる理由を解説。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-db">DB</span><span>🌿 基礎</span><span>⏱ 約 8 分</span><span>2026-08-31</span></div>
+      </div>
       <div class="card" data-cat="container" data-diff="基礎"
            data-search="ingress を apply したのに、なぜ何も起きないのか？ ingressはhost/パスの振り分けルールを宣言するapiオブジェクトにすぎず、ingress controllerが別途動いていないと何も起きない。serviceがl4止まりな理由、tls終端後は平文になる挙動、後継gateway apiへの移行方針を解説。" data-terms="Ingress / Ingress Controller / IngressClass / pathType / TLS 終端（TLS termination） / Gateway API">
         <h3><a href="2026-08-30.html">Ingress を apply したのに、なぜ何も起きないのか？</a></h3>

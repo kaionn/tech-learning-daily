@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-08-30T08:27:53+09:00</updated>
+  <updated>2026-08-31T08:38:58+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>インデックスを貼ったのに、なぜ EXPLAIN は Seq Scan のままなのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-08-31.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-08-31.html</id>
+    <updated>2026-08-31T08:38:58+09:00</updated>
+    <summary>プランナーは条件に一致する行の割合（選択率）から見積りコストを計算し、最も安いプランを選ぶ。統計情報pg_statsの仕組みと、統計が古いと見積りが実態とズレる理由を解説。</summary>
+  </entry>
   <entry>
     <title>Ingress を apply したのに、なぜ何も起きないのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-08-30.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-08-18.html</id>
     <updated>2026-08-18T06:47:48+09:00</updated>
     <summary>固定ウィンドウカウンタはウィンドウ境界をまたぐと定義の最大2倍のリクエストを通してしまう。トークンバケット・リーキーバケット・スライディングウィンドウカウンタの違いと、分散環境でのレースコンディション対策を解説。</summary>
-  </entry>
-  <entry>
-    <title>HTTP/2 は接続を1本にまとめたのに、なぜ遅くなることがあるのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-08-17.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-08-17.html</id>
-    <updated>2026-08-17T06:45:21+09:00</updated>
-    <summary>HTTP/1.1はアプリ層のHead-of-Line Blockingをブラウザが複数TCP接続で回避してきたが、HTTP/2はストリーム多重化で1本の接続に集約した。その代償として生まれたTCP層のHead-of-Line BlockingとHTTP/3による解決を解説。</summary>
   </entry>
 </feed>
