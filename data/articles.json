@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-09-01.html",
+    "date": "2026-09-01",
+    "title": "Rails は自動でエスケープしているのに、なぜ XSS はなくならないのか？",
+    "summary": "XSS は攻撃者の JS を被害者の権限でブラウザに実行させる攻撃で、防御の要は HTML 本文・属性・JS 文字列・URL という文脈ごとに異なる出力エスケープと、それが漏れた時の最後の壁となる CSP の script-src 許可リストだ。",
+    "category": "security",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": ["XSS（クロスサイトスクリプティング）", "出力時エスケープ", "html_safe / raw", "CSP（Content-Security-Policy）", "nonce"]
+  },
+  {
     "file": "2026-08-31.html",
     "date": "2026-08-31",
     "title": "インデックスを貼ったのに、なぜ EXPLAIN は Seq Scan のままなのか？",

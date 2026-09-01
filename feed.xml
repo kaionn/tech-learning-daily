@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-08-31T08:38:58+09:00</updated>
+  <updated>2026-09-01T09:46:02+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>Rails は自動でエスケープしているのに、なぜ XSS はなくならないのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-09-01.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-09-01.html</id>
+    <updated>2026-09-01T09:46:02+09:00</updated>
+    <summary>XSSは攻撃者のJSを被害者の権限でブラウザに実行させる攻撃で、防御の要はHTML本文・属性・JS文字列・URLという文脈ごとに異なる出力エスケープと、それが漏れた時の最後の壁となるCSPのscript-src許可リストだ。</summary>
+  </entry>
   <entry>
     <title>インデックスを貼ったのに、なぜ EXPLAIN は Seq Scan のままなのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-08-31.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-08-19.html</id>
     <updated>2026-08-19T06:46:35+09:00</updated>
     <summary>ClusterIP は実在しない仮想IPで、実体は各ノードのkube-proxyが書き込むiptablesのDNATルールにすぎない。EndpointSliceとreadiness probeの関係、TCPは通りICMP(ping)だけが失敗する理由を解説。</summary>
-  </entry>
-  <entry>
-    <title>「1分100リクエストまで」のはずが、なぜ一瞬で200件通ってしまうのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-08-18.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-08-18.html</id>
-    <updated>2026-08-18T06:47:48+09:00</updated>
-    <summary>固定ウィンドウカウンタはウィンドウ境界をまたぐと定義の最大2倍のリクエストを通してしまう。トークンバケット・リーキーバケット・スライディングウィンドウカウンタの違いと、分散環境でのレースコンディション対策を解説。</summary>
   </entry>
 </feed>
