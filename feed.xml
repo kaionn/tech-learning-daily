@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-09-01T09:46:02+09:00</updated>
+  <updated>2026-09-02T08:24:35+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>HTTP/2 でストリームをまとめたのに、なぜ HTTP/3 は TCP を手放したのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-09-02.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-09-02.html</id>
+    <updated>2026-09-02T08:24:35+09:00</updated>
+    <summary>HTTP/2はアプリ層のHOLブロッキングは解決したが、1本のTCPに多重化する限りパケットロス時は無関係なストリームまで足止めされる。QUICがストリームごとに独立した信頼性配送を実装し、コネクションIDで接続をIP・ポートから切り離した設計を解説。</summary>
+  </entry>
   <entry>
     <title>Rails は自動でエスケープしているのに、なぜ XSS はなくならないのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-09-01.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-08-20.html</id>
     <updated>2026-08-20T06:45:53+09:00</updated>
     <summary>TypeScript の型注釈はコンパイル時に消去され、実行時には一切残らない。as が実行時チェックを伴わない申告にすぎない理由と、構造的型付けが名前ではなく形で互換性を判断する設計を解説。</summary>
-  </entry>
-  <entry>
-    <title>ClusterIP に ping が通らないのに、なぜ curl は届くのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-08-19.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-08-19.html</id>
-    <updated>2026-08-19T06:46:35+09:00</updated>
-    <summary>ClusterIP は実在しない仮想IPで、実体は各ノードのkube-proxyが書き込むiptablesのDNATルールにすぎない。EndpointSliceとreadiness probeの関係、TCPは通りICMP(ping)だけが失敗する理由を解説。</summary>
   </entry>
 </feed>

@@ -6,6 +6,7 @@
 
 ## 消化済み
 
+- 2026-09-02 HTTP/3 と QUIC（HTTP/2 のトランスポート層 HOL ブロッキングをどう解決したか、コネクション ID による接続維持）（自動選定）
 - 2026-09-01 XSS（クロスサイトスクリプティング）の仕組みと文脈依存の出力エスケープ、CSP による防御（自動選定）
 - 2026-08-31 PostgreSQL のクエリプランナーと EXPLAIN（Seq Scan / Index Scan の選択理由、統計情報 pg_stats）（自動選定）
 - 2026-08-30 Kubernetes の Ingress の仕組み（知りたい観点: Ingress リソースと Ingress Controller の役割分担、Service だけでは複数ドメインをさばけない理由）（自動選定）

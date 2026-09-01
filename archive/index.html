@@ -31,7 +31,7 @@
         <span class="row-label">カテゴリ</span>
         <button class="chip on" data-cat="">すべて</button>
         <button class="chip" data-cat="container">Container <span class="chip-count">8</span></button>
-        <button class="chip" data-cat="network">Network <span class="chip-count">6</span></button>
+        <button class="chip" data-cat="network">Network <span class="chip-count">7</span></button>
         <button class="chip" data-cat="security">Security <span class="chip-count">6</span></button>
         <button class="chip" data-cat="ai">AI <span class="chip-count">5</span></button>
         <button class="chip" data-cat="arch">Arch <span class="chip-count">5</span></button>
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-09">
       <div class="section-title">2026 年 9 月 <span class="count"></span></div>
+      <div class="card" data-cat="network" data-diff="応用"
+           data-search="http/2 でストリームをまとめたのに、なぜ http/3 は tcp を手放したのか？ http/2 はアプリ層の hol ブロッキングは解決したが、1 本の tcp に多重化する限りパケットロス時は無関係なストリームまで足止めされる。quic がストリームごとに独立した信頼性配送を実装し、コネクション id で接続を ip・ポートから切り離した設計を解説。" data-terms="HOL ブロッキング（Head-of-Line Blocking） / QUIC / コネクション ID / 0-RTT / Alt-Svc">
+        <h3><a href="2026-09-02.html">HTTP/2 でストリームをまとめたのに、なぜ HTTP/3 は TCP を手放したのか？</a></h3>
+        <div class="summary">HTTP/2 はアプリ層の HOL ブロッキングは解決したが、1 本の TCP に多重化する限りパケットロス時は無関係なストリームまで足止めされる。QUIC がストリームごとに独立した信頼性配送を実装し、コネクション ID で接続を IP・ポートから切り離した設計を解説。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-network">Network</span><span>🌳 応用</span><span>⏱ 約 8 分</span><span>2026-09-02</span></div>
+      </div>
       <div class="card" data-cat="security" data-diff="基礎"
            data-search="rails は自動でエスケープしているのに、なぜ xss はなくならないのか？ xss は攻撃者の js を被害者の権限でブラウザに実行させる攻撃で、防御の要は html 本文・属性・js 文字列・url という文脈ごとに異なる出力エスケープと、それが漏れた時の最後の壁となる csp の script-src 許可リストだ。" data-terms="XSS（クロスサイトスクリプティング） / 出力時エスケープ / html_safe / raw / CSP（Content-Security-Policy） / nonce">
         <h3><a href="2026-09-01.html">Rails は自動でエスケープしているのに、なぜ XSS はなくならないのか？</a></h3>
