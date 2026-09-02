@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-09-02T08:24:35+09:00</updated>
+  <updated>2026-09-03T08:25:43+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>平均レイテンシが正常なのに、なぜ「たまに遅い」と言われるのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-09-03.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-09-03.html</id>
+    <updated>2026-09-03T08:25:43+09:00</updated>
+    <summary>平均は分布の中心しか表さず、ファンアウト構成では稀なテールレイテンシが大多数のユーザー体験になる。Little's Lawで待ち行列が非線形に膨らむ理由と、p99を使ったタイムアウト・SLO設計を解説。</summary>
+  </entry>
   <entry>
     <title>HTTP/2 でストリームをまとめたのに、なぜ HTTP/3 は TCP を手放したのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-09-02.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-08-21.html</id>
     <updated>2026-08-21T06:50:45+09:00</updated>
     <summary>SLIは良いイベント/全イベントの比率、SLOは意図的に100%未満で設定する目標、エラーバジェットはその残高。バーンレートとマルチウィンドウ・マルチバーンレートアラートが緊急招集とチケットを切り分ける仕組みを解説。</summary>
-  </entry>
-  <entry>
-    <title>`as HTMLInputElement` と書いたのに、なぜ実行時に `null` で落ちるのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-08-20.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-08-20.html</id>
-    <updated>2026-08-20T06:45:53+09:00</updated>
-    <summary>TypeScript の型注釈はコンパイル時に消去され、実行時には一切残らない。as が実行時チェックを伴わない申告にすぎない理由と、構造的型付けが名前ではなく形で互換性を判断する設計を解説。</summary>
   </entry>
 </feed>

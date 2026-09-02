@@ -41,7 +41,7 @@
         <button class="chip" data-cat="frontend" data-overflow="1" hidden>Frontend <span class="chip-count">2</span></button>
         <button class="chip" data-cat="infra" data-overflow="1" hidden>Infra <span class="chip-count">2</span></button>
         <button class="chip" data-cat="obs" data-overflow="1" hidden>Obs <span class="chip-count">2</span></button>
-        <button class="chip" data-cat="perf" data-overflow="1" hidden>Perf <span class="chip-count">1</span></button>
+        <button class="chip" data-cat="perf" data-overflow="1" hidden>Perf <span class="chip-count">2</span></button>
         <button class="chip chip-more" id="chip-more">+ 4 件</button>
       </div>
       <div class="chip-row" id="diff-chips">
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-09">
       <div class="section-title">2026 年 9 月 <span class="count"></span></div>
+      <div class="card" data-cat="perf" data-diff="基礎"
+           data-search="平均レイテンシが正常なのに、なぜ「たまに遅い」と言われるのか？ 平均は分布の中心しか表さず、テールに隠れた遅いリクエストがファンアウト構成では大多数のユーザー体験になる。little&#x27;s law で待ち行列が非線形に膨らむ理由と、p99 を使ったタイムアウト・slo 設計を解説。" data-terms="パーセンタイル / テイルレイテンシ / ファンアウト / Little&#x27;s Law / 使用率">
+        <h3><a href="2026-09-03.html">平均レイテンシが正常なのに、なぜ「たまに遅い」と言われるのか？</a></h3>
+        <div class="summary">平均は分布の中心しか表さず、テールに隠れた遅いリクエストがファンアウト構成では大多数のユーザー体験になる。Little&#x27;s Law で待ち行列が非線形に膨らむ理由と、p99 を使ったタイムアウト・SLO 設計を解説。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-perf">Perf</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-09-03</span></div>
+      </div>
       <div class="card" data-cat="network" data-diff="応用"
            data-search="http/2 でストリームをまとめたのに、なぜ http/3 は tcp を手放したのか？ http/2 はアプリ層の hol ブロッキングは解決したが、1 本の tcp に多重化する限りパケットロス時は無関係なストリームまで足止めされる。quic がストリームごとに独立した信頼性配送を実装し、コネクション id で接続を ip・ポートから切り離した設計を解説。" data-terms="HOL ブロッキング（Head-of-Line Blocking） / QUIC / コネクション ID / 0-RTT / Alt-Svc">
         <h3><a href="2026-09-02.html">HTTP/2 でストリームをまとめたのに、なぜ HTTP/3 は TCP を手放したのか？</a></h3>
