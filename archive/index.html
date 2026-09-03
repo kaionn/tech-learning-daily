@@ -32,7 +32,7 @@
         <button class="chip on" data-cat="">すべて</button>
         <button class="chip" data-cat="container">Container <span class="chip-count">8</span></button>
         <button class="chip" data-cat="network">Network <span class="chip-count">7</span></button>
-        <button class="chip" data-cat="security">Security <span class="chip-count">6</span></button>
+        <button class="chip" data-cat="security">Security <span class="chip-count">7</span></button>
         <button class="chip" data-cat="ai">AI <span class="chip-count">5</span></button>
         <button class="chip" data-cat="arch">Arch <span class="chip-count">5</span></button>
         <button class="chip" data-cat="db">DB <span class="chip-count">5</span></button>
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-09">
       <div class="section-title">2026 年 9 月 <span class="count"></span></div>
+      <div class="card" data-cat="security" data-diff="基礎"
+           data-search="なぜ文字列結合で組み立てたsqlは壊れるのに、プレースホルダなら壊れないのか？ sqlインジェクションは文字列結合で入力中の引用符が構文の一部として解釈されて起きる。プレースホルダはprepareで構文木を確定しbindで値を束縛するため入力が構造を変えられない仕組みと、識別子はバインド対象外な点を解説。" data-terms="SQLインジェクション / プレースホルダ / プリペアドステートメント / バインド変数 / allowlist（許可リスト）">
+        <h3><a href="2026-09-04.html">なぜ文字列結合で組み立てたSQLは壊れるのに、プレースホルダなら壊れないのか？</a></h3>
+        <div class="summary">SQLインジェクションは文字列結合で入力中の引用符が構文の一部として解釈されて起きる。プレースホルダはPREPAREで構文木を確定しBINDで値を束縛するため入力が構造を変えられない仕組みと、識別子はバインド対象外な点を解説。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-security">Security</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-09-04</span></div>
+      </div>
       <div class="card" data-cat="perf" data-diff="基礎"
            data-search="平均レイテンシが正常なのに、なぜ「たまに遅い」と言われるのか？ 平均は分布の中心しか表さず、テールに隠れた遅いリクエストがファンアウト構成では大多数のユーザー体験になる。little&#x27;s law で待ち行列が非線形に膨らむ理由と、p99 を使ったタイムアウト・slo 設計を解説。" data-terms="パーセンタイル / テイルレイテンシ / ファンアウト / Little&#x27;s Law / 使用率">
         <h3><a href="2026-09-03.html">平均レイテンシが正常なのに、なぜ「たまに遅い」と言われるのか？</a></h3>
