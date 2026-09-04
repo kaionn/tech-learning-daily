@@ -1,5 +1,22 @@
 [
   {
+    "file": "2026-09-05.html",
+    "date": "2026-09-05",
+    "title": "HTTP はステートレスなのに、なぜブラウザはログイン状態を覚えていられるのか？",
+    "summary": "HTTPはステートレスでサーバーは前回のリクエストを覚えていないが、Set-Cookie/Cookieヘッダーの往復がログイン状態を運ぶ。HttpOnly/Secure/SameSiteが既定でオフな理由と、RailsのCookieStoreがセッションデータ自体を暗号化してCookieに格納する仕組みを解説。",
+    "category": "network",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": [
+      "ステートレス",
+      "Set-Cookie ヘッダー",
+      "セッション Cookie",
+      "HttpOnly",
+      "Secure",
+      "SameSite"
+    ]
+  },
+  {
     "file": "2026-09-04.html",
     "date": "2026-09-04",
     "title": "なぜ文字列結合で組み立てたSQLは壊れるのに、プレースホルダなら壊れないのか？",

@@ -31,7 +31,7 @@
         <span class="row-label">カテゴリ</span>
         <button class="chip on" data-cat="">すべて</button>
         <button class="chip" data-cat="container">Container <span class="chip-count">8</span></button>
-        <button class="chip" data-cat="network">Network <span class="chip-count">7</span></button>
+        <button class="chip" data-cat="network">Network <span class="chip-count">8</span></button>
         <button class="chip" data-cat="security">Security <span class="chip-count">7</span></button>
         <button class="chip" data-cat="ai">AI <span class="chip-count">5</span></button>
         <button class="chip" data-cat="arch">Arch <span class="chip-count">5</span></button>
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-09">
       <div class="section-title">2026 年 9 月 <span class="count"></span></div>
+      <div class="card" data-cat="network" data-diff="基礎"
+           data-search="http はステートレスなのに、なぜブラウザはログイン状態を覚えていられるのか？ httpはステートレスでサーバーは前回のリクエストを覚えていないが、set-cookie/cookieヘッダーの往復がログイン状態を運ぶ。httponly/secure/samesiteが既定でオフな理由と、railsのcookiestoreがセッションデータ自体を暗号化してcookieに格納する仕組みを解説。" data-terms="ステートレス / Set-Cookie ヘッダー / セッション Cookie / HttpOnly / Secure / SameSite">
+        <h3><a href="2026-09-05.html">HTTP はステートレスなのに、なぜブラウザはログイン状態を覚えていられるのか？</a></h3>
+        <div class="summary">HTTPはステートレスでサーバーは前回のリクエストを覚えていないが、Set-Cookie/Cookieヘッダーの往復がログイン状態を運ぶ。HttpOnly/Secure/SameSiteが既定でオフな理由と、RailsのCookieStoreがセッションデータ自体を暗号化してCookieに格納する仕組みを解説。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-network">Network</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-09-05</span></div>
+      </div>
       <div class="card" data-cat="security" data-diff="基礎"
            data-search="なぜ文字列結合で組み立てたsqlは壊れるのに、プレースホルダなら壊れないのか？ sqlインジェクションは文字列結合で入力中の引用符が構文の一部として解釈されて起きる。プレースホルダはprepareで構文木を確定しbindで値を束縛するため入力が構造を変えられない仕組みと、識別子はバインド対象外な点を解説。" data-terms="SQLインジェクション / プレースホルダ / プリペアドステートメント / バインド変数 / allowlist（許可リスト）">
         <h3><a href="2026-09-04.html">なぜ文字列結合で組み立てたSQLは壊れるのに、プレースホルダなら壊れないのか？</a></h3>

@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-09-04T08:21:28+09:00</updated>
+  <updated>2026-09-05T08:06:13+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>HTTP はステートレスなのに、なぜブラウザはログイン状態を覚えていられるのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-09-05.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-09-05.html</id>
+    <updated>2026-09-05T08:06:13+09:00</updated>
+    <summary>HTTPはステートレスでサーバーは前回のリクエストを覚えていないが、Set-Cookie/Cookieヘッダーの往復がログイン状態を運ぶ。HttpOnly/Secure/SameSiteが既定でオフな理由と、RailsのCookieStoreがセッションデータ自体を暗号化してCookieに格納する仕組みを解説。</summary>
+  </entry>
   <entry>
     <title>なぜ文字列結合で組み立てたSQLは壊れるのに、プレースホルダなら壊れないのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-09-04.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-08-23.html</id>
     <updated>2026-08-23T06:42:09+09:00</updated>
     <summary>ES Modulesのimport/exportは静的な構文制約を持つためバンドラは実行せず依存グラフを組み立てられるが、CommonJSのrequire()は動的評価のため静的解析ができない。webpackのusedExports→sideEffects→minifyという3段階と、その罠を解説。</summary>
-  </entry>
-  <entry>
-    <title>etcd は 1 台落ちても平気なのに、なぜ過半数を割ると書き込みが止まるのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-08-22.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-08-22.html</id>
-    <updated>2026-08-22T06:47:33+09:00</updated>
-    <summary>etcdはRaftという合意アルゴリズムで書き込みを複製する。過半数(クォーラム)にログが届いた時点で初めて確定し、過半数を割ると新規の書き込みも読み取りも止まる仕組みと、奇数台構成が推奨される理由を解説。</summary>
   </entry>
 </feed>
