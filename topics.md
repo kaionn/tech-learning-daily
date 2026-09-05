@@ -6,6 +6,7 @@
 
 ## 消化済み
 
+- 2026-09-06 GitHub Actions の jobs 実行モデル（needs による依存グラフ・使い捨てランナー・actions/cache の key/restore-keys とブランチスコープ）（自動選定）
 - 2026-09-05 Cookie の仕組み（Set-Cookie/Cookieヘッダーの往復、HttpOnly・Secure・SameSite属性、RailsのCookieStore）（自動選定）
 - 2026-09-04 SQLインジェクションの仕組みとプレースホルダ（プリペアドステートメント）による防御（自動選定）
 - 2026-09-03 レイテンシのパーセンタイル（p50/p95/p99）とテイルレイテンシ、Little's Lawによる待ち行列の非線形性（自動選定）

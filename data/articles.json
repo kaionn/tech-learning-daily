@@ -1,5 +1,21 @@
 [
   {
+    "file": "2026-09-06.html",
+    "date": "2026-09-06",
+    "title": "GitHub Actions の jobs は、なぜ書いた順ではなく一斉に走り出すのか？",
+    "summary": "jobs は既定で並列実行され順序を決めるのは needs のみ。各 job は毎回使い捨ての VM で動くため前段の成果物は自動で引き継がれず、actions/cache の key/restore-keys の一致順序とブランチスコープの制約を解説。",
+    "category": "dev",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": [
+      "needs",
+      "ランナー（runner）",
+      "cache key",
+      "restore-keys",
+      "matrix strategy"
+    ]
+  },
+  {
     "file": "2026-09-05.html",
     "date": "2026-09-05",
     "title": "HTTP はステートレスなのに、なぜブラウザはログイン状態を覚えていられるのか？",

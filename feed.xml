@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-09-05T08:06:13+09:00</updated>
+  <updated>2026-09-06T08:01:34+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>GitHub Actions の jobs は、なぜ書いた順ではなく一斉に走り出すのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-09-06.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-09-06.html</id>
+    <updated>2026-09-06T08:01:34+09:00</updated>
+    <summary>jobsは既定で並列実行され、順序を決めるのはneedsだけ。各jobは毎回使い捨てのVMで動くため前段の成果物は自動で引き継がれず、actions/cacheのkey/restore-keysの一致順序とブランチスコープの制約を解説。</summary>
+  </entry>
   <entry>
     <title>HTTP はステートレスなのに、なぜブラウザはログイン状態を覚えていられるのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-09-05.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-08-24.html</id>
     <updated>2026-08-24T06:43:53+09:00</updated>
     <summary>パスワードは暗号化ではなく一方向ハッシュ関数で保存し、ログイン時は復号せず再ハッシュして比較する。bcrypt/Argon2 が同じパスワードでも毎回違う結果を返しつつ検証できる、ソルトとコスト係数の仕組みを解説。</summary>
-  </entry>
-  <entry>
-    <title>使っていない関数を import しただけなのに、なぜバンドルから消えるのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-08-23.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-08-23.html</id>
-    <updated>2026-08-23T06:42:09+09:00</updated>
-    <summary>ES Modulesのimport/exportは静的な構文制約を持つためバンドラは実行せず依存グラフを組み立てられるが、CommonJSのrequire()は動的評価のため静的解析ができない。webpackのusedExports→sideEffects→minifyという3段階と、その罠を解説。</summary>
   </entry>
 </feed>
