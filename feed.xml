@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-09-06T08:01:34+09:00</updated>
+  <updated>2026-09-07T08:00:03+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>Rails のスレッドを増やしても速くならないのに、なぜ Go の goroutine は速くなるのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-09-07.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-09-07.html</id>
+    <updated>2026-09-07T08:00:03+09:00</updated>
+    <summary>Ruby(MRI)のGVLはCPUバウンドな処理を1スレッドずつしか進めずI/O待ち中だけ解放される一方、Goのgoroutineはランタイムが少数のOSスレッドに多数を割り当てるM:Nスケジューラで動くためCPUバウンドでも複数コアを使い切れる違いを解説。</summary>
+  </entry>
   <entry>
     <title>GitHub Actions の jobs は、なぜ書いた順ではなく一斉に走り出すのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-09-06.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-08-25.html</id>
     <updated>2026-08-25T06:54:42+09:00</updated>
     <summary>TCP接続はSYNキューとAcceptキューの2段の待ち行列を経て確立し、backlogとnet.core.somaxconnで決まる上限を超えると多くの場合RSTも返さず黙って破棄される。CPU/メモリに余裕があっても一部だけtimeoutする現象の仕組みを解説。</summary>
-  </entry>
-  <entry>
-    <title>パスワードのハッシュ、入れるたびに結果が違うのに、なぜログインは検証できるのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-08-24.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-08-24.html</id>
-    <updated>2026-08-24T06:43:53+09:00</updated>
-    <summary>パスワードは暗号化ではなく一方向ハッシュ関数で保存し、ログイン時は復号せず再ハッシュして比較する。bcrypt/Argon2 が同じパスワードでも毎回違う結果を返しつつ検証できる、ソルトとコスト係数の仕組みを解説。</summary>
   </entry>
 </feed>

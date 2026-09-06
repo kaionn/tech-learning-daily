@@ -1,5 +1,22 @@
 [
   {
+    "file": "2026-09-07.html",
+    "date": "2026-09-07",
+    "title": "Rails のスレッドを増やしても速くならないのに、なぜ Go の goroutine は速くなるのか？",
+    "summary": "Ruby(MRI)のGVLはCPUバウンドな処理を1スレッドずつしか進めずI/O待ち中だけ解放される一方、GoのgoroutineはランタイムのM:Nスケジューラが少数のOSスレッドに多数を割り当てるためCPUバウンドでも複数コアを使い切れる違いを解説。",
+    "category": "lang",
+    "difficulty": "基礎",
+    "readTime": 8,
+    "terms": [
+      "プロセス",
+      "スレッド",
+      "コンテキストスイッチ",
+      "GVL（Global VM Lock）",
+      "M:Nスケジューラ",
+      "copy-on-write"
+    ]
+  },
+  {
     "file": "2026-09-06.html",
     "date": "2026-09-06",
     "title": "GitHub Actions の jobs は、なぜ書いた順ではなく一斉に走り出すのか？",

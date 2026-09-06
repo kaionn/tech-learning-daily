@@ -36,8 +36,8 @@
         <button class="chip" data-cat="ai">AI <span class="chip-count">5</span></button>
         <button class="chip" data-cat="arch">Arch <span class="chip-count">5</span></button>
         <button class="chip" data-cat="db">DB <span class="chip-count">5</span></button>
+        <button class="chip" data-cat="lang">Lang <span class="chip-count">4</span></button>
         <button class="chip" data-cat="dev">Dev <span class="chip-count">3</span></button>
-        <button class="chip" data-cat="lang">Lang <span class="chip-count">3</span></button>
         <button class="chip" data-cat="frontend" data-overflow="1" hidden>Frontend <span class="chip-count">2</span></button>
         <button class="chip" data-cat="infra" data-overflow="1" hidden>Infra <span class="chip-count">2</span></button>
         <button class="chip" data-cat="obs" data-overflow="1" hidden>Obs <span class="chip-count">2</span></button>
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-09">
       <div class="section-title">2026 年 9 月 <span class="count"></span></div>
+      <div class="card" data-cat="lang" data-diff="基礎"
+           data-search="rails のスレッドを増やしても速くならないのに、なぜ go の goroutine は速くなるのか？ ruby(mri)のgvlはcpuバウンドな処理を1スレッドずつしか進めずi/o待ち中だけ解放される一方、goのgoroutineはランタイムのm:nスケジューラが少数のosスレッドに多数を割り当てるためcpuバウンドでも複数コアを使い切れる違いを解説。" data-terms="プロセス / スレッド / コンテキストスイッチ / GVL（Global VM Lock） / M:Nスケジューラ / copy-on-write">
+        <h3><a href="2026-09-07.html">Rails のスレッドを増やしても速くならないのに、なぜ Go の goroutine は速くなるのか？</a></h3>
+        <div class="summary">Ruby(MRI)のGVLはCPUバウンドな処理を1スレッドずつしか進めずI/O待ち中だけ解放される一方、GoのgoroutineはランタイムのM:Nスケジューラが少数のOSスレッドに多数を割り当てるためCPUバウンドでも複数コアを使い切れる違いを解説。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-lang">Lang</span><span>🌿 基礎</span><span>⏱ 約 8 分</span><span>2026-09-07</span></div>
+      </div>
       <div class="card" data-cat="dev" data-diff="基礎"
            data-search="github actions の jobs は、なぜ書いた順ではなく一斉に走り出すのか？ jobs は既定で並列実行され順序を決めるのは needs のみ。各 job は毎回使い捨ての vm で動くため前段の成果物は自動で引き継がれず、actions/cache の key/restore-keys の一致順序とブランチスコープの制約を解説。" data-terms="needs / ランナー（runner） / cache key / restore-keys / matrix strategy">
         <h3><a href="2026-09-06.html">GitHub Actions の jobs は、なぜ書いた順ではなく一斉に走り出すのか？</a></h3>

@@ -6,6 +6,7 @@
 
 ## 消化済み
 
+- 2026-09-07 プロセスとスレッドの違い（Ruby(MRI)のGVLとGoのgoroutine/M:Nスケジューラの比較）（自動選定）
 - 2026-09-06 GitHub Actions の jobs 実行モデル（needs による依存グラフ・使い捨てランナー・actions/cache の key/restore-keys とブランチスコープ）（自動選定）
 - 2026-09-05 Cookie の仕組み（Set-Cookie/Cookieヘッダーの往復、HttpOnly・Secure・SameSite属性、RailsのCookieStore）（自動選定）
 - 2026-09-04 SQLインジェクションの仕組みとプレースホルダ（プリペアドステートメント）による防御（自動選定）
