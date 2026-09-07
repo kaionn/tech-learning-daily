@@ -33,9 +33,9 @@
         <button class="chip" data-cat="container">Container <span class="chip-count">8</span></button>
         <button class="chip" data-cat="network">Network <span class="chip-count">8</span></button>
         <button class="chip" data-cat="security">Security <span class="chip-count">7</span></button>
+        <button class="chip" data-cat="db">DB <span class="chip-count">6</span></button>
         <button class="chip" data-cat="ai">AI <span class="chip-count">5</span></button>
         <button class="chip" data-cat="arch">Arch <span class="chip-count">5</span></button>
-        <button class="chip" data-cat="db">DB <span class="chip-count">5</span></button>
         <button class="chip" data-cat="lang">Lang <span class="chip-count">4</span></button>
         <button class="chip" data-cat="dev">Dev <span class="chip-count">3</span></button>
         <button class="chip" data-cat="frontend" data-overflow="1" hidden>Frontend <span class="chip-count">2</span></button>
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-09">
       <div class="section-title">2026 年 9 月 <span class="count"></span></div>
+      <div class="card" data-cat="db" data-diff="基礎"
+           data-search="update しただけなのに、なぜ postgres のテーブルはどんどん太っていくのか？ postgresqlのupdate/deleteは行を上書きせず新しい行バージョンを追加しxmaxで旧版を無効化するだけのmvcc設計。dead tupleはautovacuumが回収するが通常のvacuumはosにディスクを返さず、bloatや放置時のトランザクションid周回リスクも解説。" data-terms="MVCC / xmin / xmax / dead tuple / autovacuum / トランザクションID周回">
+        <h3><a href="2026-09-08.html">UPDATE しただけなのに、なぜ Postgres のテーブルはどんどん太っていくのか？</a></h3>
+        <div class="summary">PostgreSQLのUPDATE/DELETEは行を上書きせず新しい行バージョンを追加しxmaxで旧版を無効化するだけのMVCC設計。dead tupleはautovacuumが回収するが通常のVACUUMはOSにディスクを返さず、bloatや放置時のトランザクションID周回リスクも解説。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-db">DB</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-09-08</span></div>
+      </div>
       <div class="card" data-cat="lang" data-diff="基礎"
            data-search="rails のスレッドを増やしても速くならないのに、なぜ go の goroutine は速くなるのか？ ruby(mri)のgvlはcpuバウンドな処理を1スレッドずつしか進めずi/o待ち中だけ解放される一方、goのgoroutineはランタイムのm:nスケジューラが少数のosスレッドに多数を割り当てるためcpuバウンドでも複数コアを使い切れる違いを解説。" data-terms="プロセス / スレッド / コンテキストスイッチ / GVL（Global VM Lock） / M:Nスケジューラ / copy-on-write">
         <h3><a href="2026-09-07.html">Rails のスレッドを増やしても速くならないのに、なぜ Go の goroutine は速くなるのか？</a></h3>

@@ -1,5 +1,21 @@
 [
   {
+    "file": "2026-09-08.html",
+    "date": "2026-09-08",
+    "title": "UPDATE しただけなのに、なぜ Postgres のテーブルはどんどん太っていくのか？",
+    "summary": "PostgreSQLのUPDATE/DELETEは行を上書きせず新しい行バージョンを追加しxmaxで旧版を無効化するだけのMVCC設計。dead tupleはautovacuumが回収するが通常のVACUUMはOSにディスクを返さず、bloatや放置時のトランザクションID周回リスクも解説。",
+    "category": "db",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": [
+      "MVCC",
+      "xmin / xmax",
+      "dead tuple",
+      "autovacuum",
+      "トランザクションID周回"
+    ]
+  },
+  {
     "file": "2026-09-07.html",
     "date": "2026-09-07",
     "title": "Rails のスレッドを増やしても速くならないのに、なぜ Go の goroutine は速くなるのか？",

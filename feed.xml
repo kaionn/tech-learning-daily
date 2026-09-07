@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-09-07T08:00:03+09:00</updated>
+  <updated>2026-09-08T08:38:22+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>UPDATE しただけなのに、なぜ Postgres のテーブルはどんどん太っていくのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-09-08.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-09-08.html</id>
+    <updated>2026-09-08T08:38:22+09:00</updated>
+    <summary>PostgreSQLのUPDATE/DELETEは行を上書きせず新しい行バージョンを追加し古い版をxmaxで無効化するだけのMVCC設計。dead tupleはautovacuumが回収するが通常のVACUUMはOSにディスクを返さずbloatや放置時のトランザクションID周回リスクも解説。</summary>
+  </entry>
   <entry>
     <title>Rails のスレッドを増やしても速くならないのに、なぜ Go の goroutine は速くなるのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-09-07.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-08-26.html</id>
     <updated>2026-08-26T06:49:21+09:00</updated>
     <summary>テストピラミッドは単体テストを多数・高速に、E2Eを少数・低速に配分する考え方。E2Eが遅くflakyになりやすく原因特定も難しい理由と、Google発の70/20/10という目安、崩れた「アイスクリームコーン」状態の危険性を解説。</summary>
-  </entry>
-  <entry>
-    <title>サーバーは正常に動いているのに、なぜ一部のリクエストだけ timeout になるのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-08-25.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-08-25.html</id>
-    <updated>2026-08-25T06:54:42+09:00</updated>
-    <summary>TCP接続はSYNキューとAcceptキューの2段の待ち行列を経て確立し、backlogとnet.core.somaxconnで決まる上限を超えると多くの場合RSTも返さず黙って破棄される。CPU/メモリに余裕があっても一部だけtimeoutする現象の仕組みを解説。</summary>
   </entry>
 </feed>
