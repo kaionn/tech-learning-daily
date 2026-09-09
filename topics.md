@@ -6,6 +6,7 @@
 
 ## 消化済み
 
+- 2026-09-10 N+1 クエリ問題（Active Record の遅延ロードがなぜループの中で1件ずつSQLを発行するのか、includes/preload/eager_loadの使い分け、GraphQLのDataLoaderとの関係）（自動選定）
 - 2026-09-08 PostgreSQL の MVCC と VACUUM（UPDATE/DELETE で行が物理的に消えない仕組みと、テーブル肥大化・トランザクションID周回のリスク）（自動選定）
 - 2026-09-07 プロセスとスレッドの違い（Ruby(MRI)のGVLとGoのgoroutine/M:Nスケジューラの比較）（自動選定）
 - 2026-09-06 GitHub Actions の jobs 実行モデル（needs による依存グラフ・使い捨てランナー・actions/cache の key/restore-keys とブランチスコープ）（自動選定）

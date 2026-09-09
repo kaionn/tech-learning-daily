@@ -1,5 +1,22 @@
 [
   {
+    "file": "2026-09-10.html",
+    "date": "2026-09-10",
+    "title": "一覧画面をちょっと表示しただけなのに、なぜ DB へのクエリが何十回も飛ぶのか？",
+    "summary": "関連レコードをループの中で参照すると1件ごとに別のSELECTが飛ぶN+1問題は、Active Recordの遅延ロード設計に起因する。includes/preload/eager_loadの挙動差、strict_loadingによる検知、GraphQLのDataLoaderバッチ化まで解説。",
+    "category": "perf",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": [
+      "N+1問題",
+      "遅延ロード",
+      "Eager Loading",
+      "preload",
+      "strict_loading",
+      "DataLoader"
+    ]
+  },
+  {
     "file": "2026-09-08.html",
     "date": "2026-09-08",
     "title": "UPDATE しただけなのに、なぜ Postgres のテーブルはどんどん太っていくのか？",

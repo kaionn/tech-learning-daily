@@ -38,10 +38,10 @@
         <button class="chip" data-cat="arch">Arch <span class="chip-count">5</span></button>
         <button class="chip" data-cat="lang">Lang <span class="chip-count">4</span></button>
         <button class="chip" data-cat="dev">Dev <span class="chip-count">3</span></button>
+        <button class="chip" data-cat="perf" data-overflow="1" hidden>Perf <span class="chip-count">3</span></button>
         <button class="chip" data-cat="frontend" data-overflow="1" hidden>Frontend <span class="chip-count">2</span></button>
         <button class="chip" data-cat="infra" data-overflow="1" hidden>Infra <span class="chip-count">2</span></button>
         <button class="chip" data-cat="obs" data-overflow="1" hidden>Obs <span class="chip-count">2</span></button>
-        <button class="chip" data-cat="perf" data-overflow="1" hidden>Perf <span class="chip-count">2</span></button>
         <button class="chip chip-more" id="chip-more">+ 4 件</button>
       </div>
       <div class="chip-row" id="diff-chips">
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-09">
       <div class="section-title">2026 年 9 月 <span class="count"></span></div>
+      <div class="card" data-cat="perf" data-diff="基礎"
+           data-search="一覧画面をちょっと表示しただけなのに、なぜ db へのクエリが何十回も飛ぶのか？ 関連レコードをループの中で参照すると1件ごとに別のselectが飛ぶn+1問題は、active recordの遅延ロード設計に起因する。includes/preload/eager_loadの挙動差、strict_loadingによる検知、graphqlのdataloaderバッチ化まで解説。" data-terms="N+1問題 / 遅延ロード / Eager Loading / preload / strict_loading / DataLoader">
+        <h3><a href="2026-09-10.html">一覧画面をちょっと表示しただけなのに、なぜ DB へのクエリが何十回も飛ぶのか？</a></h3>
+        <div class="summary">関連レコードをループの中で参照すると1件ごとに別のSELECTが飛ぶN+1問題は、Active Recordの遅延ロード設計に起因する。includes/preload/eager_loadの挙動差、strict_loadingによる検知、GraphQLのDataLoaderバッチ化まで解説。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-perf">Perf</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-09-10</span></div>
+      </div>
       <div class="card" data-cat="db" data-diff="基礎"
            data-search="update しただけなのに、なぜ postgres のテーブルはどんどん太っていくのか？ postgresqlのupdate/deleteは行を上書きせず新しい行バージョンを追加しxmaxで旧版を無効化するだけのmvcc設計。dead tupleはautovacuumが回収するが通常のvacuumはosにディスクを返さず、bloatや放置時のトランザクションid周回リスクも解説。" data-terms="MVCC / xmin / xmax / dead tuple / autovacuum / トランザクションID周回">
         <h3><a href="2026-09-08.html">UPDATE しただけなのに、なぜ Postgres のテーブルはどんどん太っていくのか？</a></h3>
