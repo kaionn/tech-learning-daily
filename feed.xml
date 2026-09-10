@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-09-10T08:23:48+09:00</updated>
+  <updated>2026-09-11T08:19:46+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>サーバーを1台足しただけなのに、なぜキャッシュのヒット率が丸ごと落ちるのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-09-11.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-09-11.html</id>
+    <updated>2026-09-11T08:19:46+09:00</updated>
+    <summary>hash(key)%台数では台数が1つ変わるだけで大半のキーの担当が入れ替わるが、コンシステントハッシングはリング上でキーとサーバーを同じ空間に置き移動するキーを一部に抑える。仮想ノードによる偏りの解消と、Redis Clusterのハッシュスロット方式との違いを解説。</summary>
+  </entry>
   <entry>
     <title>一覧画面をちょっと表示しただけなのに、なぜ DB へのクエリが何十回も飛ぶのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-09-10.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-08-28.html</id>
     <updated>2026-08-28T14:32:12+09:00</updated>
     <summary>CSRFはログイン済みブラウザが自動送信するクッキーを悪用し、別サイトから本人になりすましたリクエストを送らせる攻撃で、CORSはレスポンスの読み取り制限にすぎず防げない。RailsのauthenticityTokenとSameSite属性の役割分担を解説。</summary>
-  </entry>
-  <entry>
-    <title>「犬」と「猫」は近く、「犬」と「車」は遠いと、コンピュータはどうやって知るのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-08-27.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-08-27.html</id>
-    <updated>2026-08-27T09:54:07+09:00</updated>
-    <summary>embeddingは文章の意味を固定長の数値ベクトルに変換したもので、コサイン類似度という角度の近さの計算で「意味の近さ」を数値化できる。大規模検索ではHNSWのような近似最近傍探索で候補を絞り込み、RAGの検索ステップの土台になっている仕組みを解説。</summary>
   </entry>
 </feed>

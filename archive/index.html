@@ -33,9 +33,9 @@
         <button class="chip" data-cat="container">Container <span class="chip-count">8</span></button>
         <button class="chip" data-cat="network">Network <span class="chip-count">8</span></button>
         <button class="chip" data-cat="security">Security <span class="chip-count">7</span></button>
+        <button class="chip" data-cat="arch">Arch <span class="chip-count">6</span></button>
         <button class="chip" data-cat="db">DB <span class="chip-count">6</span></button>
         <button class="chip" data-cat="ai">AI <span class="chip-count">5</span></button>
-        <button class="chip" data-cat="arch">Arch <span class="chip-count">5</span></button>
         <button class="chip" data-cat="lang">Lang <span class="chip-count">4</span></button>
         <button class="chip" data-cat="dev">Dev <span class="chip-count">3</span></button>
         <button class="chip" data-cat="perf" data-overflow="1" hidden>Perf <span class="chip-count">3</span></button>
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-09">
       <div class="section-title">2026 年 9 月 <span class="count"></span></div>
+      <div class="card" data-cat="arch" data-diff="基礎"
+           data-search="サーバーを1台足しただけなのに、なぜキャッシュのヒット率が丸ごと落ちるのか？ hash(key)%台数では台数が1つ変わるだけで大半のキーの担当が入れ替わるが、コンシステントハッシングはリング上でキーとサーバーを同じ空間に置き移動するキーを一部に抑える。仮想ノードによる偏りの解消と、redis clusterのハッシュスロット方式との違いを解説。" data-terms="コンシステントハッシング / ホットスポット / ハッシュリング / 仮想ノード / ハッシュスロット">
+        <h3><a href="2026-09-11.html">サーバーを1台足しただけなのに、なぜキャッシュのヒット率が丸ごと落ちるのか？</a></h3>
+        <div class="summary">hash(key)%台数では台数が1つ変わるだけで大半のキーの担当が入れ替わるが、コンシステントハッシングはリング上でキーとサーバーを同じ空間に置き移動するキーを一部に抑える。仮想ノードによる偏りの解消と、Redis Clusterのハッシュスロット方式との違いを解説。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-arch">Arch</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-09-11</span></div>
+      </div>
       <div class="card" data-cat="perf" data-diff="基礎"
            data-search="一覧画面をちょっと表示しただけなのに、なぜ db へのクエリが何十回も飛ぶのか？ 関連レコードをループの中で参照すると1件ごとに別のselectが飛ぶn+1問題は、active recordの遅延ロード設計に起因する。includes/preload/eager_loadの挙動差、strict_loadingによる検知、graphqlのdataloaderバッチ化まで解説。" data-terms="N+1問題 / 遅延ロード / Eager Loading / preload / strict_loading / DataLoader">
         <h3><a href="2026-09-10.html">一覧画面をちょっと表示しただけなのに、なぜ DB へのクエリが何十回も飛ぶのか？</a></h3>
