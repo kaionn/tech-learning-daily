@@ -30,7 +30,7 @@
       <div class="chip-row" id="cat-chips">
         <span class="row-label">カテゴリ</span>
         <button class="chip on" data-cat="">すべて</button>
-        <button class="chip" data-cat="container">Container <span class="chip-count">8</span></button>
+        <button class="chip" data-cat="container">Container <span class="chip-count">9</span></button>
         <button class="chip" data-cat="network">Network <span class="chip-count">8</span></button>
         <button class="chip" data-cat="security">Security <span class="chip-count">7</span></button>
         <button class="chip" data-cat="arch">Arch <span class="chip-count">6</span></button>
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-09">
       <div class="section-title">2026 年 9 月 <span class="count"></span></div>
+      <div class="card" data-cat="container" data-diff="基礎"
+           data-search="configmap を書き換えたのに、なぜ pod の環境変数は変わらないのか？ configmapkeyrefで注入した環境変数はpod起動時に一度だけ解決され更新は反映されず、ボリュームマウントも即座ではなくsubpathは対象外。secretはbase64エンコードにすぎず既定では暗号化されないことも解説。" data-terms="ConfigMap / Secret / kubeletの同期ループ / subPath / immutable（イミュータブル）">
+        <h3><a href="2026-09-12.html">ConfigMap を書き換えたのに、なぜ Pod の環境変数は変わらないのか？</a></h3>
+        <div class="summary">configMapKeyRefで注入した環境変数はPod起動時に一度だけ解決され更新は反映されず、ボリュームマウントも即座ではなくsubPathは対象外。SecretはBase64エンコードにすぎず既定では暗号化されないことも解説。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-container">Container</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-09-12</span></div>
+      </div>
       <div class="card" data-cat="arch" data-diff="基礎"
            data-search="サーバーを1台足しただけなのに、なぜキャッシュのヒット率が丸ごと落ちるのか？ hash(key)%台数では台数が1つ変わるだけで大半のキーの担当が入れ替わるが、コンシステントハッシングはリング上でキーとサーバーを同じ空間に置き移動するキーを一部に抑える。仮想ノードによる偏りの解消と、redis clusterのハッシュスロット方式との違いを解説。" data-terms="コンシステントハッシング / ホットスポット / ハッシュリング / 仮想ノード / ハッシュスロット">
         <h3><a href="2026-09-11.html">サーバーを1台足しただけなのに、なぜキャッシュのヒット率が丸ごと落ちるのか？</a></h3>

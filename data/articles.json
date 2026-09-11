@@ -1,5 +1,21 @@
 [
   {
+    "file": "2026-09-12.html",
+    "date": "2026-09-12",
+    "title": "ConfigMap を書き換えたのに、なぜ Pod の環境変数は変わらないのか？",
+    "summary": "configMapKeyRefで注入した環境変数はPod起動時に一度だけ解決され更新は反映されず、ボリュームマウントも即座ではなくsubPathは対象外。SecretはBase64エンコードにすぎず既定では暗号化されないことも解説。",
+    "category": "container",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": [
+      "ConfigMap",
+      "Secret",
+      "kubeletの同期ループ",
+      "subPath",
+      "immutable（イミュータブル）"
+    ]
+  },
+  {
     "file": "2026-09-11.html",
     "date": "2026-09-11",
     "title": "サーバーを1台足しただけなのに、なぜキャッシュのヒット率が丸ごと落ちるのか？",
