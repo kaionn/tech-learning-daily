@@ -30,7 +30,7 @@
       <div class="chip-row" id="cat-chips">
         <span class="row-label">カテゴリ</span>
         <button class="chip on" data-cat="">すべて</button>
-        <button class="chip" data-cat="container">Container <span class="chip-count">9</span></button>
+        <button class="chip" data-cat="container">Container <span class="chip-count">10</span></button>
         <button class="chip" data-cat="network">Network <span class="chip-count">8</span></button>
         <button class="chip" data-cat="security">Security <span class="chip-count">7</span></button>
         <button class="chip" data-cat="arch">Arch <span class="chip-count">6</span></button>
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-09">
       <div class="section-title">2026 年 9 月 <span class="count"></span></div>
+      <div class="card" data-cat="container" data-diff="応用"
+           data-search="kubectl apply を叩いてから、pod が起動するまでに何が起きているのか？ kubectl applyはkube-apiserver経由でetcdに望ましい状態を書き込むだけで、pod作成はcontroller-manager、ノード選定はkube-scheduler、実際の起動はkubeletが担う。watchによるコントロールループの仕組みを解説。" data-terms="kube-apiserver / etcd / watch（list-watch） / kube-scheduler / kubelet / コントロールループ">
+        <h3><a href="2026-09-13.html">kubectl apply を叩いてから、Pod が起動するまでに何が起きているのか？</a></h3>
+        <div class="summary">kubectl applyはkube-apiserver経由でetcdに望ましい状態を書き込むだけで、Pod作成はcontroller-manager、ノード選定はkube-scheduler、実際の起動はkubeletが担う。watchによるコントロールループの仕組みを解説。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-container">Container</span><span>🌳 応用</span><span>⏱ 約 7 分</span><span>2026-09-13</span></div>
+      </div>
       <div class="card" data-cat="container" data-diff="基礎"
            data-search="configmap を書き換えたのに、なぜ pod の環境変数は変わらないのか？ configmapkeyrefで注入した環境変数はpod起動時に一度だけ解決され更新は反映されず、ボリュームマウントも即座ではなくsubpathは対象外。secretはbase64エンコードにすぎず既定では暗号化されないことも解説。" data-terms="ConfigMap / Secret / kubeletの同期ループ / subPath / immutable（イミュータブル）">
         <h3><a href="2026-09-12.html">ConfigMap を書き換えたのに、なぜ Pod の環境変数は変わらないのか？</a></h3>

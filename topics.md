@@ -6,6 +6,7 @@
 
 ## 消化済み
 
+- 2026-09-13 Kubernetes のコントロールプレーンの仕組み（kubectl apply してから Pod が起動するまでに kube-apiserver・etcd・kube-scheduler・kube-controller-manager・kubelet がそれぞれ何をしているか、watch によるコントロールループとは何か）（自動選定）
 - 2026-09-12 Kubernetes の ConfigMap と Secret（環境変数注入は起動時一回きりで更新が反映されない理由、ボリュームマウントの反映遅延とsubPathの罠、SecretはBase64であり暗号化ではないこと）（自動選定）
 - 2026-09-11 コンシステントハッシング（分散キャッシュ・DBでノードを増減させたときになぜ移動するキーが一部で済むのか、仮想ノードによる負荷偏りの解消）（自動選定）
 - 2026-09-10 N+1 クエリ問題（Active Record の遅延ロードがなぜループの中で1件ずつSQLを発行するのか、includes/preload/eager_loadの使い分け、GraphQLのDataLoaderとの関係）（自動選定）

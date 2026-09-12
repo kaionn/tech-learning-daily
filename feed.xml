@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-09-12T08:21:45+09:00</updated>
+  <updated>2026-09-13T08:08:59+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>kubectl apply を叩いてから、Pod が起動するまでに何が起きているのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-09-13.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-09-13.html</id>
+    <updated>2026-09-13T08:08:59+09:00</updated>
+    <summary>kubectl applyはkube-apiserver経由でetcdに望ましい状態を書き込むだけで、Pod作成はcontroller-manager、ノード選定はkube-scheduler、実際の起動はkubeletが担う。watchによるコントロールループの仕組みを解説。</summary>
+  </entry>
   <entry>
     <title>ConfigMap を書き換えたのに、なぜ Pod の環境変数は変わらないのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-09-12.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-08-30.html</id>
     <updated>2026-08-30T08:27:53+09:00</updated>
     <summary>Ingressはルールを宣言するAPIオブジェクトにすぎず、Ingress Controllerが別途動いていないと何も起きない。ServiceがL4止まりのためドメインごとに振り分けられず、TLSはIngressで終端し先は平文になる挙動、後継のGateway APIへの移行方針を解説。</summary>
-  </entry>
-  <entry>
-    <title>障害が起きたサービスに、なぜリトライを重ねるほどとどめを刺してしまうのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-08-29.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-08-29.html</id>
-    <updated>2026-08-29T12:13:11+09:00</updated>
-    <summary>過負荷になった依存先へ大量のクライアントが同時にリトライするとリトライ嵐が起き、依存先の回復を妨げる。AWSのjitter付きバックオフとAzureのCircuit Breakerパターンを組み合わせて防ぐ設計を解説。</summary>
   </entry>
 </feed>
