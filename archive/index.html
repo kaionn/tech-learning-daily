@@ -38,10 +38,10 @@
         <button class="chip" data-cat="ai">AI <span class="chip-count">5</span></button>
         <button class="chip" data-cat="lang">Lang <span class="chip-count">4</span></button>
         <button class="chip" data-cat="dev">Dev <span class="chip-count">3</span></button>
+        <button class="chip" data-cat="obs" data-overflow="1" hidden>Obs <span class="chip-count">3</span></button>
         <button class="chip" data-cat="perf" data-overflow="1" hidden>Perf <span class="chip-count">3</span></button>
         <button class="chip" data-cat="frontend" data-overflow="1" hidden>Frontend <span class="chip-count">2</span></button>
         <button class="chip" data-cat="infra" data-overflow="1" hidden>Infra <span class="chip-count">2</span></button>
-        <button class="chip" data-cat="obs" data-overflow="1" hidden>Obs <span class="chip-count">2</span></button>
         <button class="chip chip-more" id="chip-more">+ 4 件</button>
       </div>
       <div class="chip-row" id="diff-chips">
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-09">
       <div class="section-title">2026 年 9 月 <span class="count"></span></div>
+      <div class="card" data-cat="obs" data-diff="基礎"
+           data-search="フロントとバックエンドのログはバラバラに出るのに、なぜ1つのリクエストとして追跡できるのか？ 分散トレーシングは1つのリクエストが複数サービスをまたぐ間の処理単位spanをtraceとしてつなげる仕組み。w3c trace contextのtraceparentヘッダーによるtrace-id/parent-id伝播の流れと、head-based/tail-basedサンプリングのトレードオフを解説。" data-terms="span / trace / trace-id / traceparent / head-based sampling / tail-based sampling">
+        <h3><a href="2026-09-14.html">フロントとバックエンドのログはバラバラに出るのに、なぜ1つのリクエストとして追跡できるのか？</a></h3>
+        <div class="summary">分散トレーシングは1つのリクエストが複数サービスをまたぐ間の処理単位spanをtraceとしてつなげる仕組み。W3C Trace Contextのtraceparentヘッダーによるtrace-id/parent-id伝播の流れと、head-based/tail-basedサンプリングのトレードオフを解説。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-obs">Obs</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-09-14</span></div>
+      </div>
       <div class="card" data-cat="container" data-diff="応用"
            data-search="kubectl apply を叩いてから、pod が起動するまでに何が起きているのか？ kubectl applyはkube-apiserver経由でetcdに望ましい状態を書き込むだけで、pod作成はcontroller-manager、ノード選定はkube-scheduler、実際の起動はkubeletが担う。watchによるコントロールループの仕組みを解説。" data-terms="kube-apiserver / etcd / watch（list-watch） / kube-scheduler / kubelet / コントロールループ">
         <h3><a href="2026-09-13.html">kubectl apply を叩いてから、Pod が起動するまでに何が起きているのか？</a></h3>

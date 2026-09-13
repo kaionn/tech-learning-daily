@@ -1,5 +1,22 @@
 [
   {
+    "file": "2026-09-14.html",
+    "date": "2026-09-14",
+    "title": "フロントとバックエンドのログはバラバラに出るのに、なぜ1つのリクエストとして追跡できるのか？",
+    "summary": "分散トレーシングは1つのリクエストが複数サービスをまたぐ間の処理単位spanをtraceとしてつなげる仕組み。W3C Trace Contextのtraceparentヘッダーによるtrace-id/parent-id伝播の流れと、head-based/tail-basedサンプリングのトレードオフを解説。",
+    "category": "obs",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": [
+      "span",
+      "trace",
+      "trace-id",
+      "traceparent",
+      "head-based sampling",
+      "tail-based sampling"
+    ]
+  },
+  {
     "file": "2026-09-13.html",
     "date": "2026-09-13",
     "title": "kubectl apply を叩いてから、Pod が起動するまでに何が起きているのか？",
