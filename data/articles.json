@@ -1,5 +1,21 @@
 [
   {
+    "file": "2026-09-15.html",
+    "date": "2026-09-15",
+    "title": "Pod は Running なのに、なぜ Service からの応答が来たり来なかったりするのか？",
+    "summary": "livenessProbe失敗はkubeletによるコンテナ再起動、readinessProbe失敗はEndpointSliceからの除外(トラフィック遮断のみ)という違いと、startupProbeがliveness誤爆を防ぐ仕組み、minReadySecondsとローリングアップデートの関係を解説。",
+    "category": "container",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": [
+      "liveness probe",
+      "readiness probe",
+      "startupProbe",
+      "EndpointSlice",
+      "minReadySeconds"
+    ]
+  },
+  {
     "file": "2026-09-14.html",
     "date": "2026-09-14",
     "title": "フロントとバックエンドのログはバラバラに出るのに、なぜ1つのリクエストとして追跡できるのか？",

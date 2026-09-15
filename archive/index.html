@@ -30,7 +30,7 @@
       <div class="chip-row" id="cat-chips">
         <span class="row-label">カテゴリ</span>
         <button class="chip on" data-cat="">すべて</button>
-        <button class="chip" data-cat="container">Container <span class="chip-count">10</span></button>
+        <button class="chip" data-cat="container">Container <span class="chip-count">11</span></button>
         <button class="chip" data-cat="network">Network <span class="chip-count">8</span></button>
         <button class="chip" data-cat="security">Security <span class="chip-count">7</span></button>
         <button class="chip" data-cat="arch">Arch <span class="chip-count">6</span></button>
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-09">
       <div class="section-title">2026 年 9 月 <span class="count"></span></div>
+      <div class="card" data-cat="container" data-diff="基礎"
+           data-search="pod は running なのに、なぜ service からの応答が来たり来なかったりするのか？ livenessprobe失敗はkubeletによるコンテナ再起動、readinessprobe失敗はendpointsliceからの除外(トラフィック遮断のみ)という違いと、startupprobeがliveness誤爆を防ぐ仕組み、minreadysecondsとローリングアップデートの関係を解説。" data-terms="liveness probe / readiness probe / startupProbe / EndpointSlice / minReadySeconds">
+        <h3><a href="2026-09-15.html">Pod は Running なのに、なぜ Service からの応答が来たり来なかったりするのか？</a></h3>
+        <div class="summary">livenessProbe失敗はkubeletによるコンテナ再起動、readinessProbe失敗はEndpointSliceからの除外(トラフィック遮断のみ)という違いと、startupProbeがliveness誤爆を防ぐ仕組み、minReadySecondsとローリングアップデートの関係を解説。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-container">Container</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-09-15</span></div>
+      </div>
       <div class="card" data-cat="obs" data-diff="基礎"
            data-search="フロントとバックエンドのログはバラバラに出るのに、なぜ1つのリクエストとして追跡できるのか？ 分散トレーシングは1つのリクエストが複数サービスをまたぐ間の処理単位spanをtraceとしてつなげる仕組み。w3c trace contextのtraceparentヘッダーによるtrace-id/parent-id伝播の流れと、head-based/tail-basedサンプリングのトレードオフを解説。" data-terms="span / trace / trace-id / traceparent / head-based sampling / tail-based sampling">
         <h3><a href="2026-09-14.html">フロントとバックエンドのログはバラバラに出るのに、なぜ1つのリクエストとして追跡できるのか？</a></h3>
