@@ -38,10 +38,10 @@
         <button class="chip" data-cat="ai">AI <span class="chip-count">5</span></button>
         <button class="chip" data-cat="lang">Lang <span class="chip-count">4</span></button>
         <button class="chip" data-cat="dev">Dev <span class="chip-count">3</span></button>
+        <button class="chip" data-cat="infra" data-overflow="1" hidden>Infra <span class="chip-count">3</span></button>
         <button class="chip" data-cat="obs" data-overflow="1" hidden>Obs <span class="chip-count">3</span></button>
         <button class="chip" data-cat="perf" data-overflow="1" hidden>Perf <span class="chip-count">3</span></button>
         <button class="chip" data-cat="frontend" data-overflow="1" hidden>Frontend <span class="chip-count">2</span></button>
-        <button class="chip" data-cat="infra" data-overflow="1" hidden>Infra <span class="chip-count">2</span></button>
         <button class="chip chip-more" id="chip-more">+ 4 件</button>
       </div>
       <div class="chip-row" id="diff-chips">
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-09">
       <div class="section-title">2026 年 9 月 <span class="count"></span></div>
+      <div class="card" data-cat="infra" data-diff="基礎"
+           data-search="なぜ web サーバーは「パブリックサブネット」に置き、db は「プライベートサブネット」に置くのか？ パブリック/プライベートサブネットの違いはルートテーブルに0.0.0.0/0→インターネットゲートウェイの経路があるかだけで決まる。natゲートウェイのアドレス変換の仕組みと、サブネットがazをまたげない制約によるaz分散設計を解説。" data-terms="VPC / サブネット / ルートテーブル / インターネットゲートウェイ(igw) / NAT ゲートウェイ">
+        <h3><a href="2026-09-16.html">なぜ Web サーバーは「パブリックサブネット」に置き、DB は「プライベートサブネット」に置くのか？</a></h3>
+        <div class="summary">パブリック/プライベートサブネットの違いはルートテーブルに0.0.0.0/0→インターネットゲートウェイの経路があるかだけで決まる。NATゲートウェイのアドレス変換の仕組みと、サブネットがAZをまたげない制約によるAZ分散設計を解説。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-infra">Infra</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-09-16</span></div>
+      </div>
       <div class="card" data-cat="container" data-diff="基礎"
            data-search="pod は running なのに、なぜ service からの応答が来たり来なかったりするのか？ livenessprobe失敗はkubeletによるコンテナ再起動、readinessprobe失敗はendpointsliceからの除外(トラフィック遮断のみ)という違いと、startupprobeがliveness誤爆を防ぐ仕組み、minreadysecondsとローリングアップデートの関係を解説。" data-terms="liveness probe / readiness probe / startupProbe / EndpointSlice / minReadySeconds">
         <h3><a href="2026-09-15.html">Pod は Running なのに、なぜ Service からの応答が来たり来なかったりするのか？</a></h3>

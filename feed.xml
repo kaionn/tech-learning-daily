@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-09-15T09:01:11+09:00</updated>
+  <updated>2026-09-16T08:36:38+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>なぜ Web サーバーは「パブリックサブネット」に置き、DB は「プライベートサブネット」に置くのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-09-16.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-09-16.html</id>
+    <updated>2026-09-16T08:36:38+09:00</updated>
+    <summary>パブリック/プライベートサブネットの違いはルートテーブルに0.0.0.0/0→インターネットゲートウェイの経路があるかだけで決まる。NATゲートウェイのアドレス変換の仕組みと、サブネットがAZをまたげない制約を解説。</summary>
+  </entry>
   <entry>
     <title>Pod は Running なのに、なぜ Service からの応答が来たり来なかったりするのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-09-15.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-09-02.html</id>
     <updated>2026-09-02T08:24:35+09:00</updated>
     <summary>HTTP/2はアプリ層のHOLブロッキングは解決したが、1本のTCPに多重化する限りパケットロス時は無関係なストリームまで足止めされる。QUICがストリームごとに独立した信頼性配送を実装し、コネクションIDで接続をIP・ポートから切り離した設計を解説。</summary>
-  </entry>
-  <entry>
-    <title>Rails は自動でエスケープしているのに、なぜ XSS はなくならないのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-09-01.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-09-01.html</id>
-    <updated>2026-09-01T09:46:02+09:00</updated>
-    <summary>XSSは攻撃者のJSを被害者の権限でブラウザに実行させる攻撃で、防御の要はHTML本文・属性・JS文字列・URLという文脈ごとに異なる出力エスケープと、それが漏れた時の最後の壁となるCSPのscript-src許可リストだ。</summary>
   </entry>
 </feed>
