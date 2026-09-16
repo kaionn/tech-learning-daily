@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-09-16T08:36:38+09:00</updated>
+  <updated>2026-09-17T08:42:03+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>同じ「テーブルを割る」なのに、パーティショニングとシャーディングは何が違うのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-09-17.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-09-17.html</id>
+    <updated>2026-09-17T08:42:03+09:00</updated>
+    <summary>パーティショニングは1台のDB内でのテーブル分割、シャーディングは複数サーバーへの分散という違いを解説。partition pruningの仕組み、shard keyを跨ぐJOIN・トランザクションの壁、リシャーディングの難しさを扱う。</summary>
+  </entry>
   <entry>
     <title>なぜ Web サーバーは「パブリックサブネット」に置き、DB は「プライベートサブネット」に置くのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-09-16.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-09-03.html</id>
     <updated>2026-09-03T08:25:43+09:00</updated>
     <summary>平均は分布の中心しか表さず、ファンアウト構成では稀なテールレイテンシが大多数のユーザー体験になる。Little's Lawで待ち行列が非線形に膨らむ理由と、p99を使ったタイムアウト・SLO設計を解説。</summary>
-  </entry>
-  <entry>
-    <title>HTTP/2 でストリームをまとめたのに、なぜ HTTP/3 は TCP を手放したのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-09-02.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-09-02.html</id>
-    <updated>2026-09-02T08:24:35+09:00</updated>
-    <summary>HTTP/2はアプリ層のHOLブロッキングは解決したが、1本のTCPに多重化する限りパケットロス時は無関係なストリームまで足止めされる。QUICがストリームごとに独立した信頼性配送を実装し、コネクションIDで接続をIP・ポートから切り離した設計を解説。</summary>
   </entry>
 </feed>

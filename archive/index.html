@@ -32,9 +32,9 @@
         <button class="chip on" data-cat="">すべて</button>
         <button class="chip" data-cat="container">Container <span class="chip-count">11</span></button>
         <button class="chip" data-cat="network">Network <span class="chip-count">8</span></button>
+        <button class="chip" data-cat="db">DB <span class="chip-count">7</span></button>
         <button class="chip" data-cat="security">Security <span class="chip-count">7</span></button>
         <button class="chip" data-cat="arch">Arch <span class="chip-count">6</span></button>
-        <button class="chip" data-cat="db">DB <span class="chip-count">6</span></button>
         <button class="chip" data-cat="ai">AI <span class="chip-count">5</span></button>
         <button class="chip" data-cat="lang">Lang <span class="chip-count">4</span></button>
         <button class="chip" data-cat="dev">Dev <span class="chip-count">3</span></button>
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-09">
       <div class="section-title">2026 年 9 月 <span class="count"></span></div>
+      <div class="card" data-cat="db" data-diff="応用"
+           data-search="同じ「テーブルを割る」なのに、パーティショニングとシャーディングは何が違うのか？ パーティショニングは1台のdb内でのテーブル分割、シャーディングは複数サーバーへの分散という違いを解説。partition pruningの仕組み、shard keyを跨ぐjoin・トランザクションの壁、リシャーディングの難しさを扱う。" data-terms="パーティショニング / シャーディング / シャードキー(shard key) / パーティションプルーニング / リシャーディング">
+        <h3><a href="2026-09-17.html">同じ「テーブルを割る」なのに、パーティショニングとシャーディングは何が違うのか？</a></h3>
+        <div class="summary">パーティショニングは1台のDB内でのテーブル分割、シャーディングは複数サーバーへの分散という違いを解説。partition pruningの仕組み、shard keyを跨ぐJOIN・トランザクションの壁、リシャーディングの難しさを扱う。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-db">DB</span><span>🌳 応用</span><span>⏱ 約 7 分</span><span>2026-09-17</span></div>
+      </div>
       <div class="card" data-cat="infra" data-diff="基礎"
            data-search="なぜ web サーバーは「パブリックサブネット」に置き、db は「プライベートサブネット」に置くのか？ パブリック/プライベートサブネットの違いはルートテーブルに0.0.0.0/0→インターネットゲートウェイの経路があるかだけで決まる。natゲートウェイのアドレス変換の仕組みと、サブネットがazをまたげない制約によるaz分散設計を解説。" data-terms="VPC / サブネット / ルートテーブル / インターネットゲートウェイ(igw) / NAT ゲートウェイ">
         <h3><a href="2026-09-16.html">なぜ Web サーバーは「パブリックサブネット」に置き、DB は「プライベートサブネット」に置くのか？</a></h3>

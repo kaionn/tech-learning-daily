@@ -6,6 +6,7 @@
 
 ## 消化済み
 
+- 2026-09-17 DB のパーティショニングとシャーディングの違い（自動選定）
 - 2026-09-16 AWS VPC のパブリック/プライベートサブネットとNATゲートウェイの仕組み（自動選定）
 - 2026-09-15 Kubernetes の liveness/readiness/startupProbe（ヘルスチェック）（自動選定）
 - 2026-09-14 分散トレーシング（W3C Trace Contextのtraceparentヘッダーによるtrace-id/parent-id伝播の仕組みと、head-based/tail-basedサンプリングの違い）（自動選定）
