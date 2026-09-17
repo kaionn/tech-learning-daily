@@ -36,9 +36,9 @@
         <button class="chip" data-cat="security">Security <span class="chip-count">7</span></button>
         <button class="chip" data-cat="arch">Arch <span class="chip-count">6</span></button>
         <button class="chip" data-cat="ai">AI <span class="chip-count">5</span></button>
+        <button class="chip" data-cat="infra">Infra <span class="chip-count">4</span></button>
         <button class="chip" data-cat="lang">Lang <span class="chip-count">4</span></button>
-        <button class="chip" data-cat="dev">Dev <span class="chip-count">3</span></button>
-        <button class="chip" data-cat="infra" data-overflow="1" hidden>Infra <span class="chip-count">3</span></button>
+        <button class="chip" data-cat="dev" data-overflow="1" hidden>Dev <span class="chip-count">3</span></button>
         <button class="chip" data-cat="obs" data-overflow="1" hidden>Obs <span class="chip-count">3</span></button>
         <button class="chip" data-cat="perf" data-overflow="1" hidden>Perf <span class="chip-count">3</span></button>
         <button class="chip" data-cat="frontend" data-overflow="1" hidden>Frontend <span class="chip-count">2</span></button>
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-09">
       <div class="section-title">2026 年 9 月 <span class="count"></span></div>
+      <div class="card" data-cat="infra" data-diff="基礎"
+           data-search="ec2 はパスワードを一度も入力していないのに、なぜ s3 にアクセスできるのか？ iamロールは信頼ポリシー(誰が借りるか)と許可ポリシー(何ができるか)の二階建てで、stsのassumeroleが既定1時間・最大12時間の一時クレデンシャルを発行する仕組み。ec2でのimds経由の自動更新と、ロール剥奪が最大1時間遅延する挙動を解説。" data-terms="IAMロール / 信頼ポリシー(trust policy) / 許可ポリシー(permissions policy) / AssumeRole / STS(Security Token Service) / IMDS(Instance Metadata Service)">
+        <h3><a href="2026-09-18.html">EC2 はパスワードを一度も入力していないのに、なぜ S3 にアクセスできるのか？</a></h3>
+        <div class="summary">IAMロールは信頼ポリシー(誰が借りるか)と許可ポリシー(何ができるか)の二階建てで、STSのAssumeRoleが既定1時間・最大12時間の一時クレデンシャルを発行する仕組み。EC2でのIMDS経由の自動更新と、ロール剥奪が最大1時間遅延する挙動を解説。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-infra">Infra</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-09-18</span></div>
+      </div>
       <div class="card" data-cat="db" data-diff="応用"
            data-search="同じ「テーブルを割る」なのに、パーティショニングとシャーディングは何が違うのか？ パーティショニングは1台のdb内でのテーブル分割、シャーディングは複数サーバーへの分散という違いを解説。partition pruningの仕組み、shard keyを跨ぐjoin・トランザクションの壁、リシャーディングの難しさを扱う。" data-terms="パーティショニング / シャーディング / シャードキー(shard key) / パーティションプルーニング / リシャーディング">
         <h3><a href="2026-09-17.html">同じ「テーブルを割る」なのに、パーティショニングとシャーディングは何が違うのか？</a></h3>

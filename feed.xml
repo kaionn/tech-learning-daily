@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-09-17T08:42:03+09:00</updated>
+  <updated>2026-09-18T08:35:47+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>EC2 はパスワードを一度も入力していないのに、なぜ S3 にアクセスできるのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-09-18.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-09-18.html</id>
+    <updated>2026-09-18T08:35:47+09:00</updated>
+    <summary>IAMロールは信頼ポリシー(誰が借りるか)と許可ポリシー(何ができるか)の二階建てで、STSのAssumeRoleが既定1時間・最大12時間の一時クレデンシャルを発行する仕組み。EC2でのIMDS経由の自動更新と、ロール剥奪が最大1時間遅延する挙動を解説。</summary>
+  </entry>
   <entry>
     <title>同じ「テーブルを割る」なのに、パーティショニングとシャーディングは何が違うのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-09-17.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-09-04.html</id>
     <updated>2026-09-04T08:21:28+09:00</updated>
     <summary>SQLインジェクションは文字列結合で入力中の引用符が構文として解釈されて起きる。プレースホルダはPREPAREで構文木を確定しBINDで値を束縛するため入力が構造を変えられない仕組みと、識別子はバインド対象外な点を解説。</summary>
-  </entry>
-  <entry>
-    <title>平均レイテンシが正常なのに、なぜ「たまに遅い」と言われるのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-09-03.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-09-03.html</id>
-    <updated>2026-09-03T08:25:43+09:00</updated>
-    <summary>平均は分布の中心しか表さず、ファンアウト構成では稀なテールレイテンシが大多数のユーザー体験になる。Little's Lawで待ち行列が非線形に膨らむ理由と、p99を使ったタイムアウト・SLO設計を解説。</summary>
   </entry>
 </feed>

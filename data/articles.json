@@ -1,5 +1,22 @@
 [
   {
+    "file": "2026-09-18.html",
+    "date": "2026-09-18",
+    "title": "EC2 はパスワードを一度も入力していないのに、なぜ S3 にアクセスできるのか？",
+    "summary": "IAMロールは信頼ポリシー(誰が借りるか)と許可ポリシー(何ができるか)の二階建てで、STSのAssumeRoleが既定1時間・最大12時間の一時クレデンシャルを発行する仕組み。EC2でのIMDS経由の自動更新と、ロール剥奪が最大1時間遅延する挙動を解説。",
+    "category": "infra",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": [
+      "IAMロール",
+      "信頼ポリシー(trust policy)",
+      "許可ポリシー(permissions policy)",
+      "AssumeRole",
+      "STS(Security Token Service)",
+      "IMDS(Instance Metadata Service)"
+    ]
+  },
+  {
     "file": "2026-09-17.html",
     "date": "2026-09-17",
     "title": "同じ「テーブルを割る」なのに、パーティショニングとシャーディングは何が違うのか？",
