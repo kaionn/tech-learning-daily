@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-09-18T08:35:47+09:00</updated>
+  <updated>2026-09-19T08:25:30+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>Kafka のコンシューマーを増やしたのに、なぜ処理速度は頭打ちになるのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-09-19.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-09-19.html</id>
+    <updated>2026-09-19T08:25:30+09:00</updated>
+    <summary>Kafkaのパーティションはグループ内で同時に1コンシューマーにしか割り当てられず並列度の天井になる。パーティション数を減らせない設計、Eager/Cooperativeリバランスの違い、オートコミットの既定5秒間隔が重複処理を生む仕組みを解説。</summary>
+  </entry>
   <entry>
     <title>EC2 はパスワードを一度も入力していないのに、なぜ S3 にアクセスできるのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-09-18.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-09-05.html</id>
     <updated>2026-09-05T08:06:13+09:00</updated>
     <summary>HTTPはステートレスでサーバーは前回のリクエストを覚えていないが、Set-Cookie/Cookieヘッダーの往復がログイン状態を運ぶ。HttpOnly/Secure/SameSiteが既定でオフな理由と、RailsのCookieStoreがセッションデータ自体を暗号化してCookieに格納する仕組みを解説。</summary>
-  </entry>
-  <entry>
-    <title>なぜ文字列結合で組み立てたSQLは壊れるのに、プレースホルダなら壊れないのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-09-04.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-09-04.html</id>
-    <updated>2026-09-04T08:21:28+09:00</updated>
-    <summary>SQLインジェクションは文字列結合で入力中の引用符が構文として解釈されて起きる。プレースホルダはPREPAREで構文木を確定しBINDで値を束縛するため入力が構造を変えられない仕組みと、識別子はバインド対象外な点を解説。</summary>
   </entry>
 </feed>

@@ -32,9 +32,9 @@
         <button class="chip on" data-cat="">すべて</button>
         <button class="chip" data-cat="container">Container <span class="chip-count">11</span></button>
         <button class="chip" data-cat="network">Network <span class="chip-count">8</span></button>
+        <button class="chip" data-cat="arch">Arch <span class="chip-count">7</span></button>
         <button class="chip" data-cat="db">DB <span class="chip-count">7</span></button>
         <button class="chip" data-cat="security">Security <span class="chip-count">7</span></button>
-        <button class="chip" data-cat="arch">Arch <span class="chip-count">6</span></button>
         <button class="chip" data-cat="ai">AI <span class="chip-count">5</span></button>
         <button class="chip" data-cat="infra">Infra <span class="chip-count">4</span></button>
         <button class="chip" data-cat="lang">Lang <span class="chip-count">4</span></button>
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-09">
       <div class="section-title">2026 年 9 月 <span class="count"></span></div>
+      <div class="card" data-cat="arch" data-diff="応用"
+           data-search="kafka のコンシューマーを増やしたのに、なぜ処理速度は頭打ちになるのか？ kafkaのパーティションはグループ内で同時に1コンシューマーにしか割り当てられず並列度の天井になる。パーティション数を減らせない設計、eager/cooperativeリバランスの違い、オートコミットの既定5秒間隔が重複処理を生む仕組みを解説。" data-terms="パーティション / コンシューマーグループ / オフセット / リバランス / グループコーディネーター">
+        <h3><a href="2026-09-19.html">Kafka のコンシューマーを増やしたのに、なぜ処理速度は頭打ちになるのか？</a></h3>
+        <div class="summary">Kafkaのパーティションはグループ内で同時に1コンシューマーにしか割り当てられず並列度の天井になる。パーティション数を減らせない設計、Eager/Cooperativeリバランスの違い、オートコミットの既定5秒間隔が重複処理を生む仕組みを解説。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-arch">Arch</span><span>🌳 応用</span><span>⏱ 約 8 分</span><span>2026-09-19</span></div>
+      </div>
       <div class="card" data-cat="infra" data-diff="基礎"
            data-search="ec2 はパスワードを一度も入力していないのに、なぜ s3 にアクセスできるのか？ iamロールは信頼ポリシー(誰が借りるか)と許可ポリシー(何ができるか)の二階建てで、stsのassumeroleが既定1時間・最大12時間の一時クレデンシャルを発行する仕組み。ec2でのimds経由の自動更新と、ロール剥奪が最大1時間遅延する挙動を解説。" data-terms="IAMロール / 信頼ポリシー(trust policy) / 許可ポリシー(permissions policy) / AssumeRole / STS(Security Token Service) / IMDS(Instance Metadata Service)">
         <h3><a href="2026-09-18.html">EC2 はパスワードを一度も入力していないのに、なぜ S3 にアクセスできるのか？</a></h3>
