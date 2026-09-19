@@ -1,5 +1,21 @@
 [
   {
+    "file": "2026-09-20.html",
+    "date": "2026-09-20",
+    "title": "負荷が落ち着いたのに、なぜ HPA はしばらく Pod を減らしてくれないのか？",
+    "summary": "HPAは既定15秒間隔の制御ループでdesiredReplicas=ceil(現在数×実測/目標)を計算するだけの仕組み。既定10%のトレランスでフラッピングを防ぎ、scaleUpは0秒・scaleDownは既定300秒のstabilizationWindowSecondsという非対称設計で急な縮小を避ける理由を解説。",
+    "category": "container",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": [
+      "HPA(Horizontal Pod Autoscaler)",
+      "metrics-server",
+      "トレランス",
+      "スタビライゼーションウィンドウ",
+      "リソースリクエスト"
+    ]
+  },
+  {
     "file": "2026-09-19.html",
     "date": "2026-09-19",
     "title": "Kafka のコンシューマーを増やしたのに、なぜ処理速度は頭打ちになるのか？",

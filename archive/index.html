@@ -30,7 +30,7 @@
       <div class="chip-row" id="cat-chips">
         <span class="row-label">カテゴリ</span>
         <button class="chip on" data-cat="">すべて</button>
-        <button class="chip" data-cat="container">Container <span class="chip-count">11</span></button>
+        <button class="chip" data-cat="container">Container <span class="chip-count">12</span></button>
         <button class="chip" data-cat="network">Network <span class="chip-count">8</span></button>
         <button class="chip" data-cat="arch">Arch <span class="chip-count">7</span></button>
         <button class="chip" data-cat="db">DB <span class="chip-count">7</span></button>
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-09">
       <div class="section-title">2026 年 9 月 <span class="count"></span></div>
+      <div class="card" data-cat="container" data-diff="基礎"
+           data-search="負荷が落ち着いたのに、なぜ hpa はしばらく pod を減らしてくれないのか？ hpaは既定15秒間隔の制御ループでdesiredreplicas=ceil(現在数×実測/目標)を計算するだけの仕組み。既定10%のトレランスでフラッピングを防ぎ、scaleupは0秒・scaledownは既定300秒のstabilizationwindowsecondsという非対称設計で急な縮小を避ける理由を解説。" data-terms="HPA(Horizontal Pod Autoscaler) / metrics-server / トレランス / スタビライゼーションウィンドウ / リソースリクエスト">
+        <h3><a href="2026-09-20.html">負荷が落ち着いたのに、なぜ HPA はしばらく Pod を減らしてくれないのか？</a></h3>
+        <div class="summary">HPAは既定15秒間隔の制御ループでdesiredReplicas=ceil(現在数×実測/目標)を計算するだけの仕組み。既定10%のトレランスでフラッピングを防ぎ、scaleUpは0秒・scaleDownは既定300秒のstabilizationWindowSecondsという非対称設計で急な縮小を避ける理由を解説。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-container">Container</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-09-20</span></div>
+      </div>
       <div class="card" data-cat="arch" data-diff="応用"
            data-search="kafka のコンシューマーを増やしたのに、なぜ処理速度は頭打ちになるのか？ kafkaのパーティションはグループ内で同時に1コンシューマーにしか割り当てられず並列度の天井になる。パーティション数を減らせない設計、eager/cooperativeリバランスの違い、オートコミットの既定5秒間隔が重複処理を生む仕組みを解説。" data-terms="パーティション / コンシューマーグループ / オフセット / リバランス / グループコーディネーター">
         <h3><a href="2026-09-19.html">Kafka のコンシューマーを増やしたのに、なぜ処理速度は頭打ちになるのか？</a></h3>
