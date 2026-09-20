@@ -31,7 +31,7 @@
         <span class="row-label">カテゴリ</span>
         <button class="chip on" data-cat="">すべて</button>
         <button class="chip" data-cat="container">Container <span class="chip-count">12</span></button>
-        <button class="chip" data-cat="network">Network <span class="chip-count">8</span></button>
+        <button class="chip" data-cat="network">Network <span class="chip-count">9</span></button>
         <button class="chip" data-cat="arch">Arch <span class="chip-count">7</span></button>
         <button class="chip" data-cat="db">DB <span class="chip-count">7</span></button>
         <button class="chip" data-cat="security">Security <span class="chip-count">7</span></button>
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-09">
       <div class="section-title">2026 年 9 月 <span class="count"></span></div>
+      <div class="card" data-cat="network" data-diff="基礎"
+           data-search="レスポンスは 200 のはずなのに、なぜ通信量が 0 バイトになるのか？ httpキャッシュは鮮度(サーバーに聞かずに使える期間)と検証(聞いてから使う判断)の2層構造で、no-cacheは保存禁止ではなく毎回検証を強制する指示。etag/if-none-matchの検証が一致すると304 not modifiedで本文送信を省略する仕組みを解説。" data-terms="鮮度(freshness) / 検証(validation) / ETag / If-None-Match / 304 Not Modified / s-maxage">
+        <h3><a href="2026-09-21.html">レスポンスは 200 のはずなのに、なぜ通信量が 0 バイトになるのか？</a></h3>
+        <div class="summary">HTTPキャッシュは鮮度(サーバーに聞かずに使える期間)と検証(聞いてから使う判断)の2層構造で、no-cacheは保存禁止ではなく毎回検証を強制する指示。ETag/If-None-Matchの検証が一致すると304 Not Modifiedで本文送信を省略する仕組みを解説。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-network">Network</span><span>🌿 基礎</span><span>⏱ 約 6 分</span><span>2026-09-21</span></div>
+      </div>
       <div class="card" data-cat="container" data-diff="基礎"
            data-search="負荷が落ち着いたのに、なぜ hpa はしばらく pod を減らしてくれないのか？ hpaは既定15秒間隔の制御ループでdesiredreplicas=ceil(現在数×実測/目標)を計算するだけの仕組み。既定10%のトレランスでフラッピングを防ぎ、scaleupは0秒・scaledownは既定300秒のstabilizationwindowsecondsという非対称設計で急な縮小を避ける理由を解説。" data-terms="HPA(Horizontal Pod Autoscaler) / metrics-server / トレランス / スタビライゼーションウィンドウ / リソースリクエスト">
         <h3><a href="2026-09-20.html">負荷が落ち着いたのに、なぜ HPA はしばらく Pod を減らしてくれないのか？</a></h3>

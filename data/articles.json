@@ -1,5 +1,22 @@
 [
   {
+    "file": "2026-09-21.html",
+    "date": "2026-09-21",
+    "title": "レスポンスは 200 のはずなのに、なぜ通信量が 0 バイトになるのか？",
+    "summary": "HTTPキャッシュは鮮度(サーバーに聞かずに使える期間)と検証(聞いてから使う判断)の2層構造で、no-cacheは保存禁止ではなく毎回検証を強制する指示。ETag/If-None-Matchの検証が一致すると304 Not Modifiedで本文送信を省略する仕組みを解説。",
+    "category": "network",
+    "difficulty": "基礎",
+    "readTime": 6,
+    "terms": [
+      "鮮度(freshness)",
+      "検証(validation)",
+      "ETag",
+      "If-None-Match",
+      "304 Not Modified",
+      "s-maxage"
+    ]
+  },
+  {
     "file": "2026-09-20.html",
     "date": "2026-09-20",
     "title": "負荷が落ち着いたのに、なぜ HPA はしばらく Pod を減らしてくれないのか？",

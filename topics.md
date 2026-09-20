@@ -6,6 +6,7 @@
 
 ## 消化済み
 
+- 2026-09-21 HTTP キャッシュ制御（Cache-Control と ETag/If-None-Match による検証、304 Not Modified の仕組み）（自動選定）
 - 2026-09-20 Kubernetes の HorizontalPodAutoscaler（自動選定）
 - 2026-09-19 Kafka のパーティションとコンシューマーグループ（自動選定）
 - 2026-09-18 AWS IAM ロールと AssumeRole・STS 一時クレデンシャルの仕組み（自動選定）

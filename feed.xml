@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-09-20T08:16:10+09:00</updated>
+  <updated>2026-09-21T08:20:30+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>レスポンスは 200 のはずなのに、なぜ通信量が 0 バイトになるのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-09-21.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-09-21.html</id>
+    <updated>2026-09-21T08:20:30+09:00</updated>
+    <summary>HTTPキャッシュはサーバーに聞かずに使える鮮度期間と、聞いてから使う検証の2層構造。no-cacheは保存禁止ではなく毎回検証を強制する指示で、ETag/If-None-Matchによる検証が一致すると304 Not Modifiedで本文送信を省略する仕組みを解説。</summary>
+  </entry>
   <entry>
     <title>負荷が落ち着いたのに、なぜ HPA はしばらく Pod を減らしてくれないのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-09-20.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-09-07.html</id>
     <updated>2026-09-07T08:00:03+09:00</updated>
     <summary>Ruby(MRI)のGVLはCPUバウンドな処理を1スレッドずつしか進めずI/O待ち中だけ解放される一方、Goのgoroutineはランタイムが少数のOSスレッドに多数を割り当てるM:Nスケジューラで動くためCPUバウンドでも複数コアを使い切れる違いを解説。</summary>
-  </entry>
-  <entry>
-    <title>GitHub Actions の jobs は、なぜ書いた順ではなく一斉に走り出すのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-09-06.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-09-06.html</id>
-    <updated>2026-09-06T08:01:34+09:00</updated>
-    <summary>jobsは既定で並列実行され、順序を決めるのはneedsだけ。各jobは毎回使い捨てのVMで動くため前段の成果物は自動で引き継がれず、actions/cacheのkey/restore-keysの一致順序とブランチスコープの制約を解説。</summary>
   </entry>
 </feed>
