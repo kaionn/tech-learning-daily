@@ -39,9 +39,9 @@
         <button class="chip" data-cat="infra">Infra <span class="chip-count">4</span></button>
         <button class="chip" data-cat="lang">Lang <span class="chip-count">4</span></button>
         <button class="chip" data-cat="dev" data-overflow="1" hidden>Dev <span class="chip-count">3</span></button>
+        <button class="chip" data-cat="frontend" data-overflow="1" hidden>Frontend <span class="chip-count">3</span></button>
         <button class="chip" data-cat="obs" data-overflow="1" hidden>Obs <span class="chip-count">3</span></button>
         <button class="chip" data-cat="perf" data-overflow="1" hidden>Perf <span class="chip-count">3</span></button>
-        <button class="chip" data-cat="frontend" data-overflow="1" hidden>Frontend <span class="chip-count">2</span></button>
         <button class="chip chip-more" id="chip-more">+ 4 件</button>
       </div>
       <div class="chip-row" id="diff-chips">
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-09">
       <div class="section-title">2026 年 9 月 <span class="count"></span></div>
+      <div class="card" data-cat="frontend" data-diff="基礎"
+           data-search="setstate しただけなのに、なぜ react は新しいツリーをまるごと作り直すのか？ reactはstate変更のたびに軽量なjsオブジェクトである仮想domツリーを丸ごと生成し、前回ツリーとdiffしてから差分だけを実domへ適用する。要素の同一性が「ツリー内の位置」で決まるためkeyが必須になる理由と、fiberによるスケジューリングやreact18のautomatic batchingを解説。" data-terms="仮想DOM / reconciliation / diffing / key / Fiber / automatic batching">
+        <h3><a href="2026-09-22.html">setState しただけなのに、なぜ React は新しいツリーをまるごと作り直すのか？</a></h3>
+        <div class="summary">Reactはstate変更のたびに軽量なJSオブジェクトである仮想DOMツリーを丸ごと生成し、前回ツリーとdiffしてから差分だけを実DOMへ適用する。要素の同一性が「ツリー内の位置」で決まるためkeyが必須になる理由と、FiberによるスケジューリングやReact18のautomatic batchingを解説。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-frontend">Frontend</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-09-22</span></div>
+      </div>
       <div class="card" data-cat="network" data-diff="基礎"
            data-search="レスポンスは 200 のはずなのに、なぜ通信量が 0 バイトになるのか？ httpキャッシュは鮮度(サーバーに聞かずに使える期間)と検証(聞いてから使う判断)の2層構造で、no-cacheは保存禁止ではなく毎回検証を強制する指示。etag/if-none-matchの検証が一致すると304 not modifiedで本文送信を省略する仕組みを解説。" data-terms="鮮度(freshness) / 検証(validation) / ETag / If-None-Match / 304 Not Modified / s-maxage">
         <h3><a href="2026-09-21.html">レスポンスは 200 のはずなのに、なぜ通信量が 0 バイトになるのか？</a></h3>

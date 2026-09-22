@@ -6,6 +6,7 @@
 
 ## 消化済み
 
+- 2026-09-22 Reactの仮想DOMとreconciliation（key属性の役割、diffingアルゴリズム）（自動選定）
 - 2026-09-21 HTTP キャッシュ制御（Cache-Control と ETag/If-None-Match による検証、304 Not Modified の仕組み）（自動選定）
 - 2026-09-20 Kubernetes の HorizontalPodAutoscaler（自動選定）
 - 2026-09-19 Kafka のパーティションとコンシューマーグループ（自動選定）

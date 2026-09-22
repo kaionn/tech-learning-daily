@@ -1,5 +1,22 @@
 [
   {
+    "file": "2026-09-22.html",
+    "date": "2026-09-22",
+    "title": "setState しただけなのに、なぜ React は新しいツリーをまるごと作り直すのか？",
+    "summary": "Reactはstate変更のたびに軽量なJSオブジェクトである仮想DOMツリーを丸ごと生成し、前回ツリーとdiffしてから差分だけを実DOMへ適用する。要素の同一性が「ツリー内の位置」で決まるためkeyが必須になる理由と、FiberによるスケジューリングやReact18のautomatic batchingを解説。",
+    "category": "frontend",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": [
+      "仮想DOM",
+      "reconciliation",
+      "diffing",
+      "key",
+      "Fiber",
+      "automatic batching"
+    ]
+  },
+  {
     "file": "2026-09-21.html",
     "date": "2026-09-21",
     "title": "レスポンスは 200 のはずなのに、なぜ通信量が 0 バイトになるのか？",
