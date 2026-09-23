@@ -32,9 +32,9 @@
         <button class="chip on" data-cat="">すべて</button>
         <button class="chip" data-cat="container">Container <span class="chip-count">12</span></button>
         <button class="chip" data-cat="network">Network <span class="chip-count">9</span></button>
+        <button class="chip" data-cat="db">DB <span class="chip-count">8</span></button>
         <button class="chip" data-cat="security">Security <span class="chip-count">8</span></button>
         <button class="chip" data-cat="arch">Arch <span class="chip-count">7</span></button>
-        <button class="chip" data-cat="db">DB <span class="chip-count">7</span></button>
         <button class="chip" data-cat="ai">AI <span class="chip-count">5</span></button>
         <button class="chip" data-cat="infra">Infra <span class="chip-count">4</span></button>
         <button class="chip" data-cat="lang">Lang <span class="chip-count">4</span></button>
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-09">
       <div class="section-title">2026 年 9 月 <span class="count"></span></div>
+      <div class="card" data-cat="db" data-diff="基礎"
+           data-search="同じ alter table のはずなのに、なぜ一瞬で終わる時と本番を止める時があるのか？ alter tableはpostgresqlで最も強いaccess exclusiveロックを取ることが多く単純なselectとも共存できない。列追加はpostgresql 11以降のfast defaultで一瞬だが、既存列へのnot null付与は全行スキャンを伴うため、not valid→validate constraint→set not nullの3段階に分けて軽いロックへ逃がす手法を解説。" data-terms="ACCESS EXCLUSIVEロック / SHARE UPDATE EXCLUSIVEロック / fast default / NOT VALID制約 / VALIDATE CONSTRAINT / ALGORITHM=INSTANT">
+        <h3><a href="2026-09-24.html">同じ ALTER TABLE のはずなのに、なぜ一瞬で終わる時と本番を止める時があるのか？</a></h3>
+        <div class="summary">ALTER TABLEはPostgreSQLで最も強いACCESS EXCLUSIVEロックを取ることが多く単純なSELECTとも共存できない。列追加はPostgreSQL 11以降のfast defaultで一瞬だが、既存列へのNOT NULL付与は全行スキャンを伴うため、NOT VALID→VALIDATE CONSTRAINT→SET NOT NULLの3段階に分けて軽いロックへ逃がす手法を解説。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-db">DB</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-09-24</span></div>
+      </div>
       <div class="card" data-cat="security" data-diff="基礎"
            data-search="画像の url を1つ受け取っただけなのに、なぜそれがクラウドの認証情報を盗む入口になるのか？ ssrfはユーザー指定のurlをサーバーに取得させ、外部からは届かない内部ネットワークやクラウドのメタデータサービスに到達する攻撃。ブロックリストがdnsリバインディングやリダイレクトで破られる理由と、imdsv2のput+トークン方式・既定ホップリミット1による防御を解説。" data-terms="SSRF / IMDSv2 / 許可リスト（allowlist） / DNSリバインディング / ホップリミット">
         <h3><a href="2026-09-23.html">画像の URL を1つ受け取っただけなのに、なぜそれがクラウドの認証情報を盗む入口になるのか？</a></h3>

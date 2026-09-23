@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-09-23T08:38:31+09:00</updated>
+  <updated>2026-09-24T08:48:55+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>同じ ALTER TABLE のはずなのに、なぜ一瞬で終わる時と本番を止める時があるのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-09-24.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-09-24.html</id>
+    <updated>2026-09-24T08:48:55+09:00</updated>
+    <summary>ALTER TABLEはPostgreSQLで最も強いACCESS EXCLUSIVEロックを取ることが多く単純なSELECTとも共存できない。列追加はPG11以降のfast defaultで一瞬だが、既存列へのNOT NULL付与は全行スキャンを伴うためNOT VALID→VALIDATE→SET NOT NULLの3段階で軽いロックに逃がす手法を解説。</summary>
+  </entry>
   <entry>
     <title>画像の URL を1つ受け取っただけなのに、なぜそれがクラウドの認証情報を盗む入口になるのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-09-23.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-09-11.html</id>
     <updated>2026-09-11T08:19:46+09:00</updated>
     <summary>hash(key)%台数では台数が1つ変わるだけで大半のキーの担当が入れ替わるが、コンシステントハッシングはリング上でキーとサーバーを同じ空間に置き移動するキーを一部に抑える。仮想ノードによる偏りの解消と、Redis Clusterのハッシュスロット方式との違いを解説。</summary>
-  </entry>
-  <entry>
-    <title>一覧画面をちょっと表示しただけなのに、なぜ DB へのクエリが何十回も飛ぶのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-09-10.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-09-10.html</id>
-    <updated>2026-09-10T08:23:48+09:00</updated>
-    <summary>関連レコードをループの中で参照すると1件ごとに別のSELECTが飛ぶN+1問題は、Active Recordの遅延ロード設計に起因する。includes/preload/eager_loadの挙動差、strict_loadingによる検知、GraphQLのDataLoaderバッチ化まで解説。</summary>
   </entry>
 </feed>

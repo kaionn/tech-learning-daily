@@ -1,5 +1,22 @@
 [
   {
+    "file": "2026-09-24.html",
+    "date": "2026-09-24",
+    "title": "同じ ALTER TABLE のはずなのに、なぜ一瞬で終わる時と本番を止める時があるのか？",
+    "summary": "ALTER TABLEはPostgreSQLで最も強いACCESS EXCLUSIVEロックを取ることが多く単純なSELECTとも共存できない。列追加はPostgreSQL 11以降のfast defaultで一瞬だが、既存列へのNOT NULL付与は全行スキャンを伴うため、NOT VALID→VALIDATE CONSTRAINT→SET NOT NULLの3段階に分けて軽いロックへ逃がす手法を解説。",
+    "category": "db",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": [
+      "ACCESS EXCLUSIVEロック",
+      "SHARE UPDATE EXCLUSIVEロック",
+      "fast default",
+      "NOT VALID制約",
+      "VALIDATE CONSTRAINT",
+      "ALGORITHM=INSTANT"
+    ]
+  },
+  {
     "file": "2026-09-23.html",
     "date": "2026-09-23",
     "title": "画像の URL を1つ受け取っただけなのに、なぜそれがクラウドの認証情報を盗む入口になるのか？",
