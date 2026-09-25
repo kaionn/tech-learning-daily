@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-09-24T08:48:55+09:00</updated>
+  <updated>2026-09-25T08:58:48+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>サーバーがすでに HTML を作ったのに、なぜブラウザはもう一度同じコンポーネントを実行するのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-09-25.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-09-25.html</id>
+    <updated>2026-09-25T08:58:48+09:00</updated>
+    <summary>SSRはHTMLという構造だけを送るためクリックしても反応せず、ハイドレーションはブラウザで同じコンポーネントを実行してサーバー出力と照合しイベントハンドラだけを取り付ける処理。出力が食い違うとその箇所以下のHTMLが丸ごと作り直される仕組みを解説。</summary>
+  </entry>
   <entry>
     <title>同じ ALTER TABLE のはずなのに、なぜ一瞬で終わる時と本番を止める時があるのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-09-24.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-09-12.html</id>
     <updated>2026-09-12T08:21:45+09:00</updated>
     <summary>configMapKeyRefで注入した環境変数はPod起動時に一度だけ解決され更新は反映されず、ボリュームマウントも即座ではなくsubPathは対象外。SecretはBase64エンコードにすぎず既定では暗号化されないことも解説。</summary>
-  </entry>
-  <entry>
-    <title>サーバーを1台足しただけなのに、なぜキャッシュのヒット率が丸ごと落ちるのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-09-11.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-09-11.html</id>
-    <updated>2026-09-11T08:19:46+09:00</updated>
-    <summary>hash(key)%台数では台数が1つ変わるだけで大半のキーの担当が入れ替わるが、コンシステントハッシングはリング上でキーとサーバーを同じ空間に置き移動するキーを一部に抑える。仮想ノードによる偏りの解消と、Redis Clusterのハッシュスロット方式との違いを解説。</summary>
   </entry>
 </feed>

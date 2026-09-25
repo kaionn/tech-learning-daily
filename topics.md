@@ -6,6 +6,7 @@
 
 ## 消化済み
 
+- 2026-09-25 SSR とハイドレーション(サーバーで生成したHTMLとブラウザでのコンポーネント再実行の関係、ハイドレーションミスマッチが起きる原因と挙動)（自動選定）
 - 2026-09-24 PostgreSQL の ALTER TABLE のロック挙動(ACCESS EXCLUSIVE と SHARE UPDATE EXCLUSIVE の違い、NOT NULL 制約を安全に付与する NOT VALID → VALIDATE CONSTRAINT の手順)（自動選定）
 - 2026-09-23 SSRF（Server-Side Request Forgery）の仕組みとクラウドのメタデータサービス経由の認証情報窃取、許可リスト方式による防御（自動選定）
 - 2026-09-22 Reactの仮想DOMとreconciliation（key属性の役割、diffingアルゴリズム）（自動選定）
