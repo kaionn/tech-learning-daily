@@ -1,5 +1,21 @@
 [
   {
+    "file": "2026-09-26.html",
+    "date": "2026-09-26",
+    "title": "LLM は文章しか生成できないはずなのに、なぜ Claude Code は実際にコマンドを実行できるのか？",
+    "summary": "LLMは関数を直接実行できず、input_schema(JSON Schema)に沿ったtool_useブロックを生成して意思表示するだけで、実行は呼び出し元アプリの仕事。制約付きデコーディングによるJSON構造の保証と、tool_use→実行→tool_resultの往復ループを解説。",
+    "category": "ai",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": [
+      "tool use(Function Calling)",
+      "input_schema(JSON Schema)",
+      "tool_choice",
+      "tool_use ブロック / tool_result",
+      "制約付きデコーディング(constrained decoding)"
+    ]
+  },
+  {
     "file": "2026-09-25.html",
     "date": "2026-09-25",
     "title": "サーバーがすでに HTML を作ったのに、なぜブラウザはもう一度同じコンポーネントを実行するのか？",

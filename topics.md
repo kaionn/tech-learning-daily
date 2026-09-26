@@ -6,6 +6,7 @@
 
 ## 消化済み
 
+- 2026-09-26 LLM の tool use(Function Calling)の仕組み(モデルはツールを直接実行できず構造化された呼び出し意思を生成するだけで、実行はアプリ側が担う往復構造、制約付きデコーディングによるJSON妥当性の保証)（自動選定）
 - 2026-09-25 SSR とハイドレーション(サーバーで生成したHTMLとブラウザでのコンポーネント再実行の関係、ハイドレーションミスマッチが起きる原因と挙動)（自動選定）
 - 2026-09-24 PostgreSQL の ALTER TABLE のロック挙動(ACCESS EXCLUSIVE と SHARE UPDATE EXCLUSIVE の違い、NOT NULL 制約を安全に付与する NOT VALID → VALIDATE CONSTRAINT の手順)（自動選定）
 - 2026-09-23 SSRF（Server-Side Request Forgery）の仕組みとクラウドのメタデータサービス経由の認証情報窃取、許可リスト方式による防御（自動選定）

@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-09-25T08:58:48+09:00</updated>
+  <updated>2026-09-26T08:59:51+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>LLM は文章しか生成できないはずなのに、なぜ Claude Code は実際にコマンドを実行できるのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-09-26.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-09-26.html</id>
+    <updated>2026-09-26T08:59:51+09:00</updated>
+    <summary>LLMは関数を直接実行できず、input_schema(JSON Schema)に沿ったtool_useブロックを生成して意思表示するだけで、実行は呼び出し元アプリの仕事。制約付きデコーディングによるJSON構造の保証と、tool_use→実行→tool_resultの往復ループを解説。</summary>
+  </entry>
   <entry>
     <title>サーバーがすでに HTML を作ったのに、なぜブラウザはもう一度同じコンポーネントを実行するのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-09-25.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-09-13.html</id>
     <updated>2026-09-13T08:08:59+09:00</updated>
     <summary>kubectl applyはkube-apiserver経由でetcdに望ましい状態を書き込むだけで、Pod作成はcontroller-manager、ノード選定はkube-scheduler、実際の起動はkubeletが担う。watchによるコントロールループの仕組みを解説。</summary>
-  </entry>
-  <entry>
-    <title>ConfigMap を書き換えたのに、なぜ Pod の環境変数は変わらないのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-09-12.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-09-12.html</id>
-    <updated>2026-09-12T08:21:45+09:00</updated>
-    <summary>configMapKeyRefで注入した環境変数はPod起動時に一度だけ解決され更新は反映されず、ボリュームマウントも即座ではなくsubPathは対象外。SecretはBase64エンコードにすぎず既定では暗号化されないことも解説。</summary>
   </entry>
 </feed>
