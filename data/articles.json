@@ -1,5 +1,22 @@
 [
   {
+    "file": "2026-09-27.html",
+    "date": "2026-09-27",
+    "title": "package.json だけで固定したはずなのに、なぜ他人の環境では違うバージョンが入るのか？",
+    "summary": "package.jsonのキャレット/チルダ範囲は特定バージョンを固定せず、実際に選ばれたバージョンはpackage-lock.jsonが依存解決の結果として記録する。lockfileをコミットする理由、npm installとnpm ciの違い、Go(go.sum)/Bundler(Gemfile.lock)での同様の設計を解説。",
+    "category": "dev",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": [
+      "SemVer(Semantic Versioning)",
+      "キャレット(^) / チルダ(~)",
+      "package-lock.json",
+      "integrity(Subresource Integrity)",
+      "npm ci",
+      "go.sum"
+    ]
+  },
+  {
     "file": "2026-09-26.html",
     "date": "2026-09-26",
     "title": "LLM は文章しか生成できないはずなのに、なぜ Claude Code は実際にコマンドを実行できるのか？",

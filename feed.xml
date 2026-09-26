@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-09-26T08:59:51+09:00</updated>
+  <updated>2026-09-27T08:43:26+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>package.json だけで固定したはずなのに、なぜ他人の環境では違うバージョンが入るのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-09-27.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-09-27.html</id>
+    <updated>2026-09-27T08:43:26+09:00</updated>
+    <summary>package.jsonのキャレット範囲は特定バージョンを固定せず、実際に選ばれるバージョンはpackage-lock.jsonが依存解決の結果として記録する。lockfileをコミットする理由と、npm installとnpm ciの違い、Go/Bundlerでの同様の設計を解説。</summary>
+  </entry>
   <entry>
     <title>LLM は文章しか生成できないはずなのに、なぜ Claude Code は実際にコマンドを実行できるのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-09-26.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-09-14.html</id>
     <updated>2026-09-14T08:15:21+09:00</updated>
     <summary>分散トレーシングは1つのリクエストが複数サービスをまたぐ間の処理単位spanをtraceとしてつなげる仕組み。W3C Trace Contextのtraceparentヘッダーによるtrace-id/parent-id伝播と、head-based/tail-basedサンプリングの違いを解説。</summary>
-  </entry>
-  <entry>
-    <title>kubectl apply を叩いてから、Pod が起動するまでに何が起きているのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-09-13.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-09-13.html</id>
-    <updated>2026-09-13T08:08:59+09:00</updated>
-    <summary>kubectl applyはkube-apiserver経由でetcdに望ましい状態を書き込むだけで、Pod作成はcontroller-manager、ノード選定はkube-scheduler、実際の起動はkubeletが担う。watchによるコントロールループの仕組みを解説。</summary>
   </entry>
 </feed>
