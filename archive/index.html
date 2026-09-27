@@ -31,7 +31,7 @@
         <span class="row-label">カテゴリ</span>
         <button class="chip on" data-cat="">すべて</button>
         <button class="chip" data-cat="container">Container <span class="chip-count">12</span></button>
-        <button class="chip" data-cat="network">Network <span class="chip-count">9</span></button>
+        <button class="chip" data-cat="network">Network <span class="chip-count">10</span></button>
         <button class="chip" data-cat="db">DB <span class="chip-count">8</span></button>
         <button class="chip" data-cat="security">Security <span class="chip-count">8</span></button>
         <button class="chip" data-cat="arch">Arch <span class="chip-count">7</span></button>
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-09">
       <div class="section-title">2026 年 9 月 <span class="count"></span></div>
+      <div class="card" data-cat="network" data-diff="基礎"
+           data-search="http は 1 往復で終わるはずなのに、なぜ websocket は繋がりっぱなしでいられるのか？ websocketは通常のhttpリクエストとしてupgradeヘッダーを送り、101 switching protocolsで同じtcp接続をそのまま双方向通信に切り替える。フレームとマスキングの仕組み、ロードバランサのアイドルタイムアウトによる切断、複数台構成での接続共有問題を解説。" data-terms="Upgrade ヘッダー / 101 Switching Protocols / Sec-WebSocket-Key / Sec-WebSocket-Accept / フレーム(frame) / マスキング / ping/pong フレーム / アイドルタイムアウト">
+        <h3><a href="2026-09-28.html">HTTP は 1 往復で終わるはずなのに、なぜ WebSocket は繋がりっぱなしでいられるのか？</a></h3>
+        <div class="summary">WebSocketは通常のHTTPリクエストとしてUpgradeヘッダーを送り、101 Switching Protocolsで同じTCP接続をそのまま双方向通信に切り替える。フレームとマスキングの仕組み、ロードバランサのアイドルタイムアウトによる切断、複数台構成での接続共有問題を解説。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-network">Network</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-09-28</span></div>
+      </div>
       <div class="card" data-cat="dev" data-diff="基礎"
            data-search="package.json だけで固定したはずなのに、なぜ他人の環境では違うバージョンが入るのか？ package.jsonのキャレット/チルダ範囲は特定バージョンを固定せず、実際に選ばれたバージョンはpackage-lock.jsonが依存解決の結果として記録する。lockfileをコミットする理由、npm installとnpm ciの違い、go(go.sum)/bundler(gemfile.lock)での同様の設計を解説。" data-terms="SemVer(Semantic Versioning) / キャレット(^) / チルダ(~) / package-lock.json / integrity(Subresource Integrity) / npm ci / go.sum">
         <h3><a href="2026-09-27.html">package.json だけで固定したはずなのに、なぜ他人の環境では違うバージョンが入るのか？</a></h3>

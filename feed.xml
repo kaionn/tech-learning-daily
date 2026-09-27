@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-09-27T08:43:26+09:00</updated>
+  <updated>2026-09-28T08:53:02+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>HTTP は 1 往復で終わるはずなのに、なぜ WebSocket は繋がりっぱなしでいられるのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-09-28.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-09-28.html</id>
+    <updated>2026-09-28T08:53:02+09:00</updated>
+    <summary>WebSocketは通常のHTTPリクエストとしてUpgradeヘッダーを送り、101 Switching Protocolsで同じTCP接続の中身を双方向通信に切り替える。フレームとマスキングの仕組み、ロードバランサのアイドルタイムアウトでの切断、複数台構成での接続共有問題を解説。</summary>
+  </entry>
   <entry>
     <title>package.json だけで固定したはずなのに、なぜ他人の環境では違うバージョンが入るのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-09-27.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-09-15.html</id>
     <updated>2026-09-15T09:01:11+09:00</updated>
     <summary>livenessProbe失敗はkubeletによるコンテナ再起動、readinessProbe失敗はEndpointSliceからの除外(トラフィック遮断のみ)という違いと、startupProbeがliveness誤爆を防ぐ仕組み、minReadySecondsとの関係を解説。</summary>
-  </entry>
-  <entry>
-    <title>フロントとバックエンドのログはバラバラに出るのに、なぜ1つのリクエストとして追跡できるのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-09-14.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-09-14.html</id>
-    <updated>2026-09-14T08:15:21+09:00</updated>
-    <summary>分散トレーシングは1つのリクエストが複数サービスをまたぐ間の処理単位spanをtraceとしてつなげる仕組み。W3C Trace Contextのtraceparentヘッダーによるtrace-id/parent-id伝播と、head-based/tail-basedサンプリングの違いを解説。</summary>
   </entry>
 </feed>
