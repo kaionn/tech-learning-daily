@@ -1,5 +1,21 @@
 [
   {
+    "file": "2026-09-29.html",
+    "date": "2026-09-29",
+    "title": "サーバーはまだ書き終えていないのに、なぜ ChatGPT の返信は一文字ずつ流れてくるのか？",
+    "summary": "HTTP/1.1 の Transfer-Encoding: chunked は長さ不明のまま小分け送信する仕組みだが、HTTP/2 はこのヘッダーを禁止し DATA フレームで同じことをネイティブに行う。LLM API はその上に SSE で意味のある区切りを重ね、プロキシのバッファリングが効果を打ち消す落とし穴を解説。",
+    "category": "network",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": [
+      "Transfer-Encoding: chunked",
+      "DATA フレーム",
+      "Server-Sent Events(SSE)",
+      "content_block_delta",
+      "レスポンスバッファリング"
+    ]
+  },
+  {
     "file": "2026-09-28.html",
     "date": "2026-09-28",
     "title": "HTTP は 1 往復で終わるはずなのに、なぜ WebSocket は繋がりっぱなしでいられるのか？",

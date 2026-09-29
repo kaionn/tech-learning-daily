@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-09-28T08:53:02+09:00</updated>
+  <updated>2026-09-29T10:04:19+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>サーバーはまだ書き終えていないのに、なぜ ChatGPT の返信は一文字ずつ流れてくるのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-09-29.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-09-29.html</id>
+    <updated>2026-09-29T10:04:19+09:00</updated>
+    <summary>HTTP/1.1のTransfer-Encoding: chunkedは長さ不明のまま小分け送信する仕組みだが、HTTP/2はこのヘッダーを禁止しDATAフレームで同じことをネイティブに行う。LLM APIはその上にSSEで意味のある区切りを重ね、プロキシのバッファリングが効果を打ち消す落とし穴を解説。</summary>
+  </entry>
   <entry>
     <title>HTTP は 1 往復で終わるはずなのに、なぜ WebSocket は繋がりっぱなしでいられるのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-09-28.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-09-16.html</id>
     <updated>2026-09-16T08:36:38+09:00</updated>
     <summary>パブリック/プライベートサブネットの違いはルートテーブルに0.0.0.0/0→インターネットゲートウェイの経路があるかだけで決まる。NATゲートウェイのアドレス変換の仕組みと、サブネットがAZをまたげない制約を解説。</summary>
-  </entry>
-  <entry>
-    <title>Pod は Running なのに、なぜ Service からの応答が来たり来なかったりするのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-09-15.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-09-15.html</id>
-    <updated>2026-09-15T09:01:11+09:00</updated>
-    <summary>livenessProbe失敗はkubeletによるコンテナ再起動、readinessProbe失敗はEndpointSliceからの除外(トラフィック遮断のみ)という違いと、startupProbeがliveness誤爆を防ぐ仕組み、minReadySecondsとの関係を解説。</summary>
   </entry>
 </feed>

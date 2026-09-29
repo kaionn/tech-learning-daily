@@ -31,7 +31,7 @@
         <span class="row-label">カテゴリ</span>
         <button class="chip on" data-cat="">すべて</button>
         <button class="chip" data-cat="container">Container <span class="chip-count">12</span></button>
-        <button class="chip" data-cat="network">Network <span class="chip-count">10</span></button>
+        <button class="chip" data-cat="network">Network <span class="chip-count">11</span></button>
         <button class="chip" data-cat="db">DB <span class="chip-count">8</span></button>
         <button class="chip" data-cat="security">Security <span class="chip-count">8</span></button>
         <button class="chip" data-cat="arch">Arch <span class="chip-count">7</span></button>
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-09">
       <div class="section-title">2026 年 9 月 <span class="count"></span></div>
+      <div class="card" data-cat="network" data-diff="基礎"
+           data-search="サーバーはまだ書き終えていないのに、なぜ chatgpt の返信は一文字ずつ流れてくるのか？ http/1.1 の transfer-encoding: chunked は長さ不明のまま小分け送信する仕組みだが、http/2 はこのヘッダーを禁止し data フレームで同じことをネイティブに行う。llm api はその上に sse で意味のある区切りを重ね、プロキシのバッファリングが効果を打ち消す落とし穴を解説。" data-terms="Transfer-Encoding: chunked / DATA フレーム / Server-Sent Events(SSE) / content_block_delta / レスポンスバッファリング">
+        <h3><a href="2026-09-29.html">サーバーはまだ書き終えていないのに、なぜ ChatGPT の返信は一文字ずつ流れてくるのか？</a></h3>
+        <div class="summary">HTTP/1.1 の Transfer-Encoding: chunked は長さ不明のまま小分け送信する仕組みだが、HTTP/2 はこのヘッダーを禁止し DATA フレームで同じことをネイティブに行う。LLM API はその上に SSE で意味のある区切りを重ね、プロキシのバッファリングが効果を打ち消す落とし穴を解説。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-network">Network</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-09-29</span></div>
+      </div>
       <div class="card" data-cat="network" data-diff="基礎"
            data-search="http は 1 往復で終わるはずなのに、なぜ websocket は繋がりっぱなしでいられるのか？ websocketは通常のhttpリクエストとしてupgradeヘッダーを送り、101 switching protocolsで同じtcp接続をそのまま双方向通信に切り替える。フレームとマスキングの仕組み、ロードバランサのアイドルタイムアウトによる切断、複数台構成での接続共有問題を解説。" data-terms="Upgrade ヘッダー / 101 Switching Protocols / Sec-WebSocket-Key / Sec-WebSocket-Accept / フレーム(frame) / マスキング / ping/pong フレーム / アイドルタイムアウト">
         <h3><a href="2026-09-28.html">HTTP は 1 往復で終わるはずなのに、なぜ WebSocket は繋がりっぱなしでいられるのか？</a></h3>
