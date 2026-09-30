@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-09-29T10:04:19+09:00</updated>
+  <updated>2026-09-30T09:39:53+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>1つのDBならロールバックで済んだはずなのに、複数サービスをまたぐ更新はなぜそう簡単に戻せないのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-09-30.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-09-30.html</id>
+    <updated>2026-09-30T09:39:53+09:00</updated>
+    <summary>単一DBのCOMMITは1回のログ書き込みで守られるが、サービスをまたぐと同じ発想は使えない。2PCはprepareで全員の合意を取るが、コーディネータ障害でロックを持ったまま止まるブロッキング問題があり、Sagaは確定を待たず進めて失敗時は補償トランザクションで打ち消す代わりに分離性を失う。</summary>
+  </entry>
   <entry>
     <title>サーバーはまだ書き終えていないのに、なぜ ChatGPT の返信は一文字ずつ流れてくるのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-09-29.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-09-17.html</id>
     <updated>2026-09-17T08:42:03+09:00</updated>
     <summary>パーティショニングは1台のDB内でのテーブル分割、シャーディングは複数サーバーへの分散という違いを解説。partition pruningの仕組み、shard keyを跨ぐJOIN・トランザクションの壁、リシャーディングの難しさを扱う。</summary>
-  </entry>
-  <entry>
-    <title>なぜ Web サーバーは「パブリックサブネット」に置き、DB は「プライベートサブネット」に置くのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-09-16.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-09-16.html</id>
-    <updated>2026-09-16T08:36:38+09:00</updated>
-    <summary>パブリック/プライベートサブネットの違いはルートテーブルに0.0.0.0/0→インターネットゲートウェイの経路があるかだけで決まる。NATゲートウェイのアドレス変換の仕組みと、サブネットがAZをまたげない制約を解説。</summary>
   </entry>
 </feed>

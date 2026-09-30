@@ -6,6 +6,7 @@
 
 ## 消化済み
 
+- 2026-09-30 分散トランザクション（2PCのブロッキング問題とSagaパターンの補償トランザクション・分離性の欠如）（自動選定）
 - 2026-09-29 HTTP のストリーミングレスポンス(chunked transfer encoding と Server-Sent Events、LLM API の逐次表示の仕組み)（自動選定）
 - 2026-09-28 WebSocket の仕組み(HTTPからのUpgradeハンドシェイク、101 Switching Protocols、フレームとマスキング、ロードバランサのアイドルタイムアウトと複数台構成での接続共有)（自動選定）
 - 2026-09-27 npm/yarn の package-lock.json はなぜ必要か（package.json の SemVer 範囲指定と、依存解決結果を固定する lockfile の役割分担、npm install/npm ci の違い）（自動選定）

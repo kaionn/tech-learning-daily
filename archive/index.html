@@ -32,9 +32,9 @@
         <button class="chip on" data-cat="">すべて</button>
         <button class="chip" data-cat="container">Container <span class="chip-count">12</span></button>
         <button class="chip" data-cat="network">Network <span class="chip-count">11</span></button>
+        <button class="chip" data-cat="arch">Arch <span class="chip-count">8</span></button>
         <button class="chip" data-cat="db">DB <span class="chip-count">8</span></button>
         <button class="chip" data-cat="security">Security <span class="chip-count">8</span></button>
-        <button class="chip" data-cat="arch">Arch <span class="chip-count">7</span></button>
         <button class="chip" data-cat="ai">AI <span class="chip-count">6</span></button>
         <button class="chip" data-cat="dev">Dev <span class="chip-count">4</span></button>
         <button class="chip" data-cat="frontend">Frontend <span class="chip-count">4</span></button>
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-09">
       <div class="section-title">2026 年 9 月 <span class="count"></span></div>
+      <div class="card" data-cat="arch" data-diff="基礎"
+           data-search="1つのdbならロールバックで済んだはずなのに、複数サービスをまたぐ更新はなぜそう簡単に戻せないのか？ 単一dbのコミットは1本のログで守られるが、サービスをまたぐと使えない。2pcはprepareで合意を取るがコーディネータ障害でロックを保持し続けるブロッキング問題があり、sagaは確定を待たず進めて失敗時は補償トランザクションで打ち消す代わりに分離性を失う。" data-terms="分散トランザクション / 2PC(Two-Phase Commit) / ブロッキング問題 / 補償トランザクション / Sagaパターン / Outboxパターン">
+        <h3><a href="2026-09-30.html">1つのDBならロールバックで済んだはずなのに、複数サービスをまたぐ更新はなぜそう簡単に戻せないのか？</a></h3>
+        <div class="summary">単一DBのコミットは1本のログで守られるが、サービスをまたぐと使えない。2PCはprepareで合意を取るがコーディネータ障害でロックを保持し続けるブロッキング問題があり、Sagaは確定を待たず進めて失敗時は補償トランザクションで打ち消す代わりに分離性を失う。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-arch">Arch</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-09-30</span></div>
+      </div>
       <div class="card" data-cat="network" data-diff="基礎"
            data-search="サーバーはまだ書き終えていないのに、なぜ chatgpt の返信は一文字ずつ流れてくるのか？ http/1.1 の transfer-encoding: chunked は長さ不明のまま小分け送信する仕組みだが、http/2 はこのヘッダーを禁止し data フレームで同じことをネイティブに行う。llm api はその上に sse で意味のある区切りを重ね、プロキシのバッファリングが効果を打ち消す落とし穴を解説。" data-terms="Transfer-Encoding: chunked / DATA フレーム / Server-Sent Events(SSE) / content_block_delta / レスポンスバッファリング">
         <h3><a href="2026-09-29.html">サーバーはまだ書き終えていないのに、なぜ ChatGPT の返信は一文字ずつ流れてくるのか？</a></h3>
