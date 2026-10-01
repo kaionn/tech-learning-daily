@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-09-30T09:39:53+09:00</updated>
+  <updated>2026-10-01T09:39:10+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>同じ API 呼び出しなのに、なぜ gRPC は REST よりずっと速いと言われるのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-10-01.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-10-01.html</id>
+    <updated>2026-10-01T09:39:10+09:00</updated>
+    <summary>gRPCが標準で使うprotobufはフィールド名を送らずフィールド番号だけを送るバイナリ形式で、.protoの共有なしにはデコードできない。HTTP/2上でのmultiplexingとトレーラーによるステータス伝達、4種類のストリーミングRPC、フィールド番号の不変性とdeadlineの既定動作を解説。</summary>
+  </entry>
   <entry>
     <title>1つのDBならロールバックで済んだはずなのに、複数サービスをまたぐ更新はなぜそう簡単に戻せないのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-09-30.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-09-18.html</id>
     <updated>2026-09-18T08:35:47+09:00</updated>
     <summary>IAMロールは信頼ポリシー(誰が借りるか)と許可ポリシー(何ができるか)の二階建てで、STSのAssumeRoleが既定1時間・最大12時間の一時クレデンシャルを発行する仕組み。EC2でのIMDS経由の自動更新と、ロール剥奪が最大1時間遅延する挙動を解説。</summary>
-  </entry>
-  <entry>
-    <title>同じ「テーブルを割る」なのに、パーティショニングとシャーディングは何が違うのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-09-17.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-09-17.html</id>
-    <updated>2026-09-17T08:42:03+09:00</updated>
-    <summary>パーティショニングは1台のDB内でのテーブル分割、シャーディングは複数サーバーへの分散という違いを解説。partition pruningの仕組み、shard keyを跨ぐJOIN・トランザクションの壁、リシャーディングの難しさを扱う。</summary>
   </entry>
 </feed>

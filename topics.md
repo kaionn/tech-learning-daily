@@ -6,6 +6,7 @@
 
 ## 消化済み
 
+- 2026-10-01 gRPCとProtocol Buffers（protobufのバイナリwire formatとフィールド番号によるスキーマ依存、HTTP/2上でのストリーミングRPC4種とトレーラーによるステータス伝達、RESTとの速度差の正体）（自動選定）
 - 2026-09-30 分散トランザクション（2PCのブロッキング問題とSagaパターンの補償トランザクション・分離性の欠如）（自動選定）
 - 2026-09-29 HTTP のストリーミングレスポンス(chunked transfer encoding と Server-Sent Events、LLM API の逐次表示の仕組み)（自動選定）
 - 2026-09-28 WebSocket の仕組み(HTTPからのUpgradeハンドシェイク、101 Switching Protocols、フレームとマスキング、ロードバランサのアイドルタイムアウトと複数台構成での接続共有)（自動選定）

@@ -1,5 +1,21 @@
 [
   {
+    "file": "2026-10-01.html",
+    "date": "2026-10-01",
+    "title": "同じ API 呼び出しなのに、なぜ gRPC は REST よりずっと速いと言われるのか？",
+    "summary": "gRPCが標準で使うprotobufはフィールド名を送らずフィールド番号だけを送るバイナリ形式で、.protoの共有なしにはデコードできない。HTTP/2上でのmultiplexingとトレーラーによるステータス伝達、4種類のストリーミングRPC、フィールド番号の不変性とdeadlineの既定動作を解説。",
+    "category": "network",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": [
+      "Protocol Buffers(protobuf)",
+      ".proto / protoc",
+      "ワイヤーフォーマット(wire format)",
+      "トレーラー(trailing metadata)",
+      "gRPC-Web"
+    ]
+  },
+  {
     "file": "2026-09-30.html",
     "date": "2026-09-30",
     "title": "1つのDBならロールバックで済んだはずなのに、複数サービスをまたぐ更新はなぜそう簡単に戻せないのか？",
