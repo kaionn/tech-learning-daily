@@ -1,5 +1,22 @@
 [
   {
+    "file": "2026-10-02.html",
+    "date": "2026-10-02",
+    "title": "Pod は使い捨てなのに、DB のデータはなぜ消えないのか？",
+    "summary": "Podのファイルシステムは既定でPodと一緒に消える一時領域だが、PersistentVolume/PersistentVolumeClaimで初めてPodのライフサイクルから切り離せる。StorageClassによる動的プロビジョニング、reclaimPolicyのDelete/Retainの非対称性、StatefulSetがPVCを自動削除しない設計を解説。",
+    "category": "container",
+    "difficulty": "基礎",
+    "readTime": 8,
+    "terms": [
+      "PersistentVolume(PV)",
+      "PersistentVolumeClaim(PVC)",
+      "StorageClass",
+      "reclaimPolicy",
+      "volumeBindingMode",
+      "StatefulSet / volumeClaimTemplates"
+    ]
+  },
+  {
     "file": "2026-10-01.html",
     "date": "2026-10-01",
     "title": "同じ API 呼び出しなのに、なぜ gRPC は REST よりずっと速いと言われるのか？",

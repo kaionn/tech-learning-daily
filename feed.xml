@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-10-01T09:39:10+09:00</updated>
+  <updated>2026-10-02T09:55:04+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>Pod は使い捨てなのに、DB のデータはなぜ消えないのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-10-02.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-10-02.html</id>
+    <updated>2026-10-02T09:55:04+09:00</updated>
+    <summary>Pod のファイルシステムは既定で Pod と一緒に消える一時領域で、PersistentVolume/PersistentVolumeClaimで初めてPodのライフサイクルから切り離せる。StorageClassによる動的プロビジョニング、reclaimPolicyのDelete/Retainの非対称性、StatefulSetがPVCを自動削除しない設計を解説。</summary>
+  </entry>
   <entry>
     <title>同じ API 呼び出しなのに、なぜ gRPC は REST よりずっと速いと言われるのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-10-01.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-09-19.html</id>
     <updated>2026-09-19T08:25:30+09:00</updated>
     <summary>Kafkaのパーティションはグループ内で同時に1コンシューマーにしか割り当てられず並列度の天井になる。パーティション数を減らせない設計、Eager/Cooperativeリバランスの違い、オートコミットの既定5秒間隔が重複処理を生む仕組みを解説。</summary>
-  </entry>
-  <entry>
-    <title>EC2 はパスワードを一度も入力していないのに、なぜ S3 にアクセスできるのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-09-18.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-09-18.html</id>
-    <updated>2026-09-18T08:35:47+09:00</updated>
-    <summary>IAMロールは信頼ポリシー(誰が借りるか)と許可ポリシー(何ができるか)の二階建てで、STSのAssumeRoleが既定1時間・最大12時間の一時クレデンシャルを発行する仕組み。EC2でのIMDS経由の自動更新と、ロール剥奪が最大1時間遅延する挙動を解説。</summary>
   </entry>
 </feed>
