@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-10-03T09:39:29+09:00</updated>
+  <updated>2026-10-04T08:55:55+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>正しい UPDATE を書いただけなのに、なぜ DB はトランザクションを片方だけ殺すのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-10-04.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-10-04.html</id>
+    <updated>2026-10-04T08:55:55+09:00</updated>
+    <summary>デッドロックは複数トランザクションが互いのロックを待ち合う循環待ちで、DBは事前に防がず待ちグラフで検出して片方を中止する。PostgreSQLのdeadlock_timeout、ロック待ちタイムアウトとの違い、ロック順序の統一と再実行による対策を解説。</summary>
+  </entry>
   <entry>
     <title>etcd は過半数を割ると書き込みが止まるのに、なぜ DynamoDB は止まらないのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-10-03.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-09-21.html</id>
     <updated>2026-09-21T08:20:30+09:00</updated>
     <summary>HTTPキャッシュはサーバーに聞かずに使える鮮度期間と、聞いてから使う検証の2層構造。no-cacheは保存禁止ではなく毎回検証を強制する指示で、ETag/If-None-Matchによる検証が一致すると304 Not Modifiedで本文送信を省略する仕組みを解説。</summary>
-  </entry>
-  <entry>
-    <title>負荷が落ち着いたのに、なぜ HPA はしばらく Pod を減らしてくれないのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-09-20.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-09-20.html</id>
-    <updated>2026-09-20T08:16:10+09:00</updated>
-    <summary>HPAは既定15秒間隔の制御ループでdesiredReplicas=ceil(現在数×実測/目標)を計算するだけの仕組み。既定10%のトレランスでフラッピングを防ぎ、scaleUpは0秒・scaleDownは既定300秒のstabilizationWindowSecondsという非対称設計で急な縮小を避ける理由を解説。</summary>
   </entry>
 </feed>

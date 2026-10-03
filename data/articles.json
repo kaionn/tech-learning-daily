@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-10-04.html",
+    "date": "2026-10-04",
+    "title": "正しい UPDATE を書いただけなのに、なぜ DB はトランザクションを片方だけ殺すのか？",
+    "summary": "2つのトランザクションが互いのロックを待ち合うデッドロックを、DBが待ちグラフで検出して片方を中止する仕組みと、ロック順序の統一・再実行による対策。",
+    "category": "db",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": ["行ロック", "デッドロック", "待ちグラフ（wait-for graph）", "deadlock_timeout", "lock_timeout / innodb_lock_wait_timeout"]
+  },
+  {
     "file": "2026-10-03.html",
     "date": "2026-10-03",
     "title": "etcd は過半数を割ると書き込みが止まるのに、なぜ DynamoDB は止まらないのか？",
