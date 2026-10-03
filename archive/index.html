@@ -32,7 +32,7 @@
         <button class="chip on" data-cat="">すべて</button>
         <button class="chip" data-cat="container">Container <span class="chip-count">13</span></button>
         <button class="chip" data-cat="network">Network <span class="chip-count">12</span></button>
-        <button class="chip" data-cat="arch">Arch <span class="chip-count">8</span></button>
+        <button class="chip" data-cat="arch">Arch <span class="chip-count">9</span></button>
         <button class="chip" data-cat="db">DB <span class="chip-count">8</span></button>
         <button class="chip" data-cat="security">Security <span class="chip-count">8</span></button>
         <button class="chip" data-cat="ai">AI <span class="chip-count">6</span></button>
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-10">
       <div class="section-title">2026 年 10 月 <span class="count"></span></div>
+      <div class="card" data-cat="arch" data-diff="応用"
+           data-search="etcd は過半数を割ると書き込みが止まるのに、なぜ dynamodb は止まらないのか？ cap定理が強制するのはネットワーク分断時だけの一貫性か可用性かの二択で、etcdはraftのクォーラムで少数派の書き込みを止めcpを選び、dynamodb/cassandraは分断時も書き込みを受け付けapを選ぶ。pacelcによる平常時のレイテンシとの別トレードオフも解説。" data-terms="CAP定理 / クォーラム（quorum） / 結果整合性（eventual consistency） / 強整合性（strong consistency） / PACELC">
+        <h3><a href="2026-10-03.html">etcd は過半数を割ると書き込みが止まるのに、なぜ DynamoDB は止まらないのか？</a></h3>
+        <div class="summary">CAP定理が強制するのはネットワーク分断時だけの一貫性か可用性かの二択で、etcdはRaftのクォーラムで少数派の書き込みを止めCPを選び、DynamoDB/Cassandraは分断時も書き込みを受け付けAPを選ぶ。PACELCによる平常時のレイテンシとの別トレードオフも解説。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-arch">Arch</span><span>🌳 応用</span><span>⏱ 約 8 分</span><span>2026-10-03</span></div>
+      </div>
       <div class="card" data-cat="container" data-diff="基礎"
            data-search="pod は使い捨てなのに、db のデータはなぜ消えないのか？ podのファイルシステムは既定でpodと一緒に消える一時領域だが、persistentvolume/persistentvolumeclaimで初めてpodのライフサイクルから切り離せる。storageclassによる動的プロビジョニング、reclaimpolicyのdelete/retainの非対称性、statefulsetがpvcを自動削除しない設計を解説。" data-terms="PersistentVolume(PV) / PersistentVolumeClaim(PVC) / StorageClass / reclaimPolicy / volumeBindingMode / StatefulSet / volumeClaimTemplates">
         <h3><a href="2026-10-02.html">Pod は使い捨てなのに、DB のデータはなぜ消えないのか？</a></h3>

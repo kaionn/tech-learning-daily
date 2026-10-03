@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-10-02T09:55:04+09:00</updated>
+  <updated>2026-10-03T09:39:29+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>etcd は過半数を割ると書き込みが止まるのに、なぜ DynamoDB は止まらないのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-10-03.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-10-03.html</id>
+    <updated>2026-10-03T09:39:29+09:00</updated>
+    <summary>CAP定理が強制するのはネットワーク分断時だけの一貫性か可用性かの二択で、etcdはRaftのクォーラムで少数派の書き込みを止めCPを選び、DynamoDB/Cassandraは分断時も書き込みを受け付けAPを選ぶ。PACELCによる平常時のレイテンシとの別トレードオフも解説。</summary>
+  </entry>
   <entry>
     <title>Pod は使い捨てなのに、DB のデータはなぜ消えないのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-10-02.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-09-20.html</id>
     <updated>2026-09-20T08:16:10+09:00</updated>
     <summary>HPAは既定15秒間隔の制御ループでdesiredReplicas=ceil(現在数×実測/目標)を計算するだけの仕組み。既定10%のトレランスでフラッピングを防ぎ、scaleUpは0秒・scaleDownは既定300秒のstabilizationWindowSecondsという非対称設計で急な縮小を避ける理由を解説。</summary>
-  </entry>
-  <entry>
-    <title>Kafka のコンシューマーを増やしたのに、なぜ処理速度は頭打ちになるのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-09-19.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-09-19.html</id>
-    <updated>2026-09-19T08:25:30+09:00</updated>
-    <summary>Kafkaのパーティションはグループ内で同時に1コンシューマーにしか割り当てられず並列度の天井になる。パーティション数を減らせない設計、Eager/Cooperativeリバランスの違い、オートコミットの既定5秒間隔が重複処理を生む仕組みを解説。</summary>
   </entry>
 </feed>

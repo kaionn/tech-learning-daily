@@ -1,5 +1,21 @@
 [
   {
+    "file": "2026-10-03.html",
+    "date": "2026-10-03",
+    "title": "etcd は過半数を割ると書き込みが止まるのに、なぜ DynamoDB は止まらないのか？",
+    "summary": "CAP定理が強制するのはネットワーク分断時だけの一貫性か可用性かの二択で、etcdはRaftのクォーラムで少数派の書き込みを止めCPを選び、DynamoDB/Cassandraは分断時も書き込みを受け付けAPを選ぶ。PACELCによる平常時のレイテンシとの別トレードオフも解説。",
+    "category": "arch",
+    "difficulty": "応用",
+    "readTime": 8,
+    "terms": [
+      "CAP定理",
+      "クォーラム（quorum）",
+      "結果整合性（eventual consistency）",
+      "強整合性（strong consistency）",
+      "PACELC"
+    ]
+  },
+  {
     "file": "2026-10-02.html",
     "date": "2026-10-02",
     "title": "Pod は使い捨てなのに、DB のデータはなぜ消えないのか？",

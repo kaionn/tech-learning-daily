@@ -6,6 +6,7 @@
 
 ## 消化済み
 
+- 2026-10-03 CAP定理（分散システムがネットワーク分断時に一貫性と可用性のどちらを諭すか、etcd/RaftのクォーラムとDynamoDB/Cassandraのtunable consistencyの対比、PACELCによる平常時のレイテンシとのトレードオフ拡張）（自動選定）
 - 2026-10-02 Kubernetes の PersistentVolume / PersistentVolumeClaim（Podのライフサイクルからストレージを切り離す仕組み、StorageClassによる動的プロビジョニング、reclaimPolicyのDelete/Retain、StatefulSetのvolumeClaimTemplates）（自動選定）
 - 2026-10-01 gRPCとProtocol Buffers（protobufのバイナリwire formatとフィールド番号によるスキーマ依存、HTTP/2上でのストリーミングRPC4種とトレーラーによるステータス伝達、RESTとの速度差の正体）（自動選定）
 - 2026-09-30 分散トランザクション（2PCのブロッキング問題とSagaパターンの補償トランザクション・分離性の欠如）（自動選定）
