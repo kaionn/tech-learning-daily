@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-10-05.html",
+    "date": "2026-10-05",
+    "title": "ファイルなんて開いていないのに、なぜ「Too many open files」でサーバーが落ちるのか？",
+    "summary": "ファイルを扱わないAPIサーバーでも、TCPソケットがファイルディスクリプタを消費してプロセスごとの上限に達すると「Too many open files」で新規接続を受け付けられなくなる。上限が1024に据え置かれる理由と、上げ方・fd漏れの見分け方を解説。",
+    "category": "infra",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": ["ファイルディスクリプタ（fd）", "RLIMIT_NOFILE", "EMFILE", "ENFILE", "select()"]
+  },
+  {
     "file": "2026-10-04.html",
     "date": "2026-10-04",
     "title": "正しい UPDATE を書いただけなのに、なぜ DB はトランザクションを片方だけ殺すのか？",

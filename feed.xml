@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-10-04T08:55:55+09:00</updated>
+  <updated>2026-10-05T09:02:03+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>ファイルなんて開いていないのに、なぜ「Too many open files」でサーバーが落ちるのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-10-05.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-10-05.html</id>
+    <updated>2026-10-05T09:02:03+09:00</updated>
+    <summary>TCPソケットもパイプもファイルディスクリプタとして数えられ、プロセスごとの上限RLIMIT_NOFILEに達するとEMFILEになる。systemdのソフト1024はselect()互換のため。上限の上げ方と、fd漏れの見分け方を解説。</summary>
+  </entry>
   <entry>
     <title>正しい UPDATE を書いただけなのに、なぜ DB はトランザクションを片方だけ殺すのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-10-04.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-09-22.html</id>
     <updated>2026-09-22T08:20:00+09:00</updated>
     <summary>Reactはstate変更のたびに軽量なJSオブジェクトである仮想DOMツリーを丸ごと生成し前回ツリーとdiffしてから差分だけ実DOMへ適用する。要素の同一性は位置で決まるためkeyが必須になる理由と、FiberによるスケジューリングやReact18のautomatic batchingを解説。</summary>
-  </entry>
-  <entry>
-    <title>レスポンスは 200 のはずなのに、なぜ通信量が 0 バイトになるのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-09-21.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-09-21.html</id>
-    <updated>2026-09-21T08:20:30+09:00</updated>
-    <summary>HTTPキャッシュはサーバーに聞かずに使える鮮度期間と、聞いてから使う検証の2層構造。no-cacheは保存禁止ではなく毎回検証を強制する指示で、ETag/If-None-Matchによる検証が一致すると304 Not Modifiedで本文送信を省略する仕組みを解説。</summary>
   </entry>
 </feed>
