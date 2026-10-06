@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-10-06.html",
+    "date": "2026-10-06",
+    "title": "接続はちゃんと閉じたのに、なぜ TIME_WAIT が溜まって新しい接続が張れなくなるのか？",
+    "summary": "先に接続を閉じた側がTIME_WAITで4つ組を60秒保持する理由と、同じ宛先への新規接続の繰り返しでエフェメラルポートが尽きる仕組み、keep-aliveとコネクションプールによる対策を解説。",
+    "category": "network",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": ["4 つ組（4-tuple）", "エフェメラルポート", "TIME_WAIT", "MSL", "keep-alive", "CLOSE_WAIT"]
+  },
+  {
     "file": "2026-10-05.html",
     "date": "2026-10-05",
     "title": "ファイルなんて開いていないのに、なぜ「Too many open files」でサーバーが落ちるのか？",

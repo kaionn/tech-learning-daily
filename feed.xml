@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-10-05T09:02:03+09:00</updated>
+  <updated>2026-10-06T10:49:38+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>接続はちゃんと閉じたのに、なぜ TIME_WAIT が溜まって新しい接続が張れなくなるのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-10-06.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-10-06.html</id>
+    <updated>2026-10-06T10:49:38+09:00</updated>
+    <summary>TCPで先に接続を閉じた側は遅延パケットと最後のACK再送に備えTIME_WAITで4つ組を60秒保持するため、同じ宛先へ毎回新規接続するとエフェメラルポートが尽きる。tcp_tw_reuseなどの設定と、keep-alive・コネクションプールによる本当の対策を解説。</summary>
+  </entry>
   <entry>
     <title>ファイルなんて開いていないのに、なぜ「Too many open files」でサーバーが落ちるのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-10-05.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-09-23.html</id>
     <updated>2026-09-23T08:38:31+09:00</updated>
     <summary>SSRFはユーザー指定URLをサーバーに取得させ内部ネットワークやクラウドのメタデータサービスに到達する攻撃。ブロックリストがDNSリバインディングやリダイレクトで破られる理由と、IMDSv2のPUT+トークン方式・既定ホップリミット1による防御を解説。</summary>
-  </entry>
-  <entry>
-    <title>setState しただけなのに、なぜ React は新しいツリーをまるごと作り直すのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-09-22.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-09-22.html</id>
-    <updated>2026-09-22T08:20:00+09:00</updated>
-    <summary>Reactはstate変更のたびに軽量なJSオブジェクトである仮想DOMツリーを丸ごと生成し前回ツリーとdiffしてから差分だけ実DOMへ適用する。要素の同一性は位置で決まるためkeyが必須になる理由と、FiberによるスケジューリングやReact18のautomatic batchingを解説。</summary>
   </entry>
 </feed>
