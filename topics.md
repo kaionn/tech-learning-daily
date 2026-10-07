@@ -6,6 +6,7 @@
 
 ## 消化済み
 
+- 2026-10-07 Linux のページキャッシュとメモリの見方（freeのfree/buff/cache/available列の意味とMemAvailable、drop_cachesを本番で使わない理由、cgroup v2がページキャッシュをコンテナの使用量に計上する仕組みとkubeletのワーキングセット）（自動選定）
 - 2026-10-06 TCP の TIME_WAIT とエフェメラルポート枯渇（先に閉じた側が4つ組を2MSL保持する理由、Linuxの60秒固定とip_local_port_range、cannot assign requested address の発生条件、tcp_tw_reuse と削除された tcp_tw_recycle、keep-alive/コネクションプールによる対策）（自動選定）
 - 2026-10-05 ファイルディスクリプタと「Too many open files」（ソケットもfdを消費する仕組み、RLIMIT_NOFILEのソフト/ハードリミットとsystemdのデフォルト1024がselect()互換のためである理由、LimitNOFILE/docker --ulimitでの上げ方とfd漏れの見分け方）（自動選定）
 - 2026-10-04 DB のデッドロック（ロック順序の逆転による循環待ち、PostgreSQL/InnoDBの待ちグラフによる検出と犠牲者選択、deadlock_timeout とロック待ちタイムアウトの違い、ロック順序の統一とトランザクション再実行による対策）（自動選定）
