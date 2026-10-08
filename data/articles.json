@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-10-08.html",
+    "date": "2026-10-08",
+    "title": "COMMIT が返った瞬間、データはまだメモリにしかないのに、なぜ停電しても消えないのか？",
+    "summary": "PostgreSQLがCOMMIT時にテーブル本体ではなくWAL(先行書き込みログ)だけをディスクに確定させて成功を返す仕組みと、チェックポイントによる書き戻し・クラッシュ後のREDO、synchronous_commit=offとfsync=offの違いを解説。",
+    "category": "db",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": ["WAL", "fsync", "チェックポイント", "REDO", "LSN", "グループコミット"]
+  },
+  {
     "file": "2026-10-07.html",
     "date": "2026-10-07",
     "title": "空きメモリはほぼゼロなのに、なぜ Linux サーバーは平気で動き続けるのか？",

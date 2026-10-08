@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-10-07T09:50:31+09:00</updated>
+  <updated>2026-10-08T10:05:45+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>COMMIT が返った瞬間、データはまだメモリにしかないのに、なぜ停電しても消えないのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-10-08.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-10-08.html</id>
+    <updated>2026-10-08T10:05:45+09:00</updated>
+    <summary>PostgreSQLはCOMMIT時にテーブル本体ではなくWALだけをfsyncして成功を返し、クラッシュ後はチェックポイント以降のWALを再生して復元する。synchronous_commit=offとfsync=offの違いも解説。</summary>
+  </entry>
   <entry>
     <title>空きメモリはほぼゼロなのに、なぜ Linux サーバーは平気で動き続けるのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-10-07.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-09-25.html</id>
     <updated>2026-09-25T08:58:48+09:00</updated>
     <summary>SSRはHTMLという構造だけを送るためクリックしても反応せず、ハイドレーションはブラウザで同じコンポーネントを実行してサーバー出力と照合しイベントハンドラだけを取り付ける処理。出力が食い違うとその箇所以下のHTMLが丸ごと作り直される仕組みを解説。</summary>
-  </entry>
-  <entry>
-    <title>同じ ALTER TABLE のはずなのに、なぜ一瞬で終わる時と本番を止める時があるのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-09-24.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-09-24.html</id>
-    <updated>2026-09-24T08:48:55+09:00</updated>
-    <summary>ALTER TABLEはPostgreSQLで最も強いACCESS EXCLUSIVEロックを取ることが多く単純なSELECTとも共存できない。列追加はPG11以降のfast defaultで一瞬だが、既存列へのNOT NULL付与は全行スキャンを伴うためNOT VALID→VALIDATE→SET NOT NULLの3段階で軽いロックに逃がす手法を解説。</summary>
   </entry>
 </feed>
