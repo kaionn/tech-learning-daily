@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-10-09.html",
+    "date": "2026-10-09",
+    "title": "docker stop を叩いただけなのに、なぜコンテナは 10 秒も止まらないのか？",
+    "summary": "docker stopはPID 1にSIGTERMを送り既定10秒後にSIGKILLする。LinuxがPID 1にはハンドラ登録済みのシグナルしか届けないため、shell形式のCMDやハンドラ無しのアプリでは無視される仕組みと、exec形式・tini(--init)による対策を解説。",
+    "category": "container",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": ["SIGTERM / SIGKILL", "PID 1", "PID 名前空間", "exec 形式 / shell 形式", "tini", "ゾンビプロセス"]
+  },
+  {
     "file": "2026-10-08.html",
     "date": "2026-10-08",
     "title": "COMMIT が返った瞬間、データはまだメモリにしかないのに、なぜ停電しても消えないのか？",

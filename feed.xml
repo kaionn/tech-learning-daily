@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-10-08T10:05:45+09:00</updated>
+  <updated>2026-10-09T10:18:07+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>docker stop を叩いただけなのに、なぜコンテナは 10 秒も止まらないのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-10-09.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-10-09.html</id>
+    <updated>2026-10-09T10:18:07+09:00</updated>
+    <summary>docker stopのSIGTERMはPID 1がハンドラを持たないとカーネルに捨てられ、10秒後のSIGKILLで止まる。shell形式のCMDが原因になる理由と、exec形式・tiniによる対策を解説。</summary>
+  </entry>
   <entry>
     <title>COMMIT が返った瞬間、データはまだメモリにしかないのに、なぜ停電しても消えないのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-10-08.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-09-26.html</id>
     <updated>2026-09-26T08:59:51+09:00</updated>
     <summary>LLMは関数を直接実行できず、input_schema(JSON Schema)に沿ったtool_useブロックを生成して意思表示するだけで、実行は呼び出し元アプリの仕事。制約付きデコーディングによるJSON構造の保証と、tool_use→実行→tool_resultの往復ループを解説。</summary>
-  </entry>
-  <entry>
-    <title>サーバーがすでに HTML を作ったのに、なぜブラウザはもう一度同じコンポーネントを実行するのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-09-25.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-09-25.html</id>
-    <updated>2026-09-25T08:58:48+09:00</updated>
-    <summary>SSRはHTMLという構造だけを送るためクリックしても反応せず、ハイドレーションはブラウザで同じコンポーネントを実行してサーバー出力と照合しイベントハンドラだけを取り付ける処理。出力が食い違うとその箇所以下のHTMLが丸ごと作り直される仕組みを解説。</summary>
   </entry>
 </feed>

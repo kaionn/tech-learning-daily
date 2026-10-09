@@ -6,6 +6,7 @@
 
 ## 消化済み
 
+- 2026-10-09 コンテナの PID 1 とシグナル（docker stop が SIGTERM→既定10秒後に SIGKILL する流れ、カーネルが PID 1 にハンドラ未登録のシグナルを届けない理由、shell形式CMDとexec形式の違いとexec "$@"、tini/--init によるシグナル転送とゾンビ回収、k8sのterminationGracePeriodSecondsと終了コード137）（自動選定）
 - 2026-10-08 WAL（先行書き込みログ）とクラッシュリカバリ（COMMIT時にWALだけをfsyncする理由とグループコミット、チェックポイントとcheckpoint_timeout/max_wal_size/full_page_writes、REDOによる復旧、synchronous_commit=offとfsync=offの違い）（自動選定）
 - 2026-10-07 Linux のページキャッシュとメモリの見方（freeのfree/buff/cache/available列の意味とMemAvailable、drop_cachesを本番で使わない理由、cgroup v2がページキャッシュをコンテナの使用量に計上する仕組みとkubeletのワーキングセット）（自動選定）
 - 2026-10-06 TCP の TIME_WAIT とエフェメラルポート枯渇（先に閉じた側が4つ組を2MSL保持する理由、Linuxの60秒固定とip_local_port_range、cannot assign requested address の発生条件、tcp_tw_reuse と削除された tcp_tw_recycle、keep-alive/コネクションプールによる対策）（自動選定）
