@@ -6,6 +6,7 @@
 
 ## 消化済み
 
+- 2026-10-10 浮動小数点数とIEEE 754（0.1+0.2が0.3にならない理由と二進数で割り切れない小数、仮数52bitと目盛りの間隔・Number.EPSILON・MAX_SAFE_INTEGER、金額をnumeric/BigDecimal/整数最小単位で扱う理由と巨大IDのJSON受け渡し）（自動選定）
 - 2026-10-09 コンテナの PID 1 とシグナル（docker stop が SIGTERM→既定10秒後に SIGKILL する流れ、カーネルが PID 1 にハンドラ未登録のシグナルを届けない理由、shell形式CMDとexec形式の違いとexec "$@"、tini/--init によるシグナル転送とゾンビ回収、k8sのterminationGracePeriodSecondsと終了コード137）（自動選定）
 - 2026-10-08 WAL（先行書き込みログ）とクラッシュリカバリ（COMMIT時にWALだけをfsyncする理由とグループコミット、チェックポイントとcheckpoint_timeout/max_wal_size/full_page_writes、REDOによる復旧、synchronous_commit=offとfsync=offの違い）（自動選定）
 - 2026-10-07 Linux のページキャッシュとメモリの見方（freeのfree/buff/cache/available列の意味とMemAvailable、drop_cachesを本番で使わない理由、cgroup v2がページキャッシュをコンテナの使用量に計上する仕組みとkubeletのワーキングセット）（自動選定）

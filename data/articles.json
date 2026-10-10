@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-10-10.html",
+    "date": "2026-10-10",
+    "title": "0.1 と 0.2 を足しただけなのに、なぜ 0.3 にならないのか？",
+    "summary": "0.1 は二進数で割り切れず近似値で保存されるため、0.1+0.2 は 0.3 の近似とは別の値に着地する。IEEE 754 倍精度の目盛りの仕組みと、金額・巨大 ID を正確に扱う型の選び方を解説。",
+    "category": "lang",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": ["IEEE 754", "倍精度（binary64）", "仮数", "Number.EPSILON", "MAX_SAFE_INTEGER", "numeric / BigDecimal"]
+  },
+  {
     "file": "2026-10-09.html",
     "date": "2026-10-09",
     "title": "docker stop を叩いただけなのに、なぜコンテナは 10 秒も止まらないのか？",
