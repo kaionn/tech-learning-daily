@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-10-10T09:59:04+09:00</updated>
+  <updated>2026-10-11T09:18:58+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>見た目は 1 文字なのに、なぜ JS は 8、Go は 18、Ruby は 5 と数えるのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-10-11.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-10-11.html</id>
+    <updated>2026-10-11T09:18:58+09:00</updated>
+    <summary>文字には符号位置・符号化(UTF-8/UTF-16)・書記素クラスタの3層があり、言語ごとに数える層が違う。UTF-8の可変長設計、JSのサロゲートペア、MySQLのutf8mb3で絵文字が入らない理由を解説。</summary>
+  </entry>
   <entry>
     <title>0.1 と 0.2 を足しただけなのに、なぜ 0.3 にならないのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-10-10.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-09-28.html</id>
     <updated>2026-09-28T08:53:02+09:00</updated>
     <summary>WebSocketは通常のHTTPリクエストとしてUpgradeヘッダーを送り、101 Switching Protocolsで同じTCP接続の中身を双方向通信に切り替える。フレームとマスキングの仕組み、ロードバランサのアイドルタイムアウトでの切断、複数台構成での接続共有問題を解説。</summary>
-  </entry>
-  <entry>
-    <title>package.json だけで固定したはずなのに、なぜ他人の環境では違うバージョンが入るのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-09-27.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-09-27.html</id>
-    <updated>2026-09-27T08:43:26+09:00</updated>
-    <summary>package.jsonのキャレット範囲は特定バージョンを固定せず、実際に選ばれるバージョンはpackage-lock.jsonが依存解決の結果として記録する。lockfileをコミットする理由と、npm installとnpm ciの違い、Go/Bundlerでの同様の設計を解説。</summary>
   </entry>
 </feed>

@@ -37,7 +37,7 @@
         <button class="chip" data-cat="security">Security <span class="chip-count">8</span></button>
         <button class="chip" data-cat="ai">AI <span class="chip-count">6</span></button>
         <button class="chip" data-cat="infra">Infra <span class="chip-count">6</span></button>
-        <button class="chip" data-cat="lang">Lang <span class="chip-count">5</span></button>
+        <button class="chip" data-cat="lang">Lang <span class="chip-count">6</span></button>
         <button class="chip" data-cat="dev" data-overflow="1" hidden>Dev <span class="chip-count">4</span></button>
         <button class="chip" data-cat="frontend" data-overflow="1" hidden>Frontend <span class="chip-count">4</span></button>
         <button class="chip" data-cat="obs" data-overflow="1" hidden>Obs <span class="chip-count">3</span></button>
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-10">
       <div class="section-title">2026 年 10 月 <span class="count"></span></div>
+      <div class="card" data-cat="lang" data-diff="基礎"
+           data-search="見た目は 1 文字なのに、なぜ js は 8、go は 18、ruby は 5 と数えるのか？ 文字には符号位置・utf-8/utf-16 の符号化・書記素クラスタの 3 層があり、js・go・ruby はそれぞれ違う層を数えている。utf-8 の可変長設計、サロゲートペア、mysql の utf8mb3 で絵文字が入らない理由まで。" data-terms="符号位置（コードポイント） / UTF-8 / サロゲートペア / 書記素クラスタ / ZWJ / utf8mb4">
+        <h3><a href="2026-10-11.html">見た目は 1 文字なのに、なぜ JS は 8、Go は 18、Ruby は 5 と数えるのか？</a></h3>
+        <div class="summary">文字には符号位置・UTF-8/UTF-16 の符号化・書記素クラスタの 3 層があり、JS・Go・Ruby はそれぞれ違う層を数えている。UTF-8 の可変長設計、サロゲートペア、MySQL の utf8mb3 で絵文字が入らない理由まで。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-lang">Lang</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-11</span></div>
+      </div>
       <div class="card" data-cat="lang" data-diff="基礎"
            data-search="0.1 と 0.2 を足しただけなのに、なぜ 0.3 にならないのか？ 0.1 は二進数で割り切れず近似値で保存されるため、0.1+0.2 は 0.3 の近似とは別の値に着地する。ieee 754 倍精度の目盛りの仕組みと、金額・巨大 id を正確に扱う型の選び方を解説。" data-terms="IEEE 754 / 倍精度（binary64） / 仮数 / Number.EPSILON / MAX_SAFE_INTEGER / numeric / BigDecimal">
         <h3><a href="2026-10-10.html">0.1 と 0.2 を足しただけなのに、なぜ 0.3 にならないのか？</a></h3>
