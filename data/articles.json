@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-10-12.html",
+    "date": "2026-10-12",
+    "title": "created_at は正しく保存したはずなのに、なぜ画面の時刻が 9 時間ずれるのか？",
+    "summary": "時刻には世界で 1 つに決まる「瞬間」と場所ごとの「壁時計時刻」がある。PostgreSQL の timestamptz と timestamp の違い、Rails の列型と SQL 直書きで 9 時間ずれる仕組み、JS の Date 文字列解釈で 1 日ずれる理由と対策まで。",
+    "category": "db",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": ["Unix 時間", "UTC", "壁時計時刻", "オフセット", "IANA tz データベース", "timestamptz"]
+  },
+  {
     "file": "2026-10-11.html",
     "date": "2026-10-11",
     "title": "見た目は 1 文字なのに、なぜ JS は 8、Go は 18、Ruby は 5 と数えるのか？",

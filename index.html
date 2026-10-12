@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tech Learning Daily — 見た目は 1 文字なのに、なぜ JS は 8、Go は 18、Ruby は 5 と数えるのか？</title>
+  <title>Tech Learning Daily — created_at は正しく保存したはずなのに、なぜ画面の時刻が 9 時間ずれるのか？</title>
   <link rel="stylesheet" href="style.css">
   <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="feed.xml">
   <link rel="icon" href="/favicon.ico" sizes="48x48">
@@ -14,153 +14,128 @@
   <div class="container">
     <header>
       <h1>Tech Learning Daily</h1>
-      <div class="date">2026-10-11 (Sun) — 第 86 号</div>
+      <div class="date">2026-10-12 (Mon) — 第 87 号</div>
       <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
     </header>
 
     <article class="article">
       <div class="meta-bar">
-        <span class="tag tag-lang">Lang</span>
+        <span class="tag tag-db">DB</span>
         <span class="difficulty">🌿 基礎</span>
         <span class="read-time">⏱ 約 7 分</span>
       </div>
-      <h2 class="article-title">見た目は 1 文字なのに、なぜ JS は 8、Go は 18、Ruby は 5 と数えるのか？</h2>
-      <p class="lead">家族の絵文字 <code>👨‍👩‍👧</code> の長さを測ると、JavaScript の <code>length</code> は 8、Go の <code>len()</code> は 18、Ruby の <code>length</code> は 5 を返す。画面には 1 文字しか見えていないのに、3 つの言語の答えがどれも 1 にならない。どの言語も間違ってはいない。では、それぞれ何を数えているのだろうか。</p>
+      <h2 class="article-title">created_at は正しく保存したはずなのに、なぜ画面の時刻が 9 時間ずれるのか？</h2>
+      <p class="lead">Rails の画面では正しい時刻が出ているのに、バッチで SQL から入れた行だけ 9 時間先の時刻になる。あるいは、フロントで <code>new Date("2026-10-12")</code> と書いた日付が、海外のユーザーの画面では前日になる。どれも「タイムゾーンの設定ミス」で片付けられがちだが、原因は 1 つの設定ではない。ずれは「時刻」という言葉に 2 種類の意味が混ざっているところから生まれる。</p>
 
       <div class="tldr">
         <div class="box-title">🎯 3 行まとめ</div>
         <ul>
-          <li>「文字」には、Unicode が割り振った番号（符号位置）、その番号を保存するためのバイト列（UTF-8 / UTF-16）、人間が 1 文字と感じる単位（書記素クラスタ）の 3 層があり、言語ごとに数えている層が違う。</li>
-          <li>UTF-8 は 1〜4 バイトの可変長で、ASCII とバイト単位で互換になるよう設計されている。JS の文字列は UTF-16 で、U+FFFF を超える絵文字は 2 単位（サロゲートペア）を使う。</li>
-          <li>MySQL の <code>utf8</code> は最大 3 バイトの <code>utf8mb3</code> の別名で絵文字を保存できないため、<code>utf8mb4</code> を指定する。</li>
+          <li>時刻には、世界で 1 つに決まる「瞬間」と、場所ごとに読み方が違う「壁時計時刻」の 2 種類があり、両者をつなぐのがタイムゾーンの規則だ。</li>
+          <li>PostgreSQL の <code>timestamptz</code> はタイムゾーンを保存せず瞬間を UTC で持つ型で、<code>timestamp</code> は渡されたオフセットを黙って捨てる壁時計時刻の型だ。</li>
+          <li>9 時間ずれは、壁時計時刻を書いた側と読んだ側が別のタイムゾーンを仮定したときに起きる。境界では常にオフセット付きで受け渡すのが対策になる。</li>
         </ul>
       </div>
 
       <section class="body-section">
-        <h3>「文字」は 3 つの層でできている</h3>
-        <p>Unicode は、世界中の文字一つひとつに番号を割り振った表である。この番号を<strong>符号位置</strong>（コードポイント）と呼び、<code>U+3042</code>（あ）や <code>U+1F604</code>（😄）のように 16 進数で書く。範囲は <code>U+0000</code> から <code>U+10FFFF</code> までで、ここまでは単なる「番号の表」にすぎない。</p>
-        <p>番号をメモリやファイルに置くには、それをバイト列に変換する規則が要る。これが<strong>符号化方式</strong>（エンコーディング）で、UTF-8 と UTF-16 が代表例だ。同じ <code>U+1F604</code> でも、UTF-8 なら 4 バイト、UTF-16 なら 16 ビットの単位 2 つになる。</p>
-        <p>さらにその上に、人間が「1 文字」と感じる単位がある。Unicode の規格 UAX #29 はこれを<strong>書記素クラスタ</strong>（grapheme cluster）と定義している。冒頭の家族絵文字は、男性・女性・女の子の 3 つの絵文字を、<strong>ZWJ</strong>（Zero Width Joiner, <code>U+200D</code>。前後の絵文字を 1 つに合成させる目に見えない文字）でつないだ 5 つの符号位置からできている。</p>
+        <h3>「時刻」には 2 種類ある</h3>
+        <p>1 つ目は<strong>瞬間（instant）</strong>だ。「このリクエストが届いた時点」のように、世界のどこから見ても同じ 1 点を指す。コンピュータは瞬間を <strong>Unix 時間</strong>（1970-01-01 00:00:00 UTC からの経過秒数）のような 1 本の数直線上の数値で表す。<code>1791795600</code> という数値は、東京でもニューヨークでも同じ瞬間を指す。</p>
+        <p>2 つ目は<strong>壁時計時刻（wall clock time）</strong>だ。「10 月 12 日 18:00」のように、ある場所の時計の針が示す値で、どの場所の時計かを添えないと瞬間が 1 つに決まらない。<strong>UTC</strong>（協定世界時）は、この壁時計の基準になる世界共通の時計だと考えてよい。</p>
+        <p>瞬間と壁時計時刻を相互変換するのが<strong>タイムゾーン</strong>だ。ここで紛らわしいのが、<code>+09:00</code> のような<strong>オフセット</strong>（UTC との差）と、<code>Asia/Tokyo</code> のようなタイムゾーン名は別物だという点だ。オフセットはある瞬間の差を 1 つ書いた数値にすぎない。タイムゾーン名は「いつからいつまでは何時間差か」という規則の履歴全体を指す。<code>America/New_York</code> は夏時間の切り替えで <code>-05:00</code> と <code>-04:00</code> を行き来する。</p>
+<pre class="diagram">  瞬間: Unix 時間 1791795600
+  （= 2026-10-12 09:00 UTC）
+      │
+      ├─▶ Asia/Tokyo（常に +09:00）
+      │     └─▶ 10/12 18:00
+      │
+      └─▶ America/New_York
+            （夏時間中なので -04:00）
+            └─▶ 10/12 05:00
+
+  ▲ 規則（タイムゾーン）を通すと
+    同じ瞬間が別の壁時計時刻になる</pre>
+        <p>この規則は各国の政府が決め、ときに急に変わる。そのため規則は <strong>IANA tz データベース</strong>にまとめられ、IANA の説明によれば数か月に 1 回程度の頻度で更新版が出ている。OS や言語ランタイムはこのデータを同梱しているので、規則の変更は OS やランタイムを更新しないと反映されない。</p>
       </section>
 
       <section class="body-section">
-        <h3>UTF-8 は「先頭バイトを見れば長さが分かる」</h3>
-        <p>UTF-8 は、符号位置の大きさに応じて 1〜4 バイトを使い分ける。RFC 3629 の規定では、<code>U+007F</code> までは 1 バイト、<code>U+07FF</code> までは 2 バイト、<code>U+FFFF</code> までは 3 バイト、それより上は 4 バイトだ。ひらがなや常用漢字の多くは 3 バイト、絵文字の多くは 4 バイトになる。</p>
-<pre class="diagram"> 😄 = U+1F604（21 ビットの番号）
- 0 0001 1111 0110 0000 0100
-   │
-   ▼ 4 バイト用の型に上から詰める
- ┌────────┬────────┬────────┬────────┐
- │11110xxx│10xxxxxx│10xxxxxx│10xxxxxx│
- └────────┴────────┴────────┴────────┘
-   │
-   ▼
- ┌────────┬────────┬────────┬────────┐
- │11110000│10011111│10011000│10000100│
- │   F0   │   9F   │   98   │   84   │
- └────────┴────────┴────────┴────────┘
- 先頭の 1 の個数 = 全体のバイト数
- 10 で始まる = 続きのバイト</pre>
-        <p>この型には 2 つの狙いがある。1 つ目は、先頭バイトの上位ビットに並ぶ 1 の個数が全体のバイト数を表し、続きのバイトは必ず <code>10</code> で始まることだ。バイト列の途中から読み始めても、<code>10</code> で始まらないバイトまで戻れば文字の切れ目が見つかる。</p>
-        <p>2 つ目は ASCII との互換である。<code>U+007F</code> までは ASCII と同じ 1 バイトになり、複数バイトの文字を構成するバイトはすべて最上位ビットが 1 なので、<code>/</code> や <code>"</code> のような ASCII のバイトが日本語の途中に紛れ込むことがない。ASCII しか知らない古いプログラムに UTF-8 を流しても、区切り文字の検索が壊れないのはこのためだ。</p>
-      </section>
-
-      <section class="body-section">
-        <h3>JS の length が数えているのは UTF-16 の「単位」</h3>
-        <p>JavaScript の文字列は UTF-16 で表現され、<code>length</code> は文字数ではなく UTF-16 の<strong>符号単位</strong>（16 ビットのかたまり）の数を返す、と MDN は明記している。<code>U+FFFF</code> 以下の文字は 1 単位で収まるので、日本語だけを扱っている間は <code>length</code> が文字数と一致して見える。</p>
-        <p>しかし 16 ビットでは <code>U+10000</code> 以上を表せない。そこで UTF-16 は、文字を割り当てずに予約してある領域 <code>U+D800</code>〜<code>U+DFFF</code> から 2 つの値を組み合わせて 1 文字を表す。これを<strong>サロゲートペア</strong>と呼ぶ。😄 は <code>D83D DE04</code> の 2 単位なので、<code>"😄".length</code> は 2 になり、<code>"😄".slice(0, 1)</code> は前半だけの壊れた値（表示すると <code>�</code>）を返す。</p>
-        <p>一方、Go の <code>len()</code> は UTF-8 のバイト数を返し、Ruby の <code>length</code> は符号位置の数を返す。これで冒頭の 3 つの数字が説明できる。</p>
-<pre class="diagram"> 👨‍👩‍👧 を分解すると（見た目は 1 文字）
-
-  男    ZWJ   女    ZWJ   子
- ┌────┬────┬────┬────┬────┐
- │ 1  │ 1  │ 1  │ 1  │ 1  │ 符号位置  5
- │ 2  │ 1  │ 2  │ 1  │ 2  │ UTF-16    8
- │ 4  │ 3  │ 4  │ 3  │ 4  │ UTF-8    18
- └────┴────┴────┴────┴────┘
- └──────── 書記素 1 個 ───────┘
-
- Ruby  s.length    ─▶  5
- JS    s.length    ─▶  8
- Go    len(s)      ─▶ 18</pre>
-        <p>こう並べると、符号位置を数える Ruby が一番「正しい」ように見える。しかし実際は Ruby の 5 も人間の答えの 1 とは違う。正解に近いのは、どの層を数えるべきかを用途ごとに選ぶことである。</p>
+        <h3>timestamptz はタイムゾーンを保存しない</h3>
+        <p>PostgreSQL には <code>timestamp</code>（正式名 <code>timestamp without time zone</code>）と <code>timestamptz</code>（<code>timestamp with time zone</code>）の 2 つの型がある。名前からは「後者はタイムゾーンも一緒に保存する」ように思える。しかし実際は、どちらも 8 バイトで、どちらにもタイムゾーンは入っていない。</p>
+        <p><code>timestamptz</code> は「瞬間」の型だ。入力にオフセットがあればそれを使って UTC に変換し、無ければセッションの <code>TimeZone</code> 設定を仮定して変換する。保存されるのは UTC の値だけで、元のオフセットは捨てられる。出力時は毎回、そのセッションの <code>TimeZone</code> に変換して表示する。</p>
+        <p><code>timestamp</code> は「壁時計時刻」の型だ。公式ドキュメントによれば、入力文字列にオフセットが書かれていても<strong>黙って無視</strong>し、日付と時刻の数字だけをそのまま保存する。どの場所の時計の値かという情報は、型にもデータにも残らない。</p>
+<pre class="code">SET TimeZone = 'Asia/Tokyo';
+SELECT '2026-10-12 09:00:00+00'::timestamptz;
+-- 2026-10-12 18:00:00+09（UTC から変換して表示）
+SELECT '2026-10-12 09:00:00+00'::timestamp;
+-- 2026-10-12 09:00:00（+00 は捨てられる）</pre>
+        <p>なお SQL 標準では、型名を <code>timestamp</code> とだけ書くと <code>without time zone</code> の意味になり、PostgreSQL もそれに従う。何も考えずに <code>timestamp</code> と書くと、壁時計時刻の型を選んだことになる。</p>
       </section>
 
       <div class="analogy">
         <div class="box-title">🍱 たとえるなら</div>
-        <p>弁当の数え方に近い。客が見ているのは「幕の内 1 個」（書記素）、厨房の献立表では「ご飯・焼き魚・卵焼き・漬物・仕切り」の 5 品目（符号位置）、配送業者にとっては「容器いくつ分の重さか」（バイトや UTF-16 単位）だ。誰の数え方も間違っていないが、レジで品目数を請求すると客は怒る。</p>
+        <p><code>timestamptz</code> は、受け取った待ち合わせ時刻をすべて「ロンドンの時計で何時か」に換算してメモし、読み上げるときは聞き手の街の時刻に直して伝える秘書だ。<code>timestamp</code> は「15:00」とだけ書いた付箋で、どの街の 15 時かは書いた人の頭の中にしかない。付箋を別の街の人が読めば、自分の街の 15 時だと受け取る。</p>
       </div>
 
       <section class="body-section">
-        <h3>どの層で数えるべきか</h3>
-        <p>画面上の文字数制限やカーソル移動、「先頭 20 文字で省略」のような処理は、書記素クラスタで数えないと絵文字や国旗の途中で切れる。国旗 🇯🇵 も 2 つの符号位置（地域指示子）の組なので、符号位置で切ると「🇯」だけが残る。JavaScript では <code>Intl.Segmenter</code>、Ruby では <code>String#grapheme_clusters</code> が書記素単位の分割を提供する。</p>
-<pre class="code">// JavaScript
-const s = "👨‍👩‍👧";
-s.length;                    // 8（UTF-16 単位）
-[...s].length;               // 5（符号位置）
-[...new Intl.Segmenter("ja", { granularity: "grapheme" })
-  .segment(s)].length;       // 1（書記素）</pre>
-        <p>逆に、DB のカラム容量や HTTP ボディのサイズ上限、ネットワーク越しのバッファ確保はバイト数で考える。Go が <code>len()</code> でバイト数を返し、<code>for range</code> で回したときだけ UTF-8 を 1 符号位置（Go では <code>rune</code> と呼ぶ）ずつ解読するのは、文字列を「UTF-8 のバイト列」として扱う設計を貫いているからだ。</p>
+        <h3>Rails で 9 時間ずれる典型パターン</h3>
+        <p>Rails は 3 つの層で時刻を扱っている。アプリ側の表示用タイムゾーン <code>config.time_zone</code>、DB に書くときの壁時計の基準 <code>config.active_record.default_timezone</code>（デフォルトは <code>:utc</code>）、そして DB の列の型だ。Rails ガイドによれば、PostgreSQL では <code>t.datetime</code> が作る列はデフォルトで <code>timestamp without time zone</code> になる。</p>
+        <p>つまり Rails は「UTC の壁時計時刻」を付箋に書き、読むときも「これは UTC だ」と仮定して <code>config.time_zone</code>（たとえば <code>"Tokyo"</code>）に変換して表示する。Rails だけが読み書きしている間は、書く側と読む側の仮定が一致するのでずれない。</p>
+        <p>ずれるのは、別の書き手が別の仮定で同じ列に書いたときだ。たとえばセッションの <code>TimeZone</code> が <code>Asia/Tokyo</code> の psql やバッチから <code>INSERT ... VALUES (now())</code> を実行すると、<code>now()</code> が返す瞬間は <code>timestamp</code> 列に入る時点で東京の壁時計時刻に変換される。その値を Rails は UTC だと思って読み、さらに +9 時間して表示する。データは壊れていないように見えて、解釈の約束だけが食い違っている。</p>
+        <p>列を <code>timestamptz</code> にすると、DB 自身が瞬間として保持するので、書き手ごとのセッション設定の違いは変換時に吸収される。現在の Rails では次の設定で <code>t.datetime</code> の既定の型を切り替えられる。既存の列は自動では変わらないため、既存テーブルは別途マイグレーションで型を変える必要がある。</p>
+<pre class="code"># config/application.rb
+ActiveSupport.on_load(:active_record_postgresqladapter) do
+  self.datetime_type = :timestamptz
+end</pre>
       </section>
 
       <section class="body-section">
-        <h3>MySQL の <code>utf8</code> は 3 バイトまでしか入らない</h3>
-        <p>MySQL の文字セット <code>utf8</code> は <code>utf8mb3</code> の別名（非推奨）で、1 文字最大 3 バイト、つまり <code>U+FFFF</code> 以下しか保存できない。4 バイトになる絵文字を挿入すると、strict モードでは <code>Incorrect string value: '\xF0\x9F...'</code> のエラーで INSERT が失敗する。先ほどの UTF-8 の表で、4 バイト文字の先頭が <code>F0</code> だったことを思い出すと、このエラーメッセージが何を拒否しているかが読める。</p>
-        <p>MySQL 8.0 ではサーバーのデフォルトが <code>utf8mb4</code>（照合順序 <code>utf8mb4_0900_ai_ci</code>）になった。ただし、5.7 以前に作られたテーブルはアップグレード後も作成時の文字セットを持ち続けるので、デフォルトが変わっても古いテーブルには絵文字が入らないままになる。</p>
-<pre class="code">-- テーブルの文字セットを確認
-SHOW CREATE TABLE posts;
-
--- utf8mb3 なら変換する（テーブルを書き換えるので本番は要計画）
-ALTER TABLE posts CONVERT TO CHARACTER SET utf8mb4;</pre>
-        <p>接続側の文字セットも揃える必要がある。Rails なら <code>config/database.yml</code> に <code>encoding: utf8mb4</code> を書く。テーブルだけ <code>utf8mb4</code> にしても、接続が 3 バイトまでの文字セットで送れば、4 バイト文字は DB に届く前に変換に失敗する。</p>
+        <h3>JavaScript の Date と API の境界</h3>
+        <p>JavaScript の <code>Date</code> の中身は、エポックからのミリ秒数という瞬間だけだ。問題は文字列から作るときに起きる。MDN によれば、<code>"2026-10-12"</code> のように日付だけの文字列は UTC として、<code>"2026-10-12T00:00"</code> のようにオフセットの無い日時の文字列は実行環境のローカル時刻として解釈される。</p>
+        <p>そのため、日付だけの文字列を UTC の 0 時として読んだあと画面にローカル時刻で表示すると、UTC より西のタイムゾーンでは前日の夕方になる。同じ API レスポンスが、東京の開発者の画面では正しく、カリフォルニアのユーザーの画面では 1 日ずれる。</p>
+        <p>境界での受け渡しは <code>2026-10-12T09:00:00Z</code> や <code>2026-10-12T18:00:00+09:00</code> のように、オフセットを必ず含む ISO 8601 形式にそろえるのが基本になる。オフセットが付いていれば、受け手がどのタイムゾーンを仮定していても同じ瞬間に復元できるからだ。</p>
       </section>
 
       <div class="practical">
         <div class="box-title">💼 実務でどう出会うか</div>
-        <p>一番多いのは、フロントとバックエンドで文字数制限が食い違うケースだ。HTML の <code>maxlength</code> や JS の <code>length</code> は UTF-16 単位で数え、Rails の <code>validates :name, length: { maximum: 20 }</code> は Ruby の <code>String#length</code>（符号位置）で数える。絵文字を混ぜると、フロントは「20 文字を超えた」と言い、サーバーは通す（あるいはその逆）という不一致が起きる。仕様書の「20 文字」がどの層の 20 なのかを決めておくと、この手の問い合わせは減る。もう一つは、ユーザー名や投稿本文に絵文字が入った瞬間にだけ 500 エラーが出る障害で、多くは前述の <code>utf8mb3</code> が原因である。</p>
+        <p>「すでに起きた出来事」（注文日時・ログイン日時・ログ）は瞬間として UTC で持てばよく、PostgreSQL なら <code>timestamptz</code> が素直な選択だ。一方「来年 3 月の毎週月曜 10:00 に東京で会議」のような未来の予定は、壁時計時刻と <code>Asia/Tokyo</code> のようなタイムゾーン名をセットで保存する。今の規則で UTC に換算して保存すると、夏時間の導入や廃止で規則が変わったとき、予定が 1 時間ずれた瞬間を指してしまう。誕生日や締め日のように時刻を持たない値は、<code>date</code> 型で日付として持つ方が、0 時の UTC 換算による 1 日ずれを避けられる。</p>
       </div>
 
       <div class="hands-on">
         <div class="box-title">⌨️ 手を動かす（5 分）</div>
-        <p>Mac のターミナルで、同じ文字が UTF-8 で何バイトになるかを <code>xxd</code> で見る。</p>
-<pre class="code">printf 'A' | xxd
-printf 'あ' | xxd
-printf '😄' | xxd
-printf '👨‍👩‍👧' | wc -c
-node -e 'const s="👨‍👩‍👧"; console.log(s.length, [...s].length)'
-ruby -e 's="👨‍👩‍👧"; p [s.length, s.bytesize, s.grapheme_clusters.size]'</pre>
-        <p><code>A</code> は <code>41</code> の 1 バイト、<code>あ</code> は <code>e3 81 82</code> の 3 バイト、<code>😄</code> は <code>f0 9f 98 84</code> の 4 バイトで、先頭バイトが <code>e</code>（1110…）や <code>f</code>（1111 0…）で始まり、続きのバイトが <code>8</code>〜<code>b</code>（10…）で始まっていることが確認できる。家族絵文字は <code>wc -c</code> で 18、node で <code>8 5</code>、ruby で <code>[5, 18, 1]</code> が表示されるはずだ（node / ruby が無い環境ではその行を飛ばしてよい）。</p>
+        <p>同じ Unix 時間 0 がタイムゾーンによって違う壁時計時刻に見えること、そして JavaScript の文字列解釈の違いを Mac のターミナルで確かめる（<code>node</code> が入っている前提）。</p>
+<pre class="code">TZ=UTC date -r 0
+TZ=Asia/Tokyo date -r 0
+TZ=America/Los_Angeles node -e 'console.log(new Date("2026-10-12").toString())'
+TZ=America/Los_Angeles node -e 'console.log(new Date("2026-10-12T00:00").toString())'</pre>
+        <p><code>date -r 0</code> は 1970 年 1 月 1 日の 00:00 UTC と 09:00 JST を表示し、同じ瞬間が別の壁時計時刻で読まれることが分かる。<code>node</code> の 1 行目は <code>Sun Oct 11 2026 17:00:00 GMT-0700</code> と前日になり、2 行目は <code>Mon Oct 12 2026 00:00:00 GMT-0700</code> になるはずだ。違いは文字列に時刻部分があるかどうかだけだ。</p>
       </div>
 
       <div class="misconceptions">
         <div class="box-title">🙅 よくある誤解</div>
         <ul>
-          <li><span class="wrong">UTF-8 では日本語は 2 バイト</span> — ひらがな・カタカナ・常用漢字の多くは <code>U+0800</code>〜<code>U+FFFF</code> にあるので 3 バイトになる。2 バイトなのは Shift_JIS などの旧来の符号化方式の話である。</li>
-          <li><span class="wrong">Unicode と UTF-8 は同じもの</span> — Unicode は文字と番号の対応表で、UTF-8 はその番号をバイト列にする規則の一つ。同じ Unicode 文字列を UTF-16 で保存すればバイト列はまったく別物になる。</li>
-          <li><span class="wrong">符号位置で数えれば「人間の文字数」になる</span> — ZWJ でつないだ絵文字、国旗、濁点などの結合文字は複数の符号位置で 1 文字に見える。人間の 1 文字に合わせたいなら書記素クラスタで数える。</li>
+          <li><span class="wrong"><code>timestamp with time zone</code> は入力時のタイムゾーンを保存している</span> — 保存されるのは UTC に換算した瞬間だけで、元のオフセットは捨てられる。表示時のオフセットは読み手のセッション設定から付け直されたものだ。</li>
+          <li><span class="wrong"><code>+09:00</code> と <code>Asia/Tokyo</code> は同じ意味だ</span> — オフセットはある瞬間の差を 1 つ書いた値で、タイムゾーン名は規則の履歴全体を指す。夏時間のある地域では、同じタイムゾーン名でも日付によってオフセットが変わる。</li>
+          <li><span class="wrong">全部 UTC で保存しておけば時刻の問題は起きない</span> — 過去の出来事には有効だが、未来の現地時刻の予定は、規則の変更で UTC 換算がずれうる。壁時計時刻とタイムゾーン名で持つ方が正しい場合がある。</li>
         </ul>
       </div>
 
       <div class="glossary">
         <div class="box-title">📖 用語ミニ辞典</div>
         <dl>
-          <dt>符号位置（コードポイント）</dt><dd>Unicode が各文字に割り振った番号。<code>U+0000</code>〜<code>U+10FFFF</code>。</dd>
-          <dt>UTF-8</dt><dd>符号位置を 1〜4 バイトの可変長で表す符号化方式。ASCII とバイト単位で互換。</dd>
-          <dt>サロゲートペア</dt><dd>UTF-16 で <code>U+10000</code> 以上の文字を 16 ビット単位 2 つで表す仕組み。</dd>
-          <dt>書記素クラスタ</dt><dd>人間が 1 文字と感じる単位。複数の符号位置から成ることがある。</dd>
-          <dt>ZWJ</dt><dd>Zero Width Joiner（<code>U+200D</code>）。前後の絵文字を 1 つの絵文字に合成させる不可視文字。</dd>
-          <dt>utf8mb4</dt><dd>MySQL で 1 文字最大 4 バイトを扱える文字セット。絵文字を保存するにはこれが要る。</dd>
+          <dt>Unix 時間</dt><dd>1970-01-01 00:00:00 UTC からの経過秒数で瞬間を表す方式。</dd>
+          <dt>UTC</dt><dd>協定世界時。各地の壁時計時刻の基準になる世界共通の時刻。</dd>
+          <dt>壁時計時刻</dt><dd>ある場所の時計が示す日付と時刻。場所が分からないと瞬間に戻せない。</dd>
+          <dt>オフセット</dt><dd><code>+09:00</code> のような、ある瞬間における UTC との時差。</dd>
+          <dt>IANA tz データベース</dt><dd><code>Asia/Tokyo</code> などのタイムゾーン名ごとに時差と夏時間の規則の履歴を収めたデータ。</dd>
+          <dt>timestamptz</dt><dd>PostgreSQL で瞬間を UTC で保持し、表示時にセッションのタイムゾーンへ変換する型。</dd>
         </dl>
       </div>
 
       <div class="further-reading">
         <div class="box-title">🔗 もっと深く</div>
         <ul>
-          <li><a href="https://www.rfc-editor.org/rfc/rfc3629">RFC 3629: UTF-8, a transformation format of ISO 10646</a> — 1〜4 バイトのビットパターン表と、ASCII 互換の設計意図が短くまとまっている。</li>
-          <li><a href="https://go.dev/blog/strings">Strings, bytes, runes and characters in Go</a> — Go の文字列がバイト列であること、<code>rune</code> と <code>for range</code> の関係を例で示す公式ブログ。</li>
-          <li><a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/length">MDN: String: length</a> — JS の <code>length</code> が UTF-16 単位を数えることと、絵文字での例。</li>
-          <li><a href="https://dev.mysql.com/doc/refman/8.0/en/charset-unicode-utf8mb3.html">MySQL 8.0 Reference Manual: The utf8mb3 Character Set</a> — <code>utf8mb3</code> が BMP までしか扱えず非推奨である旨の一次情報。</li>
-          <li><a href="https://www.unicode.org/reports/tr29/">UAX #29: Unicode Text Segmentation</a> — 書記素クラスタの境界規則（ZWJ・国旗・結合文字）の定義元。</li>
+          <li><a href="https://www.postgresql.org/docs/current/datatype-datetime.html">PostgreSQL: Date/Time Types</a> — <code>timestamp</code> と <code>timestamptz</code> の入力・保存・出力の規則が一次情報で確認できる。</li>
+          <li><a href="https://guides.rubyonrails.org/configuring.html#activerecord-connectionadapters-postgresqladapter-datetime-type">Rails Guides: Configuring — datetime_type</a> — Rails が作る列の型を <code>timestamptz</code> に切り替える公式の設定方法。</li>
+          <li><a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/parse">MDN: Date.parse()</a> — 日付だけの文字列とオフセット無しの日時文字列で解釈が分かれる例が載っている。</li>
+          <li><a href="https://data.iana.org/time-zones/tz-link.html">IANA: Time zone and daylight saving time data</a> — tz データベースの命名規則と、規則が政府の決定で変わり続ける事情の説明。</li>
         </ul>
       </div>
     </article>
@@ -168,6 +143,11 @@ ruby -e 's="👨‍👩‍👧"; p [s.length, s.bytesize, s.grapheme_clusters.si
     <!-- recent:start -->
     <section class="section recent-articles">
       <div class="section-title">最近の記事</div>
+      <div class="card">
+        <h3><a href="archive/2026-10-11.html">見た目は 1 文字なのに、なぜ JS は 8、Go は 18、Ruby は 5 と数えるのか？</a></h3>
+        <div class="summary">文字には符号位置・UTF-8/UTF-16 の符号化・書記素クラスタの 3 層があり、JS・Go・Ruby はそれぞれ違う層を数えている。UTF-8 の可変長設計、サロゲートペア、MySQL の utf8mb3 で絵文字が入らない理由まで。</div>
+        <div class="meta"><span class="tag tag-lang">Lang</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-11</span></div>
+      </div>
       <div class="card">
         <h3><a href="archive/2026-10-10.html">0.1 と 0.2 を足しただけなのに、なぜ 0.3 にならないのか？</a></h3>
         <div class="summary">0.1 は二進数で割り切れず近似値で保存されるため、0.1+0.2 は 0.3 の近似とは別の値に着地する。IEEE 754 倍精度の目盛りの仕組みと、金額・巨大 ID を正確に扱う型の選び方を解説。</div>
@@ -182,11 +162,6 @@ ruby -e 's="👨‍👩‍👧"; p [s.length, s.bytesize, s.grapheme_clusters.si
         <h3><a href="archive/2026-10-08.html">COMMIT が返った瞬間、データはまだメモリにしかないのに、なぜ停電しても消えないのか？</a></h3>
         <div class="summary">PostgreSQLがCOMMIT時にテーブル本体ではなくWAL(先行書き込みログ)だけをディスクに確定させて成功を返す仕組みと、チェックポイントによる書き戻し・クラッシュ後のREDO、synchronous_commit=offとfsync=offの違いを解説。</div>
         <div class="meta"><span class="tag tag-db">DB</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-08</span></div>
-      </div>
-      <div class="card">
-        <h3><a href="archive/2026-10-07.html">空きメモリはほぼゼロなのに、なぜ Linux サーバーは平気で動き続けるのか？</a></h3>
-        <div class="summary">Linuxが空きメモリをページキャッシュに使うためfree列は小さくて当然であり、使えるメモリはavailable列で見るべき理由と、コンテナのcgroupがページキャッシュも使用量に数える仕組み、kubeletのワーキングセットとの関係を解説。</div>
-        <div class="meta"><span class="tag tag-infra">Infra</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-07</span></div>
       </div>
       <div class="recent-more"><a href="archive/">アーカイブですべて見る →</a></div>
     </section>
