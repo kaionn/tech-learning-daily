@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tech Learning Daily — temperature を 0 にしたのに、なぜ LLM の答えは毎回同じにならないのか？</title>
+  <link rel="stylesheet" href="../style.css">
+  <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="../feed.xml">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Tech Learning Daily</h1>
+      <div class="date">2026-10-13 (Tue) — 第 88 号</div>
+      <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
+    </header>
+
+    <article class="article">
+      <div class="meta-bar">
+        <span class="tag tag-ai">AI</span>
+        <span class="difficulty">🌿 基礎</span>
+        <span class="read-time">⏱ 約 7 分</span>
+      </div>
+      <h2 class="article-title">temperature を 0 にしたのに、なぜ LLM の答えは毎回同じにならないのか？</h2>
+      <p class="lead">LLM の出力をテストで固定したくて <code>temperature: 0</code> を指定した。ところが CI で同じプロンプトを流すと、たまに 1 単語だけ違う答えが返ってきてテストが落ちる。「0 にしたのにランダムなのか」と思ったことはないだろうか。この揺れの原因はサンプリングの乱数ではなく、サーバーの混み具合にある。</p>
+
+      <div class="tldr">
+        <div class="box-title">🎯 3 行まとめ</div>
+        <ul>
+          <li>LLM は 1 トークンごとに「次に来る候補の確率の表」を計算し、その表からサイコロを振って 1 つ選ぶ。temperature・top_k・top_p はこのサイコロの振り方を変える設定だ。</li>
+          <li>temperature を 0 にすると、サイコロを振らずに毎回確率最大の候補を選ぶ。乱数はここで消える。</li>
+          <li>それでも答えが揺れるのは、同時に処理される他人のリクエスト数によって GPU 上の足し算の順序が変わり、確率の表そのものが微妙に変わるからだ。</li>
+        </ul>
+      </div>
+
+      <section class="body-section">
+        <h3>LLM は毎回「確率の表」を作っている</h3>
+        <p><a href="/archive/2026-07-25-2.html">以前の記事</a>で見たとおり、LLM は文章を 1 トークンずつ生成する。1 ステップでモデルが出力するのは「次のトークン」そのものではなく、語彙に含まれる全トークンへの点数の列だ。この点数を<strong>ロジット（logit）</strong>と呼ぶ。ロジットは負にもなる生の値で、まだ確率ではない。</p>
+        <p>ロジットを確率に直すのが <strong>softmax</strong> という関数だ。各ロジットを指数関数 <code>exp</code> に通してから全体の合計で割る。指数関数を通すので点数の差が確率では大きな差に広がり、合計はちょうど 1 になる。</p>
+        <p>最後に、この確率の表に従って乱数で 1 つを選ぶ。これを<strong>サンプリング</strong>と呼ぶ。選ばれたトークンを入力の末尾に足して、また次のロジットを計算する。生成はこの繰り返しだ。</p>
+<pre class="diagram"> 入力「日本の首都は」
+     │
+     ▼
+ ┌────────────┐
+ │   モデル   │ 行列演算の塊
+ └────────────┘
+     │ ロジット（点数）
+     ▼
+ 東京 4.0 / 大阪 3.0 / 京都 2.0 …
+     │ ÷ temperature
+     ▼
+ ┌────────────┐
+ │  softmax   │ 点数 → 確率
+ └────────────┘
+     │ 0.65 / 0.24 / 0.09 …
+     ▼
+ top_k / top_p で候補を足切り
+     │
+     ▼
+ 乱数で 1 つ選ぶ ─▶ 入力に足して次へ</pre>
+      </section>
+
+      <section class="body-section">
+        <h3>temperature は確率の表の「傾き」を変える</h3>
+        <p><strong>temperature</strong> は、softmax に通す前にロジットを割る数だ。1 より小さい値で割ると点数の差が広がり、上位の候補に確率が集中する。1 より大きい値で割ると差が縮み、下位の候補にも確率が回ってくる。</p>
+        <p>上の図の点数（東京 4.0・大阪 3.0・京都 2.0・札幌 0.5）で計算すると、temperature 1.0 では東京 0.652・大阪 0.240・京都 0.088 になる。0.5 にすると東京 0.866・大阪 0.117 まで偏り、0.1 では東京がほぼ 1.000 になる。表の中身の順位は変わらず、偏り方だけが変わる。</p>
+        <p>temperature をちょうど 0 にすると 0 で割ることになるため、実装は割り算をやめて「確率最大のトークンを選ぶ」処理に切り替えるのが普通だ。これを<strong>貪欲デコーディング（greedy decoding）</strong>と呼ぶ。ここにはもう乱数が入らない。Anthropic の Messages API リファレンスでは、<code>temperature</code> のデフォルトは <code>1.0</code>、範囲は <code>0.0</code>〜<code>1.0</code> で、分析的なタスクは 0 寄り、創作的なタスクは 1 寄りが推奨されている。</p>
+<pre class="code">{
+  "model": "...",
+  "max_tokens": 1024,
+  "temperature": 0.0,
+  "messages": [{"role": "user", "content": "..."}]
+}</pre>
+        <p>なお同リファレンスには、Claude Opus 4.6 より後に出たモデルでは <code>temperature</code> の指定自体ができず、<code>1.0</code> 以外の値は 400 エラーになると明記されている。設定を書く前に、使うモデルがこのパラメータを受け付けるかを確認したい。</p>
+      </section>
+
+      <div class="analogy">
+        <div class="box-title">🍱 たとえるなら</div>
+        <p>確率の表は、候補ごとに幅の違う区画を描いたルーレット盤だ。temperature を下げるのは、一番広い区画を広げてほかを細くする盤の描き直しにあたる。0 にすると玉を投げるのをやめて、一番広い区画を指差すだけになる。ただし盤を描く人の手元がわずかに揺れると、幅がほぼ同じ 2 つの区画のどちらが広いかが入れ替わりうる。温度 0 で残る揺れはこの描き直しの側の揺れで、玉の投げ方とは関係がない。</p>
+      </div>
+
+      <section class="body-section">
+        <h3>top_k と top_p は候補を足切りする</h3>
+        <p>temperature が表の傾きを変えるのに対し、<strong>top_k</strong> と <strong>top_p</strong> は表から候補を削る。top_k は確率の高い順に K 個だけを残す。Anthropic のリファレンスでは、確率の低い「ロングテール」の応答を除くための設定と説明されている。</p>
+        <p>top_p は <strong>nucleus sampling</strong> と呼ばれる方式で、確率の高い順に累積して、合計が指定値に達したところで打ち切る。先ほどの temperature 1.0 の表で <code>top_p: 0.9</code> とすると、東京 0.652 → 大阪まで 0.892 → 京都まで 0.980 で 0.9 に達するので、東京・大阪・京都の 3 つが残り、札幌は候補から消える。表が一つの候補に偏っていれば残る候補は少なくなり、平らなら多くなる。K 個固定の top_k と違い、残す数が場面ごとに伸び縮みする。</p>
+        <p>どちらも乱数で選ぶ前の段階の設定なので、temperature 0 のときは結果に影響しない。確率最大の候補は足切りされないからだ。Anthropic のリファレンスはどちらも「高度な用途向け」としており、Claude Opus 4.6 より後のモデルでは <code>top_k</code> は値にかかわらず拒否され、<code>top_p</code> は <code>0.99</code> 以上だけが受け付けられる。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>温度 0 でも揺れる本当の理由</h3>
+        <p>Anthropic のリファレンスには「<code>temperature</code> が <code>0.0</code> でも結果は完全には決定的にならない」と書かれている。サイコロを振らないのに揺れるなら、揺れているのは確率の表、つまりロジットの計算結果のほうだ。</p>
+        <p>出発点は<a href="/archive/2026-10-10.html">浮動小数点数</a>の性質だ。浮動小数点数の足し算は、足すたびに丸めが入るため結合法則が成り立たない。<code>(0.1+0.2)+0.3</code> と <code>0.1+(0.2+0.3)</code> は違う値になる。モデルの計算は巨大な行列の掛け算と足し算の集まりなので、足す順序が変われば結果の末尾の桁が変わる。</p>
+        <p>では順序を変えているのは何か。「GPU の並列スレッドが終わる順番が毎回ばらばらだから」と考えたくなる。しかし Thinking Machines Lab の分析によれば、LLM の推論の順伝播はそうした実行順に依存する演算を使っておらず、同じ入力・同じ条件なら毎回同じ値を返す。原因は別にある。GPU の計算カーネルは、一度にまとめて処理するリクエストの数（<strong>バッチサイズ</strong>）に応じて、効率のよい分割方法や足し算の順序を切り替える。そしてバッチサイズは、その瞬間にサーバーに届いている他人のリクエストの数で決まる。</p>
+        <p>つまり自分のリクエストから見ると、「サーバーの混み具合」が隠れた入力になっている。混み具合でロジットの末尾が変わり、上位 2 候補のロジットが拮抗している場面ではどちらが最大かが入れ替わる。生成は 1 トークンずつ積み重なるので、1 か所で違うトークンが選ばれるとそれ以降の文章は丸ごと別物になる。同記事の実験では、Qwen3-235B に temperature 0 で同じ質問を 1,000 回投げると 80 通りの回答が返り、最初の 102 トークンは全て一致し、103 トークン目で分岐していた。バッチサイズに結果が左右されない<strong>バッチ不変（batch-invariant）</strong>なカーネルに差し替えると、1,000 回すべてが一致した。代償は速度で、同記事が Qwen3-8B で行った計測では、1,000 本の生成にかかる時間が 26 秒から 42 秒に延びている。</p>
+      </section>
+
+      <div class="practical">
+        <div class="box-title">💼 実務でどう出会うか</div>
+        <p>LLM を組み込んだ機能のテストで、出力文字列の完全一致を assert すると、temperature 0 でもまれに落ちる不安定なテストになる。対策は、出力を JSON などの構造で受けて「必須フィールドがある」「分類ラベルが期待値のどれかに入る」のように意味で検証するか、単体テストでは API の応答を記録して再生し、モデル呼び出しを外すことだ。OpenAI の API には <code>seed</code> パラメータがあるが、公式 Cookbook でも決定性は保証されず、バックエンドの構成が変わったかを <code>system_fingerprint</code> で監視するよう案内されている。どの方法でも、同じ入力から同じ文字列が返ることを前提に設計しないのが安全だ。</p>
+      </div>
+
+      <div class="hands-on">
+        <div class="box-title">⌨️ 手を動かす（5 分）</div>
+        <p>temperature で確率の表の偏りが変わること、そして足す順序で浮動小数点の結果が変わることを Mac 標準の <code>python3</code> で確かめる。ターミナルにそのまま貼り付けて実行する。</p>
+<pre class="code">python3 - &lt;&lt;'EOF'
+import math
+logits = {"東京": 4.0, "大阪": 3.0, "京都": 2.0, "札幌": 0.5}
+for T in (1.0, 0.5, 0.1):
+    z = {k: math.exp(v / T) for k, v in logits.items()}
+    s = sum(z.values())
+    print(f"T={T}:", "  ".join(f"{k} {v/s:.3f}" for k, v in z.items()))
+print((0.1 + 0.2) + 0.3, 0.1 + (0.2 + 0.3))
+EOF</pre>
+        <p><code>T=1.0</code> では東京 0.652・大阪 0.240 と分散していた確率が、<code>T=0.1</code> では東京 1.000 に集中するはずだ。最終行は <code>0.6000000000000001 0.6</code> と表示され、同じ 3 つの数でも足す順序で値が変わることが分かる。モデルの中ではこの差がロジットに乗り、拮抗した候補の順位をひっくり返す。</p>
+      </div>
+
+      <div class="misconceptions">
+        <div class="box-title">🙅 よくある誤解</div>
+        <ul>
+          <li><span class="wrong">temperature を 0 にすれば出力は完全に再現できる</span> — 0 で消えるのはサンプリングの乱数だけだ。ロジットの計算自体が、同時に処理されるリクエスト数によって変わりうるため、API 経由では同じ入力でも出力が揺れる。</li>
+          <li><span class="wrong">temperature を上げるとモデルが創造的に「考える」ようになる</span> — temperature はすでに計算された確率の表の偏りを変えるだけで、モデルの知識や推論の中身は変わらない。上げるほど確率の低い候補、つまり誤りを含む候補も選ばれやすくなる。</li>
+          <li><span class="wrong">温度 0 で揺れるのは GPU スレッドの実行順が毎回ばらばらだからだ</span> — Thinking Machines Lab の分析では、推論の順伝播は同じ条件なら毎回同じ値を返す。揺れの主因は、バッチサイズによって計算カーネルが足し算の順序を変えることだ。</li>
+        </ul>
+      </div>
+
+      <div class="glossary">
+        <div class="box-title">📖 用語ミニ辞典</div>
+        <dl>
+          <dt>ロジット</dt><dd>モデルが語彙の各トークンに付ける、確率に直す前の生の点数。</dd>
+          <dt>softmax</dt><dd>点数の列を指数関数に通して正規化し、合計 1 の確率に変換する関数。</dd>
+          <dt>temperature</dt><dd>softmax の前にロジットを割る値。小さいほど上位の候補に確率が集中する。</dd>
+          <dt>貪欲デコーディング</dt><dd>乱数を使わず、毎ステップで確率最大のトークンを選ぶ生成方法。</dd>
+          <dt>nucleus sampling（top_p）</dt><dd>確率の高い順に累積し、指定した合計に達するまでの候補だけから選ぶ方式。</dd>
+          <dt>バッチ不変性</dt><dd>同時に処理するリクエスト数が変わっても、個々の計算結果が変わらない性質。</dd>
+        </dl>
+      </div>
+
+      <div class="further-reading">
+        <div class="box-title">🔗 もっと深く</div>
+        <ul>
+          <li><a href="https://thinkingmachines.ai/blog/defeating-nondeterminism-in-llm-inference/">Thinking Machines Lab: Defeating Nondeterminism in LLM Inference</a> — 温度 0 で揺れる原因をバッチ不変性の欠如まで突き止め、RMSNorm・行列積・Attention ごとに直し方を示した記事。</li>
+          <li><a href="https://platform.claude.com/docs/en/api/messages">Claude API Reference: Messages</a> — <code>temperature</code>・<code>top_k</code>・<code>top_p</code> の範囲・デフォルト値と、新しいモデルでの扱いの一次情報。</li>
+          <li><a href="https://developers.openai.com/cookbook/examples/reproducible_outputs_with_the_seed_parameter">OpenAI Cookbook: How to make your completions outputs reproducible with the new seed parameter</a> — <code>seed</code> と <code>system_fingerprint</code> による「ベストエフォートの再現性」の考え方。</li>
+          <li><a href="https://arxiv.org/abs/1904.09751">Holtzman et al.: The Curious Case of Neural Text Degeneration</a> — nucleus sampling（top_p）を提案した論文。貪欲デコーディングが単調な繰り返しを生む理由も論じている。</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- recent:start -->
+    <!-- recent:end -->
+
+    <footer>
+      <p>Generated by Claude Code (GitHub Actions)</p>
+      <a href="./" class="archive-link">過去の記事</a>
+    </footer>
+  </div>
+</body>
+</html>

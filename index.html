@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tech Learning Daily — created_at は正しく保存したはずなのに、なぜ画面の時刻が 9 時間ずれるのか？</title>
+  <title>Tech Learning Daily — temperature を 0 にしたのに、なぜ LLM の答えは毎回同じにならないのか？</title>
   <link rel="stylesheet" href="style.css">
   <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="feed.xml">
   <link rel="icon" href="/favicon.ico" sizes="48x48">
@@ -14,128 +14,137 @@
   <div class="container">
     <header>
       <h1>Tech Learning Daily</h1>
-      <div class="date">2026-10-12 (Mon) — 第 87 号</div>
+      <div class="date">2026-10-13 (Tue) — 第 88 号</div>
       <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
     </header>
 
     <article class="article">
       <div class="meta-bar">
-        <span class="tag tag-db">DB</span>
+        <span class="tag tag-ai">AI</span>
         <span class="difficulty">🌿 基礎</span>
         <span class="read-time">⏱ 約 7 分</span>
       </div>
-      <h2 class="article-title">created_at は正しく保存したはずなのに、なぜ画面の時刻が 9 時間ずれるのか？</h2>
-      <p class="lead">Rails の画面では正しい時刻が出ているのに、バッチで SQL から入れた行だけ 9 時間先の時刻になる。あるいは、フロントで <code>new Date("2026-10-12")</code> と書いた日付が、海外のユーザーの画面では前日になる。どれも「タイムゾーンの設定ミス」で片付けられがちだが、原因は 1 つの設定ではない。ずれは「時刻」という言葉に 2 種類の意味が混ざっているところから生まれる。</p>
+      <h2 class="article-title">temperature を 0 にしたのに、なぜ LLM の答えは毎回同じにならないのか？</h2>
+      <p class="lead">LLM の出力をテストで固定したくて <code>temperature: 0</code> を指定した。ところが CI で同じプロンプトを流すと、たまに 1 単語だけ違う答えが返ってきてテストが落ちる。「0 にしたのにランダムなのか」と思ったことはないだろうか。この揺れの原因はサンプリングの乱数ではなく、サーバーの混み具合にある。</p>
 
       <div class="tldr">
         <div class="box-title">🎯 3 行まとめ</div>
         <ul>
-          <li>時刻には、世界で 1 つに決まる「瞬間」と、場所ごとに読み方が違う「壁時計時刻」の 2 種類があり、両者をつなぐのがタイムゾーンの規則だ。</li>
-          <li>PostgreSQL の <code>timestamptz</code> はタイムゾーンを保存せず瞬間を UTC で持つ型で、<code>timestamp</code> は渡されたオフセットを黙って捨てる壁時計時刻の型だ。</li>
-          <li>9 時間ずれは、壁時計時刻を書いた側と読んだ側が別のタイムゾーンを仮定したときに起きる。境界では常にオフセット付きで受け渡すのが対策になる。</li>
+          <li>LLM は 1 トークンごとに「次に来る候補の確率の表」を計算し、その表からサイコロを振って 1 つ選ぶ。temperature・top_k・top_p はこのサイコロの振り方を変える設定だ。</li>
+          <li>temperature を 0 にすると、サイコロを振らずに毎回確率最大の候補を選ぶ。乱数はここで消える。</li>
+          <li>それでも答えが揺れるのは、同時に処理される他人のリクエスト数によって GPU 上の足し算の順序が変わり、確率の表そのものが微妙に変わるからだ。</li>
         </ul>
       </div>
 
       <section class="body-section">
-        <h3>「時刻」には 2 種類ある</h3>
-        <p>1 つ目は<strong>瞬間（instant）</strong>だ。「このリクエストが届いた時点」のように、世界のどこから見ても同じ 1 点を指す。コンピュータは瞬間を <strong>Unix 時間</strong>（1970-01-01 00:00:00 UTC からの経過秒数）のような 1 本の数直線上の数値で表す。<code>1791795600</code> という数値は、東京でもニューヨークでも同じ瞬間を指す。</p>
-        <p>2 つ目は<strong>壁時計時刻（wall clock time）</strong>だ。「10 月 12 日 18:00」のように、ある場所の時計の針が示す値で、どの場所の時計かを添えないと瞬間が 1 つに決まらない。<strong>UTC</strong>（協定世界時）は、この壁時計の基準になる世界共通の時計だと考えてよい。</p>
-        <p>瞬間と壁時計時刻を相互変換するのが<strong>タイムゾーン</strong>だ。ここで紛らわしいのが、<code>+09:00</code> のような<strong>オフセット</strong>（UTC との差）と、<code>Asia/Tokyo</code> のようなタイムゾーン名は別物だという点だ。オフセットはある瞬間の差を 1 つ書いた数値にすぎない。タイムゾーン名は「いつからいつまでは何時間差か」という規則の履歴全体を指す。<code>America/New_York</code> は夏時間の切り替えで <code>-05:00</code> と <code>-04:00</code> を行き来する。</p>
-<pre class="diagram">  瞬間: Unix 時間 1791795600
-  （= 2026-10-12 09:00 UTC）
-      │
-      ├─▶ Asia/Tokyo（常に +09:00）
-      │     └─▶ 10/12 18:00
-      │
-      └─▶ America/New_York
-            （夏時間中なので -04:00）
-            └─▶ 10/12 05:00
-
-  ▲ 規則（タイムゾーン）を通すと
-    同じ瞬間が別の壁時計時刻になる</pre>
-        <p>この規則は各国の政府が決め、ときに急に変わる。そのため規則は <strong>IANA tz データベース</strong>にまとめられ、IANA の説明によれば数か月に 1 回程度の頻度で更新版が出ている。OS や言語ランタイムはこのデータを同梱しているので、規則の変更は OS やランタイムを更新しないと反映されない。</p>
+        <h3>LLM は毎回「確率の表」を作っている</h3>
+        <p><a href="/archive/2026-07-25-2.html">以前の記事</a>で見たとおり、LLM は文章を 1 トークンずつ生成する。1 ステップでモデルが出力するのは「次のトークン」そのものではなく、語彙に含まれる全トークンへの点数の列だ。この点数を<strong>ロジット（logit）</strong>と呼ぶ。ロジットは負にもなる生の値で、まだ確率ではない。</p>
+        <p>ロジットを確率に直すのが <strong>softmax</strong> という関数だ。各ロジットを指数関数 <code>exp</code> に通してから全体の合計で割る。指数関数を通すので点数の差が確率では大きな差に広がり、合計はちょうど 1 になる。</p>
+        <p>最後に、この確率の表に従って乱数で 1 つを選ぶ。これを<strong>サンプリング</strong>と呼ぶ。選ばれたトークンを入力の末尾に足して、また次のロジットを計算する。生成はこの繰り返しだ。</p>
+<pre class="diagram"> 入力「日本の首都は」
+     │
+     ▼
+ ┌────────────┐
+ │   モデル   │ 行列演算の塊
+ └────────────┘
+     │ ロジット（点数）
+     ▼
+ 東京 4.0 / 大阪 3.0 / 京都 2.0 …
+     │ ÷ temperature
+     ▼
+ ┌────────────┐
+ │  softmax   │ 点数 → 確率
+ └────────────┘
+     │ 0.65 / 0.24 / 0.09 …
+     ▼
+ top_k / top_p で候補を足切り
+     │
+     ▼
+ 乱数で 1 つ選ぶ ─▶ 入力に足して次へ</pre>
       </section>
 
       <section class="body-section">
-        <h3>timestamptz はタイムゾーンを保存しない</h3>
-        <p>PostgreSQL には <code>timestamp</code>（正式名 <code>timestamp without time zone</code>）と <code>timestamptz</code>（<code>timestamp with time zone</code>）の 2 つの型がある。名前からは「後者はタイムゾーンも一緒に保存する」ように思える。しかし実際は、どちらも 8 バイトで、どちらにもタイムゾーンは入っていない。</p>
-        <p><code>timestamptz</code> は「瞬間」の型だ。入力にオフセットがあればそれを使って UTC に変換し、無ければセッションの <code>TimeZone</code> 設定を仮定して変換する。保存されるのは UTC の値だけで、元のオフセットは捨てられる。出力時は毎回、そのセッションの <code>TimeZone</code> に変換して表示する。</p>
-        <p><code>timestamp</code> は「壁時計時刻」の型だ。公式ドキュメントによれば、入力文字列にオフセットが書かれていても<strong>黙って無視</strong>し、日付と時刻の数字だけをそのまま保存する。どの場所の時計の値かという情報は、型にもデータにも残らない。</p>
-<pre class="code">SET TimeZone = 'Asia/Tokyo';
-SELECT '2026-10-12 09:00:00+00'::timestamptz;
--- 2026-10-12 18:00:00+09（UTC から変換して表示）
-SELECT '2026-10-12 09:00:00+00'::timestamp;
--- 2026-10-12 09:00:00（+00 は捨てられる）</pre>
-        <p>なお SQL 標準では、型名を <code>timestamp</code> とだけ書くと <code>without time zone</code> の意味になり、PostgreSQL もそれに従う。何も考えずに <code>timestamp</code> と書くと、壁時計時刻の型を選んだことになる。</p>
+        <h3>temperature は確率の表の「傾き」を変える</h3>
+        <p><strong>temperature</strong> は、softmax に通す前にロジットを割る数だ。1 より小さい値で割ると点数の差が広がり、上位の候補に確率が集中する。1 より大きい値で割ると差が縮み、下位の候補にも確率が回ってくる。</p>
+        <p>上の図の点数（東京 4.0・大阪 3.0・京都 2.0・札幌 0.5）で計算すると、temperature 1.0 では東京 0.652・大阪 0.240・京都 0.088 になる。0.5 にすると東京 0.866・大阪 0.117 まで偏り、0.1 では東京がほぼ 1.000 になる。表の中身の順位は変わらず、偏り方だけが変わる。</p>
+        <p>temperature をちょうど 0 にすると 0 で割ることになるため、実装は割り算をやめて「確率最大のトークンを選ぶ」処理に切り替えるのが普通だ。これを<strong>貪欲デコーディング（greedy decoding）</strong>と呼ぶ。ここにはもう乱数が入らない。Anthropic の Messages API リファレンスでは、<code>temperature</code> のデフォルトは <code>1.0</code>、範囲は <code>0.0</code>〜<code>1.0</code> で、分析的なタスクは 0 寄り、創作的なタスクは 1 寄りが推奨されている。</p>
+<pre class="code">{
+  "model": "...",
+  "max_tokens": 1024,
+  "temperature": 0.0,
+  "messages": [{"role": "user", "content": "..."}]
+}</pre>
+        <p>なお同リファレンスには、Claude Opus 4.6 より後に出たモデルでは <code>temperature</code> の指定自体ができず、<code>1.0</code> 以外の値は 400 エラーになると明記されている。設定を書く前に、使うモデルがこのパラメータを受け付けるかを確認したい。</p>
       </section>
 
       <div class="analogy">
         <div class="box-title">🍱 たとえるなら</div>
-        <p><code>timestamptz</code> は、受け取った待ち合わせ時刻をすべて「ロンドンの時計で何時か」に換算してメモし、読み上げるときは聞き手の街の時刻に直して伝える秘書だ。<code>timestamp</code> は「15:00」とだけ書いた付箋で、どの街の 15 時かは書いた人の頭の中にしかない。付箋を別の街の人が読めば、自分の街の 15 時だと受け取る。</p>
+        <p>確率の表は、候補ごとに幅の違う区画を描いたルーレット盤だ。temperature を下げるのは、一番広い区画を広げてほかを細くする盤の描き直しにあたる。0 にすると玉を投げるのをやめて、一番広い区画を指差すだけになる。ただし盤を描く人の手元がわずかに揺れると、幅がほぼ同じ 2 つの区画のどちらが広いかが入れ替わりうる。温度 0 で残る揺れはこの描き直しの側の揺れで、玉の投げ方とは関係がない。</p>
       </div>
 
       <section class="body-section">
-        <h3>Rails で 9 時間ずれる典型パターン</h3>
-        <p>Rails は 3 つの層で時刻を扱っている。アプリ側の表示用タイムゾーン <code>config.time_zone</code>、DB に書くときの壁時計の基準 <code>config.active_record.default_timezone</code>（デフォルトは <code>:utc</code>）、そして DB の列の型だ。Rails ガイドによれば、PostgreSQL では <code>t.datetime</code> が作る列はデフォルトで <code>timestamp without time zone</code> になる。</p>
-        <p>つまり Rails は「UTC の壁時計時刻」を付箋に書き、読むときも「これは UTC だ」と仮定して <code>config.time_zone</code>（たとえば <code>"Tokyo"</code>）に変換して表示する。Rails だけが読み書きしている間は、書く側と読む側の仮定が一致するのでずれない。</p>
-        <p>ずれるのは、別の書き手が別の仮定で同じ列に書いたときだ。たとえばセッションの <code>TimeZone</code> が <code>Asia/Tokyo</code> の psql やバッチから <code>INSERT ... VALUES (now())</code> を実行すると、<code>now()</code> が返す瞬間は <code>timestamp</code> 列に入る時点で東京の壁時計時刻に変換される。その値を Rails は UTC だと思って読み、さらに +9 時間して表示する。データは壊れていないように見えて、解釈の約束だけが食い違っている。</p>
-        <p>列を <code>timestamptz</code> にすると、DB 自身が瞬間として保持するので、書き手ごとのセッション設定の違いは変換時に吸収される。現在の Rails では次の設定で <code>t.datetime</code> の既定の型を切り替えられる。既存の列は自動では変わらないため、既存テーブルは別途マイグレーションで型を変える必要がある。</p>
-<pre class="code"># config/application.rb
-ActiveSupport.on_load(:active_record_postgresqladapter) do
-  self.datetime_type = :timestamptz
-end</pre>
+        <h3>top_k と top_p は候補を足切りする</h3>
+        <p>temperature が表の傾きを変えるのに対し、<strong>top_k</strong> と <strong>top_p</strong> は表から候補を削る。top_k は確率の高い順に K 個だけを残す。Anthropic のリファレンスでは、確率の低い「ロングテール」の応答を除くための設定と説明されている。</p>
+        <p>top_p は <strong>nucleus sampling</strong> と呼ばれる方式で、確率の高い順に累積して、合計が指定値に達したところで打ち切る。先ほどの temperature 1.0 の表で <code>top_p: 0.9</code> とすると、東京 0.652 → 大阪まで 0.892 → 京都まで 0.980 で 0.9 に達するので、東京・大阪・京都の 3 つが残り、札幌は候補から消える。表が一つの候補に偏っていれば残る候補は少なくなり、平らなら多くなる。K 個固定の top_k と違い、残す数が場面ごとに伸び縮みする。</p>
+        <p>どちらも乱数で選ぶ前の段階の設定なので、temperature 0 のときは結果に影響しない。確率最大の候補は足切りされないからだ。Anthropic のリファレンスはどちらも「高度な用途向け」としており、Claude Opus 4.6 より後のモデルでは <code>top_k</code> は値にかかわらず拒否され、<code>top_p</code> は <code>0.99</code> 以上だけが受け付けられる。</p>
       </section>
 
       <section class="body-section">
-        <h3>JavaScript の Date と API の境界</h3>
-        <p>JavaScript の <code>Date</code> の中身は、エポックからのミリ秒数という瞬間だけだ。問題は文字列から作るときに起きる。MDN によれば、<code>"2026-10-12"</code> のように日付だけの文字列は UTC として、<code>"2026-10-12T00:00"</code> のようにオフセットの無い日時の文字列は実行環境のローカル時刻として解釈される。</p>
-        <p>そのため、日付だけの文字列を UTC の 0 時として読んだあと画面にローカル時刻で表示すると、UTC より西のタイムゾーンでは前日の夕方になる。同じ API レスポンスが、東京の開発者の画面では正しく、カリフォルニアのユーザーの画面では 1 日ずれる。</p>
-        <p>境界での受け渡しは <code>2026-10-12T09:00:00Z</code> や <code>2026-10-12T18:00:00+09:00</code> のように、オフセットを必ず含む ISO 8601 形式にそろえるのが基本になる。オフセットが付いていれば、受け手がどのタイムゾーンを仮定していても同じ瞬間に復元できるからだ。</p>
+        <h3>温度 0 でも揺れる本当の理由</h3>
+        <p>Anthropic のリファレンスには「<code>temperature</code> が <code>0.0</code> でも結果は完全には決定的にならない」と書かれている。サイコロを振らないのに揺れるなら、揺れているのは確率の表、つまりロジットの計算結果のほうだ。</p>
+        <p>出発点は<a href="/archive/2026-10-10.html">浮動小数点数</a>の性質だ。浮動小数点数の足し算は、足すたびに丸めが入るため結合法則が成り立たない。<code>(0.1+0.2)+0.3</code> と <code>0.1+(0.2+0.3)</code> は違う値になる。モデルの計算は巨大な行列の掛け算と足し算の集まりなので、足す順序が変われば結果の末尾の桁が変わる。</p>
+        <p>では順序を変えているのは何か。「GPU の並列スレッドが終わる順番が毎回ばらばらだから」と考えたくなる。しかし Thinking Machines Lab の分析によれば、LLM の推論の順伝播はそうした実行順に依存する演算を使っておらず、同じ入力・同じ条件なら毎回同じ値を返す。原因は別にある。GPU の計算カーネルは、一度にまとめて処理するリクエストの数（<strong>バッチサイズ</strong>）に応じて、効率のよい分割方法や足し算の順序を切り替える。そしてバッチサイズは、その瞬間にサーバーに届いている他人のリクエストの数で決まる。</p>
+        <p>つまり自分のリクエストから見ると、「サーバーの混み具合」が隠れた入力になっている。混み具合でロジットの末尾が変わり、上位 2 候補のロジットが拮抗している場面ではどちらが最大かが入れ替わる。生成は 1 トークンずつ積み重なるので、1 か所で違うトークンが選ばれるとそれ以降の文章は丸ごと別物になる。同記事の実験では、Qwen3-235B に temperature 0 で同じ質問を 1,000 回投げると 80 通りの回答が返り、最初の 102 トークンは全て一致し、103 トークン目で分岐していた。バッチサイズに結果が左右されない<strong>バッチ不変（batch-invariant）</strong>なカーネルに差し替えると、1,000 回すべてが一致した。代償は速度で、同記事が Qwen3-8B で行った計測では、1,000 本の生成にかかる時間が 26 秒から 42 秒に延びている。</p>
       </section>
 
       <div class="practical">
         <div class="box-title">💼 実務でどう出会うか</div>
-        <p>「すでに起きた出来事」（注文日時・ログイン日時・ログ）は瞬間として UTC で持てばよく、PostgreSQL なら <code>timestamptz</code> が素直な選択だ。一方「来年 3 月の毎週月曜 10:00 に東京で会議」のような未来の予定は、壁時計時刻と <code>Asia/Tokyo</code> のようなタイムゾーン名をセットで保存する。今の規則で UTC に換算して保存すると、夏時間の導入や廃止で規則が変わったとき、予定が 1 時間ずれた瞬間を指してしまう。誕生日や締め日のように時刻を持たない値は、<code>date</code> 型で日付として持つ方が、0 時の UTC 換算による 1 日ずれを避けられる。</p>
+        <p>LLM を組み込んだ機能のテストで、出力文字列の完全一致を assert すると、temperature 0 でもまれに落ちる不安定なテストになる。対策は、出力を JSON などの構造で受けて「必須フィールドがある」「分類ラベルが期待値のどれかに入る」のように意味で検証するか、単体テストでは API の応答を記録して再生し、モデル呼び出しを外すことだ。OpenAI の API には <code>seed</code> パラメータがあるが、公式 Cookbook でも決定性は保証されず、バックエンドの構成が変わったかを <code>system_fingerprint</code> で監視するよう案内されている。どの方法でも、同じ入力から同じ文字列が返ることを前提に設計しないのが安全だ。</p>
       </div>
 
       <div class="hands-on">
         <div class="box-title">⌨️ 手を動かす（5 分）</div>
-        <p>同じ Unix 時間 0 がタイムゾーンによって違う壁時計時刻に見えること、そして JavaScript の文字列解釈の違いを Mac のターミナルで確かめる（<code>node</code> が入っている前提）。</p>
-<pre class="code">TZ=UTC date -r 0
-TZ=Asia/Tokyo date -r 0
-TZ=America/Los_Angeles node -e 'console.log(new Date("2026-10-12").toString())'
-TZ=America/Los_Angeles node -e 'console.log(new Date("2026-10-12T00:00").toString())'</pre>
-        <p><code>date -r 0</code> は 1970 年 1 月 1 日の 00:00 UTC と 09:00 JST を表示し、同じ瞬間が別の壁時計時刻で読まれることが分かる。<code>node</code> の 1 行目は <code>Sun Oct 11 2026 17:00:00 GMT-0700</code> と前日になり、2 行目は <code>Mon Oct 12 2026 00:00:00 GMT-0700</code> になるはずだ。違いは文字列に時刻部分があるかどうかだけだ。</p>
+        <p>temperature で確率の表の偏りが変わること、そして足す順序で浮動小数点の結果が変わることを Mac 標準の <code>python3</code> で確かめる。ターミナルにそのまま貼り付けて実行する。</p>
+<pre class="code">python3 - &lt;&lt;'EOF'
+import math
+logits = {"東京": 4.0, "大阪": 3.0, "京都": 2.0, "札幌": 0.5}
+for T in (1.0, 0.5, 0.1):
+    z = {k: math.exp(v / T) for k, v in logits.items()}
+    s = sum(z.values())
+    print(f"T={T}:", "  ".join(f"{k} {v/s:.3f}" for k, v in z.items()))
+print((0.1 + 0.2) + 0.3, 0.1 + (0.2 + 0.3))
+EOF</pre>
+        <p><code>T=1.0</code> では東京 0.652・大阪 0.240 と分散していた確率が、<code>T=0.1</code> では東京 1.000 に集中するはずだ。最終行は <code>0.6000000000000001 0.6</code> と表示され、同じ 3 つの数でも足す順序で値が変わることが分かる。モデルの中ではこの差がロジットに乗り、拮抗した候補の順位をひっくり返す。</p>
       </div>
 
       <div class="misconceptions">
         <div class="box-title">🙅 よくある誤解</div>
         <ul>
-          <li><span class="wrong"><code>timestamp with time zone</code> は入力時のタイムゾーンを保存している</span> — 保存されるのは UTC に換算した瞬間だけで、元のオフセットは捨てられる。表示時のオフセットは読み手のセッション設定から付け直されたものだ。</li>
-          <li><span class="wrong"><code>+09:00</code> と <code>Asia/Tokyo</code> は同じ意味だ</span> — オフセットはある瞬間の差を 1 つ書いた値で、タイムゾーン名は規則の履歴全体を指す。夏時間のある地域では、同じタイムゾーン名でも日付によってオフセットが変わる。</li>
-          <li><span class="wrong">全部 UTC で保存しておけば時刻の問題は起きない</span> — 過去の出来事には有効だが、未来の現地時刻の予定は、規則の変更で UTC 換算がずれうる。壁時計時刻とタイムゾーン名で持つ方が正しい場合がある。</li>
+          <li><span class="wrong">temperature を 0 にすれば出力は完全に再現できる</span> — 0 で消えるのはサンプリングの乱数だけだ。ロジットの計算自体が、同時に処理されるリクエスト数によって変わりうるため、API 経由では同じ入力でも出力が揺れる。</li>
+          <li><span class="wrong">temperature を上げるとモデルが創造的に「考える」ようになる</span> — temperature はすでに計算された確率の表の偏りを変えるだけで、モデルの知識や推論の中身は変わらない。上げるほど確率の低い候補、つまり誤りを含む候補も選ばれやすくなる。</li>
+          <li><span class="wrong">温度 0 で揺れるのは GPU スレッドの実行順が毎回ばらばらだからだ</span> — Thinking Machines Lab の分析では、推論の順伝播は同じ条件なら毎回同じ値を返す。揺れの主因は、バッチサイズによって計算カーネルが足し算の順序を変えることだ。</li>
         </ul>
       </div>
 
       <div class="glossary">
         <div class="box-title">📖 用語ミニ辞典</div>
         <dl>
-          <dt>Unix 時間</dt><dd>1970-01-01 00:00:00 UTC からの経過秒数で瞬間を表す方式。</dd>
-          <dt>UTC</dt><dd>協定世界時。各地の壁時計時刻の基準になる世界共通の時刻。</dd>
-          <dt>壁時計時刻</dt><dd>ある場所の時計が示す日付と時刻。場所が分からないと瞬間に戻せない。</dd>
-          <dt>オフセット</dt><dd><code>+09:00</code> のような、ある瞬間における UTC との時差。</dd>
-          <dt>IANA tz データベース</dt><dd><code>Asia/Tokyo</code> などのタイムゾーン名ごとに時差と夏時間の規則の履歴を収めたデータ。</dd>
-          <dt>timestamptz</dt><dd>PostgreSQL で瞬間を UTC で保持し、表示時にセッションのタイムゾーンへ変換する型。</dd>
+          <dt>ロジット</dt><dd>モデルが語彙の各トークンに付ける、確率に直す前の生の点数。</dd>
+          <dt>softmax</dt><dd>点数の列を指数関数に通して正規化し、合計 1 の確率に変換する関数。</dd>
+          <dt>temperature</dt><dd>softmax の前にロジットを割る値。小さいほど上位の候補に確率が集中する。</dd>
+          <dt>貪欲デコーディング</dt><dd>乱数を使わず、毎ステップで確率最大のトークンを選ぶ生成方法。</dd>
+          <dt>nucleus sampling（top_p）</dt><dd>確率の高い順に累積し、指定した合計に達するまでの候補だけから選ぶ方式。</dd>
+          <dt>バッチ不変性</dt><dd>同時に処理するリクエスト数が変わっても、個々の計算結果が変わらない性質。</dd>
         </dl>
       </div>
 
       <div class="further-reading">
         <div class="box-title">🔗 もっと深く</div>
         <ul>
-          <li><a href="https://www.postgresql.org/docs/current/datatype-datetime.html">PostgreSQL: Date/Time Types</a> — <code>timestamp</code> と <code>timestamptz</code> の入力・保存・出力の規則が一次情報で確認できる。</li>
-          <li><a href="https://guides.rubyonrails.org/configuring.html#activerecord-connectionadapters-postgresqladapter-datetime-type">Rails Guides: Configuring — datetime_type</a> — Rails が作る列の型を <code>timestamptz</code> に切り替える公式の設定方法。</li>
-          <li><a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/parse">MDN: Date.parse()</a> — 日付だけの文字列とオフセット無しの日時文字列で解釈が分かれる例が載っている。</li>
-          <li><a href="https://data.iana.org/time-zones/tz-link.html">IANA: Time zone and daylight saving time data</a> — tz データベースの命名規則と、規則が政府の決定で変わり続ける事情の説明。</li>
+          <li><a href="https://thinkingmachines.ai/blog/defeating-nondeterminism-in-llm-inference/">Thinking Machines Lab: Defeating Nondeterminism in LLM Inference</a> — 温度 0 で揺れる原因をバッチ不変性の欠如まで突き止め、RMSNorm・行列積・Attention ごとに直し方を示した記事。</li>
+          <li><a href="https://platform.claude.com/docs/en/api/messages">Claude API Reference: Messages</a> — <code>temperature</code>・<code>top_k</code>・<code>top_p</code> の範囲・デフォルト値と、新しいモデルでの扱いの一次情報。</li>
+          <li><a href="https://developers.openai.com/cookbook/examples/reproducible_outputs_with_the_seed_parameter">OpenAI Cookbook: How to make your completions outputs reproducible with the new seed parameter</a> — <code>seed</code> と <code>system_fingerprint</code> による「ベストエフォートの再現性」の考え方。</li>
+          <li><a href="https://arxiv.org/abs/1904.09751">Holtzman et al.: The Curious Case of Neural Text Degeneration</a> — nucleus sampling（top_p）を提案した論文。貪欲デコーディングが単調な繰り返しを生む理由も論じている。</li>
         </ul>
       </div>
     </article>
@@ -143,6 +152,11 @@ TZ=America/Los_Angeles node -e 'console.log(new Date("2026-10-12T00:00").toStrin
     <!-- recent:start -->
     <section class="section recent-articles">
       <div class="section-title">最近の記事</div>
+      <div class="card">
+        <h3><a href="archive/2026-10-12.html">created_at は正しく保存したはずなのに、なぜ画面の時刻が 9 時間ずれるのか？</a></h3>
+        <div class="summary">時刻には世界で 1 つに決まる「瞬間」と場所ごとの「壁時計時刻」がある。PostgreSQL の timestamptz と timestamp の違い、Rails の列型と SQL 直書きで 9 時間ずれる仕組み、JS の Date 文字列解釈で 1 日ずれる理由と対策まで。</div>
+        <div class="meta"><span class="tag tag-db">DB</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-12</span></div>
+      </div>
       <div class="card">
         <h3><a href="archive/2026-10-11.html">見た目は 1 文字なのに、なぜ JS は 8、Go は 18、Ruby は 5 と数えるのか？</a></h3>
         <div class="summary">文字には符号位置・UTF-8/UTF-16 の符号化・書記素クラスタの 3 層があり、JS・Go・Ruby はそれぞれ違う層を数えている。UTF-8 の可変長設計、サロゲートペア、MySQL の utf8mb3 で絵文字が入らない理由まで。</div>
@@ -157,11 +171,6 @@ TZ=America/Los_Angeles node -e 'console.log(new Date("2026-10-12T00:00").toStrin
         <h3><a href="archive/2026-10-09.html">docker stop を叩いただけなのに、なぜコンテナは 10 秒も止まらないのか？</a></h3>
         <div class="summary">docker stopはPID 1にSIGTERMを送り既定10秒後にSIGKILLする。LinuxがPID 1にはハンドラ登録済みのシグナルしか届けないため、shell形式のCMDやハンドラ無しのアプリでは無視される仕組みと、exec形式・tini(--init)による対策を解説。</div>
         <div class="meta"><span class="tag tag-container">Container</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-09</span></div>
-      </div>
-      <div class="card">
-        <h3><a href="archive/2026-10-08.html">COMMIT が返った瞬間、データはまだメモリにしかないのに、なぜ停電しても消えないのか？</a></h3>
-        <div class="summary">PostgreSQLがCOMMIT時にテーブル本体ではなくWAL(先行書き込みログ)だけをディスクに確定させて成功を返す仕組みと、チェックポイントによる書き戻し・クラッシュ後のREDO、synchronous_commit=offとfsync=offの違いを解説。</div>
-        <div class="meta"><span class="tag tag-db">DB</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-08</span></div>
       </div>
       <div class="recent-more"><a href="archive/">アーカイブですべて見る →</a></div>
     </section>

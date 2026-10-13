@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-10-12T09:40:12+09:00</updated>
+  <updated>2026-10-13T11:39:25+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>temperature を 0 にしたのに、なぜ LLM の答えは毎回同じにならないのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-10-13.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-10-13.html</id>
+    <updated>2026-10-13T11:39:25+09:00</updated>
+    <summary>LLMは毎トークン確率の表から候補を選び、temperature・top_k・top_pはその選び方を変える。温度0で乱数は消えるが、同時処理数で足し算の順序が変わりロジットが揺れるため出力は完全には一致しない。</summary>
+  </entry>
   <entry>
     <title>created_at は正しく保存したはずなのに、なぜ画面の時刻が 9 時間ずれるのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-10-12.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-09-30.html</id>
     <updated>2026-09-30T09:39:53+09:00</updated>
     <summary>単一DBのCOMMITは1回のログ書き込みで守られるが、サービスをまたぐと同じ発想は使えない。2PCはprepareで全員の合意を取るが、コーディネータ障害でロックを持ったまま止まるブロッキング問題があり、Sagaは確定を待たず進めて失敗時は補償トランザクションで打ち消す代わりに分離性を失う。</summary>
-  </entry>
-  <entry>
-    <title>サーバーはまだ書き終えていないのに、なぜ ChatGPT の返信は一文字ずつ流れてくるのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-09-29.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-09-29.html</id>
-    <updated>2026-09-29T10:04:19+09:00</updated>
-    <summary>HTTP/1.1のTransfer-Encoding: chunkedは長さ不明のまま小分け送信する仕組みだが、HTTP/2はこのヘッダーを禁止しDATAフレームで同じことをネイティブに行う。LLM APIはその上にSSEで意味のある区切りを重ね、プロキシのバッファリングが効果を打ち消す落とし穴を解説。</summary>
   </entry>
 </feed>

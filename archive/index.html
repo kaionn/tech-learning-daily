@@ -35,7 +35,7 @@
         <button class="chip" data-cat="db">DB <span class="chip-count">11</span></button>
         <button class="chip" data-cat="arch">Arch <span class="chip-count">9</span></button>
         <button class="chip" data-cat="security">Security <span class="chip-count">8</span></button>
-        <button class="chip" data-cat="ai">AI <span class="chip-count">6</span></button>
+        <button class="chip" data-cat="ai">AI <span class="chip-count">7</span></button>
         <button class="chip" data-cat="infra">Infra <span class="chip-count">6</span></button>
         <button class="chip" data-cat="lang">Lang <span class="chip-count">6</span></button>
         <button class="chip" data-cat="dev" data-overflow="1" hidden>Dev <span class="chip-count">4</span></button>
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-10">
       <div class="section-title">2026 年 10 月 <span class="count"></span></div>
+      <div class="card" data-cat="ai" data-diff="基礎"
+           data-search="temperature を 0 にしたのに、なぜ llm の答えは毎回同じにならないのか？ llm は 1 トークンごとに確率の表を作って候補を選び、temperature・top_k・top_p はその選び方を変える。温度 0 で乱数は消えるのに出力が揺れるのは、同時処理されるリクエスト数で gpu の足し算の順序が変わりロジット自体が変わるからだ。" data-terms="ロジット / softmax / temperature / 貪欲デコーディング / nucleus sampling（top_p） / バッチ不変性">
+        <h3><a href="2026-10-13.html">temperature を 0 にしたのに、なぜ LLM の答えは毎回同じにならないのか？</a></h3>
+        <div class="summary">LLM は 1 トークンごとに確率の表を作って候補を選び、temperature・top_k・top_p はその選び方を変える。温度 0 で乱数は消えるのに出力が揺れるのは、同時処理されるリクエスト数で GPU の足し算の順序が変わりロジット自体が変わるからだ。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-ai">AI</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-13</span></div>
+      </div>
       <div class="card" data-cat="db" data-diff="基礎"
            data-search="created_at は正しく保存したはずなのに、なぜ画面の時刻が 9 時間ずれるのか？ 時刻には世界で 1 つに決まる「瞬間」と場所ごとの「壁時計時刻」がある。postgresql の timestamptz と timestamp の違い、rails の列型と sql 直書きで 9 時間ずれる仕組み、js の date 文字列解釈で 1 日ずれる理由と対策まで。" data-terms="Unix 時間 / UTC / 壁時計時刻 / オフセット / IANA tz データベース / timestamptz">
         <h3><a href="2026-10-12.html">created_at は正しく保存したはずなのに、なぜ画面の時刻が 9 時間ずれるのか？</a></h3>

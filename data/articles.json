@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-10-13.html",
+    "date": "2026-10-13",
+    "title": "temperature を 0 にしたのに、なぜ LLM の答えは毎回同じにならないのか？",
+    "summary": "LLM は 1 トークンごとに確率の表を作って候補を選び、temperature・top_k・top_p はその選び方を変える。温度 0 で乱数は消えるのに出力が揺れるのは、同時処理されるリクエスト数で GPU の足し算の順序が変わりロジット自体が変わるからだ。",
+    "category": "ai",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": ["ロジット", "softmax", "temperature", "貪欲デコーディング", "nucleus sampling（top_p）", "バッチ不変性"]
+  },
+  {
     "file": "2026-10-12.html",
     "date": "2026-10-12",
     "title": "created_at は正しく保存したはずなのに、なぜ画面の時刻が 9 時間ずれるのか？",
