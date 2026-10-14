@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tech Learning Daily — CPU は半分も使っていないのに、なぜ load average は 20 もあるのか？</title>
+  <link rel="stylesheet" href="../style.css">
+  <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="../feed.xml">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Tech Learning Daily</h1>
+      <div class="date">2026-10-14 (Wed) — 第 89 号</div>
+      <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
+    </header>
+
+    <article class="article">
+      <div class="meta-bar">
+        <span class="tag tag-perf">Perf</span>
+        <span class="difficulty">🌿 基礎</span>
+        <span class="read-time">⏱ 約 7 分</span>
+      </div>
+      <h2 class="article-title">CPU は半分も使っていないのに、なぜ load average は 20 もあるのか？</h2>
+      <p class="lead">「サーバーが重い」と言われて <code>top</code> を開く。4 コアのマシンで CPU 使用率は 50% 程度なのに、右上の <code>load average</code> は 20 を超えている。「4 コアなら 4 が上限では？」と首をかしげたことはないだろうか。この数字は CPU の忙しさではなく、「何かを待っているタスクの数」を数えている。そして Linux は、その「待っている」の範囲が他の OS より広い。</p>
+
+      <div class="tldr">
+        <div class="box-title">🎯 3 行まとめ</div>
+        <ul>
+          <li>load average は CPU 使用率ではなく、「CPU で動いている、または動く順番を待っている」タスクの数を時間でならした値だ。</li>
+          <li>Linux はこれに加えて、ディスク I/O などで割り込み不可の待ちに入っている D 状態のタスクも数える。だから CPU が空いていても load は跳ね上がる。</li>
+          <li>1・5・15 分の値は単純平均ではなく、5 秒ごとのサンプルを指数的に減衰させた値で、増減の傾向を見るのに向いている。原因の切り分けには <code>vmstat</code> の <code>r</code> 列や PSI を使う。</li>
+        </ul>
+      </div>
+
+      <section class="body-section">
+        <h3>load average は「列に並んでいる人数」である</h3>
+        <p>CPU 使用率は「CPU が仕事をしていた時間の割合」なので、100% より上にはならない。一方 load average が数えるのは時間ではなく、<strong>タスクの数</strong>だ。ここでのタスクはプロセスまたはスレッドのことで、カーネルのスケジューラが CPU を割り当てる単位である。</p>
+        <p>Linux のスケジューラは、CPU で実行中のタスクと、CPU が空くのを待っているタスクを <code>R</code>（runnable）状態として扱う。CPU 待ちのタスクが並ぶ列を<strong>ランキュー</strong>と呼ぶ。4 コアのマシンで R 状態のタスクが 4 個なら全コアがちょうど埋まっている。10 個なら 6 個は列で待っている。つまり load は CPU 数を超えられ、超えた分は「待たされている仕事」を表す。</p>
+        <p>生の値は <code>/proc/loadavg</code> で読める。<code>uptime</code> や <code>top</code> もこのファイルを表示している。</p>
+        <pre class="code">$ cat /proc/loadavg
+20.31 18.02 9.47 3/812 48211</pre>
+        <p>先頭 3 つが 1・5・15 分の load average だ。4 つ目の <code>3/812</code> は「今この瞬間に実行可能なタスク数 / 存在するタスクの総数」、5 つ目は直近に作られたプロセスの PID である。ここで違和感が出る。4 つ目を見ると実行可能なタスクはたった 3 個なのに、load は 20 もある。残りの 17 はどこから来たのか。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>Linux だけが「D 状態」も数える</h3>
+        <p>答えは、Linux が R 状態に加えて <strong>D 状態</strong>のタスクも load に足していることにある。D 状態（uninterruptible sleep、割り込み不可の待ち）とは、ディスク I/O の完了などを待っている間、シグナルを受けても起きないタスクの状態だ。<code>ps</code> や <code>top</code> の状態列に <code>D</code> と表示される。<code>sleep</code> やソケットの受信待ちのような通常の待ちは <code>S</code>（割り込み可能な待ち）で、こちらは数えない。</p>
+        <pre class="diagram"> 4 コアのマシン、ある瞬間の様子
+ CPU  ┌────┬────┬────┬────┐
+      │ A  │ B  │idle│idle│  R 実行中   2
+      └────┴────┴────┴────┘
+ ランキュー（空）            R 実行待ち 0
+ ディスク待ち ▶ C D E … T    D 待ち    18
+ ──────────────────────────────────────
+ この瞬間の数 = 2 + 0 + 18 = 20
+ CPU 使用率は 50% なのに load は 20</pre>
+        <p>load average は 1973 年の RFC 546 の頃から CPU の需要を測る指標だった。Linux が D 状態を加えたのは 1993 年の Linux 0.99 patchlevel 14 で、パッチ作者の Matthias Urlichs は「スワップや割り込み不可の I/O を待っているプロセスも資源を消費している」と理由を書いている。きっかけは、速いスワップディスクを遅いものに替えたらシステムは重くなったのに load が下がった、という逆転現象だった。CPU 待ちだけを数えると、I/O が詰まってタスクが CPU を使えなくなるほど数字が下がってしまう。</p>
+        <p>その結果、Linux の load は「CPU・ディスク・一部のロックに対する需要の合計」になった。Brendan Gregg の調査によれば、D 状態に入るカーネル内のコードパスは 0.99.14 では 13 箇所だったが、Linux 4.12 では 400 箇所近くに増え、一部のロック待ちも含まれる。NFS サーバーが応答しなくなったり、ディスクが遅くなったりすると、CPU は暇なのに load だけが積み上がる。冒頭の「CPU 50% で load 20」はこの状態だ。</p>
+      </section>
+
+      <div class="analogy">
+        <div class="box-title">🍱 たとえるなら</div>
+        <p>銀行の「店内の待ち人数」表示に近い。窓口で手続き中の人と、番号札を持って順番を待つ人に加え、Linux 版は「奥で書類の取り寄せを待っている人」まで数える。窓口（CPU）が半分空いていても、書類待ちの人が 18 人いれば表示は 20 になる。ここで窓口を増やしても書類は早く届かない。</p>
+      </div>
+
+      <section class="body-section">
+        <h3>1・5・15 分は「平均」ではない</h3>
+        <p>3 つの数字は、名前から「直近 1 分間の平均」のように思える。しかし実際は、カーネルが 5 秒ごとにタスク数をサンプルし、古い値ほど重みを指数的に小さくして足し込んだ値（指数減衰移動平均）だ。1・5・15 分は「どれくらいの速さで過去を忘れるか」を決める定数にすぎない。</p>
+        <p>この計算のため、値は負荷の変化に遅れて追いつく。Gregg の実験では、アイドル状態のマシンで CPU を使い切るスレッドを 1 本だけ起動すると、1 分後の 1 分値は 1.0 ではなく約 0.62 だった。負荷が 1 分続いても、1 分値はまだ 1 に届かない。</p>
+        <p>実務での読み方は、3 つの値の大小関係だ。1 分値が 15 分値より大きければ負荷は増えている途中、小さければ収まりつつある。冒頭の <code>20.31 18.02 9.47</code> なら、15 分ほど前から負荷が積み上がり、今も高止まりしていると読める。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>CPU 数で割る目安と、その先の切り分け</h3>
+        <p>よく言われる「load が CPU 数を超えたら危険」は目安にとどまる。CPU 待ちだけを数える OS なら load ÷ CPU 数は CPU の飽和度に近いが、Linux の値には D 状態が混ざるので、割っても CPU が足りないのかディスクが遅いのかは区別できない。Gregg も、Linux の load は同じマシンの過去の値と比べる相対的な使い方を勧めている。</p>
+        <p>load が高いと分かったら、次は内訳を見る。<code>vmstat 1</code> の <code>r</code> 列は R 状態のタスク数、<code>b</code> 列は D 状態のタスク数を 1 秒ごとに表示する。<code>r</code> が CPU 数を大きく超えていれば CPU 不足、<code>b</code> が大きく <code>wa</code>（I/O 待ちの CPU 時間）も高ければディスクやネットワークストレージを疑う。D 状態のタスク名は <code>ps -eo state,pid,comm | awk '$1=="D"'</code> で列挙できる。</p>
+        <p>より直接的な指標が、Linux 4.20 で入った <strong>PSI</strong>（Pressure Stall Information）だ。タスクの数ではなく「資源待ちで止まっていた時間の割合」を CPU・メモリ・I/O 別に出す。</p>
+        <pre class="code">$ cat /proc/pressure/io
+some avg10=42.10 avg60=38.55 avg300=20.07 total=912873412
+full avg10=31.80 avg60=29.40 avg300=14.62 total=701223877</pre>
+        <p><code>some</code> は「少なくとも 1 つのタスクが I/O 待ちで止まっていた時間の割合」、<code>full</code> は「動けるはずの全タスクが同時に止まっていた時間の割合」で、<code>avg10</code>/<code>avg60</code>/<code>avg300</code> は 10・60・300 秒の平均（%）である。上の例なら直近 10 秒の約 3 割、全タスクが I/O で止まっていた。PSI は <code>CONFIG_PSI</code> を有効にしたカーネルでのみ使え、ディストリビューションによっては組み込まれていても既定で無効のため、ブートパラメータ <code>psi=1</code> で有効化する必要がある。</p>
+        <p>コンテナで見るときは注意がいる。<code>/proc/loadavg</code> はコンテナごとに分かれておらず、LXCFS のような仕組みで仮想化しない限り、コンテナ内の <code>uptime</code> はホスト全体の値を返す。一方 PSI は cgroup v2 ごとに <code>cpu.pressure</code>・<code>memory.pressure</code>・<code>io.pressure</code> を持つので、コンテナ単位の詰まりを見るならこちらを使う。</p>
+      </section>
+
+      <div class="practical">
+        <div class="box-title">💼 実務でどう出会うか</div>
+        <p>監視ダッシュボードで「load average &gt; CPU 数」のアラートが鳴ったのに CPU 使用率は低い、という場面が典型だ。このときスケールアウトして CPU を足しても、原因が EBS のスループット上限や NFS の遅延なら D 状態のタスクは減らず、load も下がらない。まず <code>vmstat 1</code> の <code>r</code> と <code>b</code> を見て CPU 起因か I/O 起因かを分け、I/O ならストレージ側のメトリクスへ進む。Kubernetes のノードで load が高い場合、その数字はノード上の全 Pod の合算なので、どの Pod が詰まっているかは各 cgroup の PSI か Pod 単位のメトリクスで確かめる。</p>
+      </div>
+
+      <div class="hands-on">
+        <div class="box-title">⌨️ 手を動かす（5 分）</div>
+        <p>Docker で CPU を使い切るループを 2 本走らせ、<code>/proc/loadavg</code> の 1 分値がどう追いつくかを 5 秒ごとに観察する（Mac の Docker Desktop なら、裏で動く Linux VM の値が見える）。</p>
+        <pre class="code">docker run --rm ubuntu bash -c '
+echo "CPU: $(nproc)"
+for i in 1 2; do (while :; do :; done) &amp; done
+for t in $(seq 1 12); do
+  sleep 5
+  echo "$(date +%T) $(cut -d" " -f1-4 /proc/loadavg)"
+done
+cat /proc/pressure/cpu 2&gt;/dev/null || echo "PSI 無効"'</pre>
+        <p>4 つ目の値（実行可能数）は最初から 2 以上になるのに、1 分値は 5 秒ごとに少しずつしか上がらず、60 秒経っても 2 に届かず 1.3 前後に留まるはずだ（VM 上の他の負荷があればその分上乗せされる）。これが指数減衰による遅れである。最後の PSI 出力では、ループ数が CPU 数を超えていれば <code>some</code> の値が上がっている。</p>
+      </div>
+
+      <div class="misconceptions">
+        <div class="box-title">🙅 よくある誤解</div>
+        <ul>
+          <li><span class="wrong">load average は CPU 使用率の別表現だ</span> — 数えているのは時間の割合ではなくタスクの数で、Linux ではディスク I/O 待ちなどの D 状態も含む。CPU がほぼ空いていても load は高くなりうる。</li>
+          <li><span class="wrong">1 分値は直近 1 分間の平均値だ</span> — 5 秒ごとのサンプルを指数的に減衰させて足し込んだ値で、1 分より前の負荷も少し残り、新しい負荷には遅れて追いつく。</li>
+          <li><span class="wrong">load が高いなら CPU を増やせば解決する</span> — D 状態が原因なら CPU を足しても待ちは減らない。<code>vmstat</code> の <code>r</code> と <code>b</code> で内訳を見てから対処を決める。</li>
+        </ul>
+      </div>
+
+      <div class="glossary">
+        <div class="box-title">📖 用語ミニ辞典</div>
+        <dl>
+          <dt>load average</dt><dd>実行中・実行待ち（Linux では D 状態も含む）のタスク数を、5 秒ごとのサンプルから指数減衰でならした値。</dd>
+          <dt>ランキュー</dt><dd>CPU が空くのを待っている R 状態のタスクが並ぶ列。</dd>
+          <dt>D 状態（uninterruptible sleep）</dt><dd>ディスク I/O 完了などを待つ間、シグナルを受けても起きない待ち状態。</dd>
+          <dt>指数減衰移動平均</dt><dd>古いサンプルほど重みを指数的に小さくして足し込む平均。直近の変化を重視しつつ過去も少し残す。</dd>
+          <dt>PSI（Pressure Stall Information）</dt><dd>CPU・メモリ・I/O の待ちでタスクが止まっていた時間の割合を出す Linux の仕組み。cgroup v2 単位でも読める。</dd>
+        </dl>
+      </div>
+
+      <div class="further-reading">
+        <div class="box-title">🔗 もっと深く</div>
+        <ul>
+          <li><a href="https://www.brendangregg.com/blog/2017-08-08/linux-load-averages.html">Linux Load Averages: Solving the Mystery</a> — D 状態が加わった 1993 年のパッチを発掘し、計算式と実験で load の正体を解き明かした記事。</li>
+          <li><a href="https://man7.org/linux/man-pages/man5/proc_loadavg.5.html">proc_loadavg(5) — Linux manual page</a> — <code>/proc/loadavg</code> の 5 つのフィールドの公式定義。</li>
+          <li><a href="https://docs.kernel.org/accounting/psi.html">PSI - Pressure Stall Information（Linux kernel documentation）</a> — some/full の定義、<code>/proc/pressure</code> の形式、cgroup v2 での使い方とトリガー設定。</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- recent:start -->
+    <!-- recent:end -->
+
+    <footer>
+      <p>Generated by Claude Code (GitHub Actions)</p>
+      <a href="./" class="archive-link">過去の記事</a>
+    </footer>
+  </div>
+</body>
+</html>

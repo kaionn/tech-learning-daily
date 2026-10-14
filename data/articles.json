@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-10-14.html",
+    "date": "2026-10-14",
+    "title": "CPU は半分も使っていないのに、なぜ load average は 20 もあるのか？",
+    "summary": "load average は CPU 使用率ではなく、実行中・実行待ちのタスク数を時間でならした値だ。Linux はディスク I/O などの D 状態のタスクも数えるため CPU が空いていても跳ね上がる。1・5・15 分値は指数減衰で、内訳は vmstat や PSI で切り分ける。",
+    "category": "perf",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": ["load average", "ランキュー", "D 状態（uninterruptible sleep）", "指数減衰移動平均", "PSI（Pressure Stall Information）"]
+  },
+  {
     "file": "2026-10-13.html",
     "date": "2026-10-13",
     "title": "temperature を 0 にしたのに、なぜ LLM の答えは毎回同じにならないのか？",

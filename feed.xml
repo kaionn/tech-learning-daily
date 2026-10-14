@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-10-13T11:39:25+09:00</updated>
+  <updated>2026-10-14T09:23:05+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>CPU は半分も使っていないのに、なぜ load average は 20 もあるのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-10-14.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-10-14.html</id>
+    <updated>2026-10-14T09:23:05+09:00</updated>
+    <summary>load average はCPU使用率ではなく実行中・実行待ちのタスク数をならした値で、Linuxはディスク待ちなどのD状態も数えるためCPUが空いていても跳ね上がる。1・5・15分値は指数減衰で、内訳はvmstatやPSIで切り分ける。</summary>
+  </entry>
   <entry>
     <title>temperature を 0 にしたのに、なぜ LLM の答えは毎回同じにならないのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-10-13.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-10-01.html</id>
     <updated>2026-10-01T09:39:10+09:00</updated>
     <summary>gRPCが標準で使うprotobufはフィールド名を送らずフィールド番号だけを送るバイナリ形式で、.protoの共有なしにはデコードできない。HTTP/2上でのmultiplexingとトレーラーによるステータス伝達、4種類のストリーミングRPC、フィールド番号の不変性とdeadlineの既定動作を解説。</summary>
-  </entry>
-  <entry>
-    <title>1つのDBならロールバックで済んだはずなのに、複数サービスをまたぐ更新はなぜそう簡単に戻せないのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-09-30.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-09-30.html</id>
-    <updated>2026-09-30T09:39:53+09:00</updated>
-    <summary>単一DBのCOMMITは1回のログ書き込みで守られるが、サービスをまたぐと同じ発想は使えない。2PCはprepareで全員の合意を取るが、コーディネータ障害でロックを持ったまま止まるブロッキング問題があり、Sagaは確定を待たず進めて失敗時は補償トランザクションで打ち消す代わりに分離性を失う。</summary>
   </entry>
 </feed>

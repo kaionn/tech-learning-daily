@@ -6,6 +6,7 @@
 
 ## 消化済み
 
+- 2026-10-14 Linux の load average（CPU使用率ではなく実行中・実行待ちのタスク数を数える指標であること、LinuxだけがD状態=割り込み不可の待ちも数える理由と1993年のパッチ、1/5/15分値が5秒サンプルの指数減衰であること、CPU数で割る目安の限界、vmstatのr/b列とPSIによる切り分け、コンテナ内ではホストの値が見える点）（自動選定）
 - 2026-10-13 LLM のサンプリングと temperature（ロジットとsoftmax、temperatureで確率分布の偏りが変わる仕組みと0で貪欲デコーディングになること、top_k/top_pの足切り、温度0でも出力が揺れる原因が浮動小数点の非結合性とバッチサイズ依存のカーネルにあること、テストでの扱い）（自動選定）
 - 2026-10-12 時刻とタイムゾーン（瞬間と壁時計時刻の区別、オフセットとIANAタイムゾーン名の違い、PostgreSQLのtimestamp/timestamptzの保存と変換、Railsのdefault_timezoneとdatetime_typeで9時間ずれる典型パターン、JSのDate文字列解釈で1日ずれる理由、未来の予定は壁時計時刻+ゾーン名で持つ理由）（自動選定）
 - 2026-10-11 Unicode と UTF-8/UTF-16（符号位置・符号化方式・書記素クラスタの3層、UTF-8の1〜4バイト可変長とASCII互換の設計、JSのlengthがUTF-16単位を数えサロゲートペアで絵文字が2になる理由、Goのlen/runeとRubyのlength、Intl.Segmenter、MySQLのutf8=utf8mb3で絵文字が入らない問題とutf8mb4）（自動選定）

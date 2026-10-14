@@ -40,8 +40,8 @@
         <button class="chip" data-cat="lang">Lang <span class="chip-count">6</span></button>
         <button class="chip" data-cat="dev" data-overflow="1" hidden>Dev <span class="chip-count">4</span></button>
         <button class="chip" data-cat="frontend" data-overflow="1" hidden>Frontend <span class="chip-count">4</span></button>
+        <button class="chip" data-cat="perf" data-overflow="1" hidden>Perf <span class="chip-count">4</span></button>
         <button class="chip" data-cat="obs" data-overflow="1" hidden>Obs <span class="chip-count">3</span></button>
-        <button class="chip" data-cat="perf" data-overflow="1" hidden>Perf <span class="chip-count">3</span></button>
         <button class="chip chip-more" id="chip-more">+ 4 件</button>
       </div>
       <div class="chip-row" id="diff-chips">
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-10">
       <div class="section-title">2026 年 10 月 <span class="count"></span></div>
+      <div class="card" data-cat="perf" data-diff="基礎"
+           data-search="cpu は半分も使っていないのに、なぜ load average は 20 もあるのか？ load average は cpu 使用率ではなく、実行中・実行待ちのタスク数を時間でならした値だ。linux はディスク i/o などの d 状態のタスクも数えるため cpu が空いていても跳ね上がる。1・5・15 分値は指数減衰で、内訳は vmstat や psi で切り分ける。" data-terms="load average / ランキュー / D 状態（uninterruptible sleep） / 指数減衰移動平均 / PSI（Pressure Stall Information）">
+        <h3><a href="2026-10-14.html">CPU は半分も使っていないのに、なぜ load average は 20 もあるのか？</a></h3>
+        <div class="summary">load average は CPU 使用率ではなく、実行中・実行待ちのタスク数を時間でならした値だ。Linux はディスク I/O などの D 状態のタスクも数えるため CPU が空いていても跳ね上がる。1・5・15 分値は指数減衰で、内訳は vmstat や PSI で切り分ける。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-perf">Perf</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-14</span></div>
+      </div>
       <div class="card" data-cat="ai" data-diff="基礎"
            data-search="temperature を 0 にしたのに、なぜ llm の答えは毎回同じにならないのか？ llm は 1 トークンごとに確率の表を作って候補を選び、temperature・top_k・top_p はその選び方を変える。温度 0 で乱数は消えるのに出力が揺れるのは、同時処理されるリクエスト数で gpu の足し算の順序が変わりロジット自体が変わるからだ。" data-terms="ロジット / softmax / temperature / 貪欲デコーディング / nucleus sampling（top_p） / バッチ不変性">
         <h3><a href="2026-10-13.html">temperature を 0 にしたのに、なぜ LLM の答えは毎回同じにならないのか？</a></h3>
