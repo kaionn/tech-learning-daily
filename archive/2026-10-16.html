@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tech Learning Daily — 同じ「DB に書く」なのに、なぜ Cassandra や RocksDB は書き込みがあれほど速いのか？</title>
+  <link rel="stylesheet" href="../style.css">
+  <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="../feed.xml">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Tech Learning Daily</h1>
+      <div class="date">2026-10-16 (Fri) — 第 91 号</div>
+      <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
+    </header>
+
+    <article class="article">
+      <div class="meta-bar">
+        <span class="tag tag-db">DB</span>
+        <span class="difficulty">🌿 基礎</span>
+        <span class="read-time">⏱ 約 7 分</span>
+      </div>
+      <h2 class="article-title">同じ「DB に書く」なのに、なぜ Cassandra や RocksDB は書き込みがあれほど速いのか？</h2>
+      <p class="lead">ログやイベントを大量に書き込む用途の設計レビューで「書き込みが多いなら PostgreSQL より Cassandra」と言われたことはないだろうか。どちらもデータをディスクに置くことに変わりはないのに、なぜ書き込みの得意・不得意が分かれるのか。答えは「既存のデータを書き換えるか、書き換えずに足していくか」というディスクの使い方の違いにある。</p>
+
+      <div class="tldr">
+        <div class="box-title">🎯 3 行まとめ</div>
+        <ul>
+          <li>B+Tree はデータをディスク上の決まった位置で書き換えるため、書き込みのたびにランダムな位置のページ更新が発生する。</li>
+          <li>LSM-tree は書き込みをメモリ上の memtable に溜め、整列済みの不変ファイル SSTable としてまとめて追記するので、書き込みが速い。</li>
+          <li>代償として読み取りは複数ファイルを探す必要があり、古い版や削除マーカーは compaction が後から裏で掃除する。</li>
+        </ul>
+      </div>
+
+      <section class="body-section">
+        <h3>B+Tree の書き込みは「その場で書き換える」</h3>
+        <p>PostgreSQL や MySQL（InnoDB）のインデックスは B+Tree で、キーの順に並んだ<strong>ページ</strong>（ディスクを読み書きする固定長のブロック）を木構造でたどってデータを探す。この構造は読み取りが速い反面、書き込みには手間がかかる。新しいキーを入れるにはまず木をたどって「そのキーが入るべきページ」を見つけ、そのページを更新しなければならない。このように既存データの置き場所を直接書き換える方式を<strong>インプレース更新</strong>と呼ぶ。</p>
+        <p>問題は、書き込むキーがばらばらなら、更新されるページもディスク上のばらばらな位置になることだ。1 行だけ変えたくてもページ丸ごとを書く必要があり、ページが満杯なら分割も起きる。インデックスが 3 本あるテーブルなら、1 行の INSERT で 3 本の木それぞれのページを書き換えることになる。書き込みが毎秒何万件と押し寄せると、このランダムな位置への小さな書き込みの積み重ねがボトルネックになる。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>LSM-tree: 書き換えず、溜めてからまとめて追記する</h3>
+        <p><strong>LSM-tree</strong>（Log-Structured Merge-tree）は発想を逆にする。書き込みが来たら、まず WAL（クラッシュ復旧用の追記専用ログ）に追記し、次にメモリ上の <strong>memtable</strong>（キー順に整列された書き込みバッファ）に入れる。ここで書き込みは完了だ。ディスクへの書き込みは WAL の末尾への追記だけで、木をたどってページを探す作業は発生しない。</p>
+        <p>memtable が一定サイズに達すると凍結され、中身がキー順のまま 1 つのファイルとしてディスクに書き出される。この操作を <strong>flush</strong>、書き出されたファイルを <strong>SSTable</strong>（Sorted String Table: キー順に整列された、作成後は二度と変更されない不変ファイル）と呼ぶ。大きな塊を順番に書くだけなので、ディスクにとっては最も効率の良い書き方になる。flush が済めば、その分の WAL は不要になり捨てられる。</p>
+        <pre class="diagram">書き込み
+  │
+  ├──▶ WAL に追記（復旧用）
+  ▼
+┌──────────────┐
+│ memtable     │ メモリ上・キー順
+└──────┬───────┘
+       │ 満杯で flush
+       ▼
+┌──────────────┐
+│ SSTable #3   │ 新 ─┐
+│ SSTable #2   │     │ 読み取りは
+│ SSTable #1   │ 古 ─┘ 新しい順に探す
+└──────┬───────┘
+       │ compaction（裏で併合）
+       ▼
+┌──────────────┐
+│ SSTable #4   │ 最新版だけ残る
+└──────────────┘</pre>
+        <p>memtable の大きさは設定で決まる。RocksDB では <code>write_buffer_size</code>（デフォルト 64MB）が 1 個の memtable の上限で、<code>max_write_buffer_number</code>（デフォルト 2）が flush 待ちを含めてメモリに置ける memtable の数だ。<code>write_buffer_size</code> を大きくすると flush の回数が減り SSTable の数も少なくなるが、メモリ使用量と、クラッシュ後に WAL から再生する量が増える。</p>
+        <pre class="code"># RocksDB の options ファイル（抜粋）
+[CFOptions "default"]
+  write_buffer_size=134217728   # 128MB に倍増
+  max_write_buffer_number=4     # flush 待ちに余裕を持たせる</pre>
+      </section>
+
+      <div class="analogy">
+        <div class="box-title">🍱 たとえるなら</div>
+        <p>消しゴムを使わない帳簿だ。金額を訂正したいときも、前の行は消さずに新しいページへ「3 月分、訂正 5,000 円」と書き足す。書くのはいつも最後のページなので速い。そのかわり、ある項目の今の金額を知りたいときは最新のページから遡って探す必要がある。ページが増えすぎたら、ときどき別のノートへ最新の値だけを清書して古いノートを捨てる。この清書が compaction にあたる。</p>
+      </div>
+
+      <section class="body-section">
+        <h3>代償は読み取りと削除に回ってくる</h3>
+        <p>SSTable を書き換えないなら、UPDATE はどう実現するのか。答えは「同じキーの新しい版を書く」だ。キー <code>user:42</code> を 3 回更新すれば、3 つの SSTable にそれぞれの版が残る。読み取りは memtable、新しい SSTable、古い SSTable の順に探し、最初に見つかった版を正解とする。SSTable が増えるほど 1 回の読み取りで調べるファイルが増え、読み取りは遅くなる。</p>
+        <p>この探索を減らすのが<strong>ブルームフィルタ</strong>（「このキーは確実に無い」か「たぶん有る」かを少ないメモリで答える確率的データ構造）だ。Cassandra は SSTable ごとにブルームフィルタを持ち、「確実に無い」と分かったファイルは開かずに飛ばす。誤って「有る」と答える確率は <code>bloom_filter_fp_chance</code> で決まり、デフォルトは LeveledCompactionStrategy のテーブルで 0.1、それ以外で 0.01 だ。値を下げれば無駄な読み取りは減るが、フィルタのメモリ使用量は増える。</p>
+        <p>削除はもっと直感に反する。DELETE を実行すればディスクが空くように思える。しかし実際は、SSTable を書き換えられないので、削除は <strong>tombstone</strong>（「このキーは削除された」という時刻付きのマーカー）を新たに<em>書き込む</em>操作になる。削除した直後はディスク使用量がむしろ増えるのだ。Cassandra では tombstone はテーブル設定 <code>gc_grace_seconds</code>（デフォルト 864000 秒 = 10 日）が過ぎるまで消されない。早く消しすぎると、削除を受け取れなかった停止中のノードが復帰したときに古いデータが「生き返って」しまうからだ。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>compaction: 後回しにした掃除のやり方を選ぶ</h3>
+        <p>増え続ける SSTable を併合し、各キーの最新版だけを残して古い版と期限切れの tombstone を捨てる処理が <strong>compaction</strong> だ。入力の SSTable はどれもキー順に整列済みなので、マージソートの要領で順番に読みながら新しいファイルへ書ける。併合が済めば古い SSTable は削除される。</p>
+        <p>どの SSTable をいつ併合するかは戦略で選ぶ。Cassandra のデフォルトは <strong>SizeTieredCompactionStrategy（STCS）</strong>で、似たサイズの SSTable がいくつか溜まったらまとめる。書き込みに強いが、同じキーの版が多くのファイルに散らばりやすい。<strong>LeveledCompactionStrategy（LCS）</strong>はデータを階層に分け、各階層内ではキーの範囲が重ならないように保つ。読み取りで調べるファイルが少なくなるので、読み取りが多いテーブルや更新・削除が多いテーブルに向く。</p>
+        <pre class="code">-- 読み取り中心のテーブルを LCS に切り替える
+ALTER TABLE shop.orders
+  WITH compaction = {'class': 'LeveledCompactionStrategy'};</pre>
+        <p>LCS にもコストはある。同じデータを階層ごとに何度も書き直すので、<strong>書き込み増幅</strong>（アプリが書いたバイト数に対して実際にディスクへ書かれたバイト数の比）が大きくなる。RocksDB の wiki は、leveled compaction の書き込み増幅はしばしば 10 を超えると書いている。「書き込み、読み取り、ディスク容量のどれを我慢するか」を選ぶのが compaction 戦略の選択だ。compaction が書き込みの速さに追いつかなくなると SSTable が溜まり続けるため、RocksDB は書き込み自体を遅らせたり止めたりして（write stall）バランスを取る。</p>
+      </section>
+
+      <div class="practical">
+        <div class="box-title">💼 実務でどう出会うか</div>
+        <p>LSM-tree は Cassandra のような分散 DB の名前を知らなくても身近にある。TiKV は RocksDB を、CockroachDB は RocksDB に着想を得た Pebble をストレージエンジンに使い、Kafka Streams のステートストアも標準では RocksDB だ。運用で出会う典型は 3 つある。大量に DELETE した直後に読み取りが遅くなる（tombstone を読み飛ばす作業が増えるため）、ディスクの空きが少ないと compaction が回らない（併合中は新旧の SSTable が一時的に両方ディスクに載るため）、書き込みピーク時に急にレイテンシが跳ねる（write stall）。いずれも「書き込み時に先送りした仕事が、別のタイミングで表面化した」と見ると原因を推測しやすい。</p>
+      </div>
+
+      <div class="hands-on">
+        <div class="box-title">⌨️ 手を動かす（5 分）</div>
+        <p>Cassandra をローカルで起動し、同じキーを 2 回書いて flush すると SSTable が 2 つ並び、compaction で 1 つにまとまることを確かめる。起動には 1 分前後かかる。</p>
+        <pre class="code">docker run -d --name lsm cassandra:5.0
+until docker exec lsm cqlsh -e "DESCRIBE KEYSPACES" &gt;/dev/null 2&gt;&amp;1; do sleep 5; done
+
+docker exec lsm cqlsh -e "CREATE KEYSPACE demo WITH replication = {'class':'SimpleStrategy','replication_factor':1}; CREATE TABLE demo.kv (k text PRIMARY KEY, v text);"
+
+docker exec lsm cqlsh -e "INSERT INTO demo.kv (k, v) VALUES ('a', 'v1');"
+docker exec lsm nodetool flush demo kv
+docker exec lsm cqlsh -e "UPDATE demo.kv SET v = 'v2' WHERE k = 'a';"
+docker exec lsm nodetool flush demo kv
+docker exec lsm sh -c 'ls /var/lib/cassandra/data/demo/kv-*/ | grep Data.db'
+
+docker exec lsm nodetool compact demo kv
+docker exec lsm sh -c 'ls /var/lib/cassandra/data/demo/kv-*/ | grep Data.db'
+docker rm -f lsm</pre>
+        <p>1 回目の <code>ls</code> では <code>Data.db</code> で終わるファイルが 2 つ（v1 を含む SSTable と v2 を含む SSTable）表示され、<code>nodetool compact</code> の後は 1 つに減るはずだ。同じディレクトリには <code>Filter.db</code>（ブルームフィルタ）など SSTable を構成する別ファイルも並んでいる。</p>
+      </div>
+
+      <div class="misconceptions">
+        <div class="box-title">🙅 よくある誤解</div>
+        <ul>
+          <li><span class="wrong">LSM-tree は B+Tree の上位互換で、新しい DB ほど LSM を使うべきだ</span> — 書き込みの速さと引き換えに、読み取りでの複数ファイル探索と compaction の負荷を抱える。範囲検索や読み取り中心なら B+Tree が有利な場面は多い。</li>
+          <li><span class="wrong">DELETE すればすぐにディスクが空く</span> — LSM-tree では削除は tombstone の追記であり、領域が空くのは compaction で tombstone と古い版がまとめて捨てられた後だ。</li>
+          <li><span class="wrong">書き込みが速いのは、ディスクに書くバイト数が少ないからだ</span> — compaction で同じデータを何度も書き直すため、総書き込み量はむしろ多くなりうる。速さの源は、書き込みの瞬間にランダムなページ更新をせず、順番に大きくまとめて書く点にある。</li>
+        </ul>
+      </div>
+
+      <div class="glossary">
+        <div class="box-title">📖 用語ミニ辞典</div>
+        <dl>
+          <dt>LSM-tree</dt><dd>書き込みをメモリに溜め、整列済みの不変ファイルとして追記し、後で併合するストレージ構造。</dd>
+          <dt>memtable</dt><dd>書き込みを受け止める、メモリ上のキー順に整列されたバッファ。</dd>
+          <dt>SSTable</dt><dd>memtable を flush して作られる、キー順に整列された不変のファイル。</dd>
+          <dt>compaction</dt><dd>複数の SSTable を併合し、最新版だけを残して古い版や tombstone を捨てる処理。</dd>
+          <dt>tombstone</dt><dd>削除を表す時刻付きのマーカー。削除はこのマーカーの書き込みとして実現される。</dd>
+          <dt>ブルームフィルタ</dt><dd>「確実に無い」か「たぶん有る」かを少ないメモリで判定する確率的データ構造。</dd>
+        </dl>
+      </div>
+
+      <div class="further-reading">
+        <div class="box-title">🔗 もっと深く</div>
+        <ul>
+          <li><a href="https://cassandra.apache.org/doc/latest/cassandra/architecture/storage-engine.html">Apache Cassandra: Storage Engine</a> — commit log → memtable → SSTable の書き込み経路と、SSTable を構成する各ファイルの役割が一覧できる。</li>
+          <li><a href="https://cassandra.apache.org/doc/latest/cassandra/managing/operating/compaction/overview.html">Apache Cassandra: Compaction Overview</a> — tombstone と gc_grace_seconds、STCS / LCS / TWCS / UCS の使い分けを公式の言葉で確認できる。</li>
+          <li><a href="https://github.com/facebook/rocksdb/wiki/MemTable">RocksDB Wiki: MemTable</a> — memtable のデータ構造と、flush が起きる 3 つの条件が書かれている。</li>
+          <li><a href="https://github.com/facebook/rocksdb/wiki/Leveled-Compaction">RocksDB Wiki: Leveled Compaction</a> — 階層ごとのサイズ目標と、どのファイルを併合対象に選ぶかを図付きで説明している。</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- recent:start -->
+    <!-- recent:end -->
+
+    <footer>
+      <p>Generated by Claude Code (GitHub Actions)</p>
+      <a href="./" class="archive-link">過去の記事</a>
+    </footer>
+  </div>
+</body>
+</html>

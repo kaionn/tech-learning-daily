@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tech Learning Daily — メモリ確保は成功したのに、なぜプロセスは後から OOM killer に殺されるのか？</title>
+  <title>Tech Learning Daily — 同じ「DB に書く」なのに、なぜ Cassandra や RocksDB は書き込みがあれほど速いのか？</title>
   <link rel="stylesheet" href="style.css">
   <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="feed.xml">
   <link rel="icon" href="/favicon.ico" sizes="48x48">
@@ -14,146 +14,139 @@
   <div class="container">
     <header>
       <h1>Tech Learning Daily</h1>
-      <div class="date">2026-10-15 (Thu) — 第 90 号</div>
+      <div class="date">2026-10-16 (Fri) — 第 91 号</div>
       <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
     </header>
 
     <article class="article">
       <div class="meta-bar">
-        <span class="tag tag-infra">Infra</span>
+        <span class="tag tag-db">DB</span>
         <span class="difficulty">🌿 基礎</span>
         <span class="read-time">⏱ 約 7 分</span>
       </div>
-      <h2 class="article-title">メモリ確保は成功したのに、なぜプロセスは後から OOM killer に殺されるのか？</h2>
-      <p class="lead">Sidekiq のワーカーがエラーログも残さずに消え、終了コードは 137。カーネルログには <code>Killed process</code> の一行だけが残っていた。メモリが足りないなら確保の時点で失敗してくれればいいのに、なぜ Linux は「確保は成功させておいて、後から殺す」のだろうか。</p>
+      <h2 class="article-title">同じ「DB に書く」なのに、なぜ Cassandra や RocksDB は書き込みがあれほど速いのか？</h2>
+      <p class="lead">ログやイベントを大量に書き込む用途の設計レビューで「書き込みが多いなら PostgreSQL より Cassandra」と言われたことはないだろうか。どちらもデータをディスクに置くことに変わりはないのに、なぜ書き込みの得意・不得意が分かれるのか。答えは「既存のデータを書き換えるか、書き換えずに足していくか」というディスクの使い方の違いにある。</p>
 
       <div class="tldr">
         <div class="box-title">🎯 3 行まとめ</div>
         <ul>
-          <li><code>malloc</code> が返すのは仮想アドレスの「予約」で、物理メモリは初めて書き込んだページから順に割り当てられる。</li>
-          <li>Linux は既定（<code>vm.overcommit_memory=0</code>）で物理メモリ以上の予約を許すため、足りなくなるのは確保時ではなく書き込み時になる。</li>
-          <li>書き込み時には失敗を返す相手がいないので、カーネルは OOM killer でスコアの高いプロセスを SIGKILL して物理メモリを取り戻す。</li>
+          <li>B+Tree はデータをディスク上の決まった位置で書き換えるため、書き込みのたびにランダムな位置のページ更新が発生する。</li>
+          <li>LSM-tree は書き込みをメモリ上の memtable に溜め、整列済みの不変ファイル SSTable としてまとめて追記するので、書き込みが速い。</li>
+          <li>代償として読み取りは複数ファイルを探す必要があり、古い版や削除マーカーは compaction が後から裏で掃除する。</li>
         </ul>
       </div>
 
       <section class="body-section">
-        <h3>プロセスが見ているのは「番地」であって「メモリ」ではない</h3>
-        <p>Linux の各プロセスは<strong>仮想メモリ</strong>（プロセスごとに用意された見かけ上のアドレス空間）の上で動いている。プログラムが読み書きするアドレスは仮想アドレスで、それを実際の物理メモリの位置へ変換する対応表を<strong>ページテーブル</strong>と呼ぶ。対応付けは<strong>ページ</strong>（メモリ管理の最小単位の固定長ブロック）ごとに行われる。</p>
-        <p><code>malloc</code> や <code>mmap</code> で大きな領域を確保したとき、カーネルがやるのは「この番地の範囲はあなたのものだ」と記録することだけだ。物理メモリはまだ一切割り当てられない。プログラムがその範囲のページに初めて書き込むと、CPU は対応する物理ページが無いことに気付いて<strong>ページフォールト</strong>（変換に失敗したことをカーネルに知らせる例外）を起こし、カーネルはその場で空いている物理ページを 1 枚用意してページテーブルに書き込む。この「使われた分だけ後から割り当てる」方式を<strong>デマンドページング</strong>という。</p>
-        <p><code>ps aux</code> の <code>VSZ</code> と <code>RSS</code> の差はここから生まれる。<code>VSZ</code> は予約済みの仮想アドレス空間の大きさで、<code>RSS</code> は実際に物理メモリに載っている量だ。Java や Go のプロセスで <code>VSZ</code> が何十 GB と表示されても慌てなくてよいのは、予約しただけで触っていない範囲が大半を占めているからである。</p>
+        <h3>B+Tree の書き込みは「その場で書き換える」</h3>
+        <p>PostgreSQL や MySQL（InnoDB）のインデックスは B+Tree で、キーの順に並んだ<strong>ページ</strong>（ディスクを読み書きする固定長のブロック）を木構造でたどってデータを探す。この構造は読み取りが速い反面、書き込みには手間がかかる。新しいキーを入れるにはまず木をたどって「そのキーが入るべきページ」を見つけ、そのページを更新しなければならない。このように既存データの置き場所を直接書き換える方式を<strong>インプレース更新</strong>と呼ぶ。</p>
+        <p>問題は、書き込むキーがばらばらなら、更新されるページもディスク上のばらばらな位置になることだ。1 行だけ変えたくてもページ丸ごとを書く必要があり、ページが満杯なら分割も起きる。インデックスが 3 本あるテーブルなら、1 行の INSERT で 3 本の木それぞれのページを書き換えることになる。書き込みが毎秒何万件と押し寄せると、このランダムな位置への小さな書き込みの積み重ねがボトルネックになる。</p>
       </section>
 
       <section class="body-section">
-        <h3>オーバーコミット: 物理メモリより多くを約束する</h3>
-        <p>予約と割り当てが分かれているなら、カーネルは「全プロセスの予約の合計」が物理メモリを超えても受け付けられる。これを<strong>オーバーコミット</strong>と呼ぶ。挙動は sysctl の <code>vm.overcommit_memory</code> で選べ、カーネルのドキュメントによれば値の意味は次のとおりだ。</p>
-        <pre class="code"># 0: ヒューリスティック（デフォルト）
-#    明らかに無茶な予約だけ拒否する
-# 1: 常に許可（チェックしない）
-# 2: 許可しない。予約の合計を
-#    swap + 物理メモリ × overcommit_ratio% に制限
-#    （overcommit_ratio のデフォルトは 50）
-sysctl vm.overcommit_memory vm.overcommit_ratio</pre>
-        <p>なぜデフォルトで約束を破りうる設計なのか。理由の一つは <code>fork</code> だ。10GB 使っている Ruby プロセスが <code>fork</code> すると、子プロセスは親のメモリをそのまま見られる状態で生まれるが、実体はコピーオンライト（書き込まれたページだけ後からコピーする方式）で共有されている。予約を厳密に数えると子の分としてさらに 10GB 分の約束が必要になり、ほとんど書き換えずにすぐ <code>exec</code> するだけの子プロセスのためにメモリを確保できず <code>fork</code> が失敗してしまう。疎な巨大配列やスレッドのスタックのように「予約は大きいが実際に触るのは一部」というパターンは多く、それを許すほうが物理メモリを有効に使える。</p>
-        <p>直感的には、メモリが足りなければ <code>malloc</code> が <code>NULL</code> を返して、アプリが自分でエラー処理すればよいように思える。しかし実際は、デフォルト設定では予約はほぼ通ってしまい、物理メモリが尽きるのはその後の何気ない<em>代入文</em>の瞬間になる。代入文には失敗を返す仕組みが無い。カーネルは、ページフォールトの処理を完了させるために、どこかから物理メモリを奪ってくるしかなくなる。</p>
-        <pre class="diagram">アプリ          カーネル           物理メモリ
- │ malloc(1GB)    │                  │
- ├──────────────▶│ 範囲を記録       │
- │◀──────────────┤ 成功（RSS 0）    │
- │ p[0] = 1       │                  │
- ├──────────────▶│ ページフォールト │
- │                ├────────────────▶│ 1枚割当
- │   ...書き込みを続ける...          │
- │                ├────────────────▶│ 空き 0
- │                │ swap も満杯      │
- │                ▼                  │
- │          OOM killer 起動          │
- │      スコア最大のプロセスに       │
- │      SIGKILL（自分とは限らない）  │</pre>
+        <h3>LSM-tree: 書き換えず、溜めてからまとめて追記する</h3>
+        <p><strong>LSM-tree</strong>（Log-Structured Merge-tree）は発想を逆にする。書き込みが来たら、まず WAL（クラッシュ復旧用の追記専用ログ）に追記し、次にメモリ上の <strong>memtable</strong>（キー順に整列された書き込みバッファ）に入れる。ここで書き込みは完了だ。ディスクへの書き込みは WAL の末尾への追記だけで、木をたどってページを探す作業は発生しない。</p>
+        <p>memtable が一定サイズに達すると凍結され、中身がキー順のまま 1 つのファイルとしてディスクに書き出される。この操作を <strong>flush</strong>、書き出されたファイルを <strong>SSTable</strong>（Sorted String Table: キー順に整列された、作成後は二度と変更されない不変ファイル）と呼ぶ。大きな塊を順番に書くだけなので、ディスクにとっては最も効率の良い書き方になる。flush が済めば、その分の WAL は不要になり捨てられる。</p>
+        <pre class="diagram">書き込み
+  │
+  ├──▶ WAL に追記（復旧用）
+  ▼
+┌──────────────┐
+│ memtable     │ メモリ上・キー順
+└──────┬───────┘
+       │ 満杯で flush
+       ▼
+┌──────────────┐
+│ SSTable #3   │ 新 ─┐
+│ SSTable #2   │     │ 読み取りは
+│ SSTable #1   │ 古 ─┘ 新しい順に探す
+└──────┬───────┘
+       │ compaction（裏で併合）
+       ▼
+┌──────────────┐
+│ SSTable #4   │ 最新版だけ残る
+└──────────────┘</pre>
+        <p>memtable の大きさは設定で決まる。RocksDB では <code>write_buffer_size</code>（デフォルト 64MB）が 1 個の memtable の上限で、<code>max_write_buffer_number</code>（デフォルト 2）が flush 待ちを含めてメモリに置ける memtable の数だ。<code>write_buffer_size</code> を大きくすると flush の回数が減り SSTable の数も少なくなるが、メモリ使用量と、クラッシュ後に WAL から再生する量が増える。</p>
+        <pre class="code"># RocksDB の options ファイル（抜粋）
+[CFOptions "default"]
+  write_buffer_size=134217728   # 128MB に倍増
+  max_write_buffer_number=4     # flush 待ちに余裕を持たせる</pre>
       </section>
 
       <div class="analogy">
         <div class="box-title">🍱 たとえるなら</div>
-        <p>航空会社のオーバーブッキングだ。一定数の乗客は来ないと見込んで座席数より多く予約を受け付ける（オーバーコミット）。予約の時点では誰も断られない。全員が搭乗口に来たとき初めて席が足りなくなり、航空会社は決められた基準で誰かを降ろす（OOM killer）。降ろされるのは最後に来た客とは限らず、予約時に「絶対に降ろさない」と約束された客（<code>oom_score_adj=-1000</code>）は対象外になる。</p>
+        <p>消しゴムを使わない帳簿だ。金額を訂正したいときも、前の行は消さずに新しいページへ「3 月分、訂正 5,000 円」と書き足す。書くのはいつも最後のページなので速い。そのかわり、ある項目の今の金額を知りたいときは最新のページから遡って探す必要がある。ページが増えすぎたら、ときどき別のノートへ最新の値だけを清書して古いノートを捨てる。この清書が compaction にあたる。</p>
       </div>
 
       <section class="body-section">
-        <h3>OOM killer は誰を殺すのか</h3>
-        <p>物理メモリと swap がどちらも尽きると、カーネルは <strong>OOM killer</strong>（Out Of Memory 時に強制終了するプロセスを選ぶカーネルの機構）を起動する。各プロセスの「殺されやすさ」は <code>/proc/&lt;pid&gt;/oom_score</code> で見られる。カーネルのドキュメントでは、基本スコアは許されたメモリのうちそのプロセスがどれだけ使っているかの割合で、0（殺さない）から 1000（必ず殺す）の範囲になる。メモリを半分使っているプロセスなら 500 前後だ。</p>
-        <p>このスコアに加算される補正値が <code>/proc/&lt;pid&gt;/oom_score_adj</code> で、-1000 から +1000 の値を取る。-1000 にするとそのプロセスのスコアは常に 0 となり、OOM killer の対象から事実上外れる。逆に +1000 にすれば真っ先に狙われる。</p>
-        <p>ここで素朴な予想が裏切られる。メモリを食い潰した犯人が殺されるとは限らないのだ。選ばれるのはその瞬間に最もスコアが高いプロセスなので、暴走した小さなバッチではなく、普段から大きな共有バッファを持つ DB が犠牲になることがある。PostgreSQL のドキュメントは、親プロセス（postmaster）が OOM killer に殺されると既存接続は動き続けても新規接続を受け付けなくなり再起動が必要になると説明し、起動スクリプトで postmaster の <code>oom_score_adj</code> を -1000 にする方法や、専用ホストでは <code>vm.overcommit_memory=2</code> で OOM の起きる確率を大きく下げる方法を挙げている。</p>
-        <p>OOM killer が送るのは SIGKILL なので、プロセスは捕捉もクリーンアップもできない。シェルやコンテナランタイムが報告する終了コード 137 は「128 + シグナル番号 9（SIGKILL）」であり、アプリのログに何も残らないのはこのためだ。</p>
+        <h3>代償は読み取りと削除に回ってくる</h3>
+        <p>SSTable を書き換えないなら、UPDATE はどう実現するのか。答えは「同じキーの新しい版を書く」だ。キー <code>user:42</code> を 3 回更新すれば、3 つの SSTable にそれぞれの版が残る。読み取りは memtable、新しい SSTable、古い SSTable の順に探し、最初に見つかった版を正解とする。SSTable が増えるほど 1 回の読み取りで調べるファイルが増え、読み取りは遅くなる。</p>
+        <p>この探索を減らすのが<strong>ブルームフィルタ</strong>（「このキーは確実に無い」か「たぶん有る」かを少ないメモリで答える確率的データ構造）だ。Cassandra は SSTable ごとにブルームフィルタを持ち、「確実に無い」と分かったファイルは開かずに飛ばす。誤って「有る」と答える確率は <code>bloom_filter_fp_chance</code> で決まり、デフォルトは LeveledCompactionStrategy のテーブルで 0.1、それ以外で 0.01 だ。値を下げれば無駄な読み取りは減るが、フィルタのメモリ使用量は増える。</p>
+        <p>削除はもっと直感に反する。DELETE を実行すればディスクが空くように思える。しかし実際は、SSTable を書き換えられないので、削除は <strong>tombstone</strong>（「このキーは削除された」という時刻付きのマーカー）を新たに<em>書き込む</em>操作になる。削除した直後はディスク使用量がむしろ増えるのだ。Cassandra では tombstone はテーブル設定 <code>gc_grace_seconds</code>（デフォルト 864000 秒 = 10 日）が過ぎるまで消されない。早く消しすぎると、削除を受け取れなかった停止中のノードが復帰したときに古いデータが「生き返って」しまうからだ。</p>
       </section>
 
       <section class="body-section">
-        <h3>コンテナと Kubernetes ではどう変わるか</h3>
-        <p>コンテナではホスト全体ではなく cgroup（プロセス群ごとに資源の上限を課すカーネル機能）単位でも同じことが起きる。<code>docker run -m 512m</code> のようにメモリ上限を付けると、その cgroup の使用量が上限に達した時点で、ホストに空きがあってもコンテナ内のプロセスが OOM killer に殺される。Docker のドキュメントは、<code>--memory-swap</code> を <code>--memory</code> と同じ値にするとコンテナは swap を使えなくなると説明している。</p>
-        <p>Kubernetes では kubelet が Pod の QoS クラスに応じて各コンテナの <code>oom_score_adj</code> を設定する。ノード全体がメモリ不足に陥ったとき、どの Pod から殺されるかはこの値でほぼ決まる。</p>
-        <pre class="code"># kubelet が設定する oom_score_adj（公式ドキュメントより）
-# Guaranteed : -997
-# BestEffort : 1000
-# Burstable  : min(max(2, 1000 - 1000
-#   × メモリ request ÷ ノードのメモリ容量), 999)
-# request = limit なら Guaranteed になる
-resources:
-  requests:
-    memory: "512Mi"
-  limits:
-    memory: "512Mi"</pre>
-        <p><code>requests</code> を書かない Pod は BestEffort になり、ノードのメモリが逼迫すると最初の標的になる。<code>requests</code> を実使用量より小さく書いた Burstable の Pod も、補正値が大きく実使用量の割合も高くなるため狙われやすい。なお kubelet 自身もしきい値に基づいて Pod を退避（eviction）させるが、それが間に合わずに物理メモリが尽きた場合にカーネルの OOM killer がこのスコアで選ぶ、という二段構えになっている。</p>
+        <h3>compaction: 後回しにした掃除のやり方を選ぶ</h3>
+        <p>増え続ける SSTable を併合し、各キーの最新版だけを残して古い版と期限切れの tombstone を捨てる処理が <strong>compaction</strong> だ。入力の SSTable はどれもキー順に整列済みなので、マージソートの要領で順番に読みながら新しいファイルへ書ける。併合が済めば古い SSTable は削除される。</p>
+        <p>どの SSTable をいつ併合するかは戦略で選ぶ。Cassandra のデフォルトは <strong>SizeTieredCompactionStrategy（STCS）</strong>で、似たサイズの SSTable がいくつか溜まったらまとめる。書き込みに強いが、同じキーの版が多くのファイルに散らばりやすい。<strong>LeveledCompactionStrategy（LCS）</strong>はデータを階層に分け、各階層内ではキーの範囲が重ならないように保つ。読み取りで調べるファイルが少なくなるので、読み取りが多いテーブルや更新・削除が多いテーブルに向く。</p>
+        <pre class="code">-- 読み取り中心のテーブルを LCS に切り替える
+ALTER TABLE shop.orders
+  WITH compaction = {'class': 'LeveledCompactionStrategy'};</pre>
+        <p>LCS にもコストはある。同じデータを階層ごとに何度も書き直すので、<strong>書き込み増幅</strong>（アプリが書いたバイト数に対して実際にディスクへ書かれたバイト数の比）が大きくなる。RocksDB の wiki は、leveled compaction の書き込み増幅はしばしば 10 を超えると書いている。「書き込み、読み取り、ディスク容量のどれを我慢するか」を選ぶのが compaction 戦略の選択だ。compaction が書き込みの速さに追いつかなくなると SSTable が溜まり続けるため、RocksDB は書き込み自体を遅らせたり止めたりして（write stall）バランスを取る。</p>
       </section>
 
       <div class="practical">
         <div class="box-title">💼 実務でどう出会うか</div>
-        <p>典型は「ワーカーやコンテナがログを残さず再起動を繰り返す」症状だ。まず終了コード（137 か）と、<code>kubectl describe pod</code> の <code>Last State</code> の <code>Reason: OOMKilled</code>、ホストなら <code>dmesg</code> や <code>journalctl -k</code> の <code>Killed process</code> 行を確認する。次に「殺されたプロセスが本当に犯人か」を疑う。ノード全体の OOM なら、同居している別プロセスの膨張が原因のこともある。JVM のヒープ上限やワーカー数 × 1 プロセスの RSS がコンテナの <code>limits.memory</code> を超える構成になっていないかも、確保時ではなく使い始めてから落ちるという性質上、負荷試験で初めて表面化しやすい。</p>
+        <p>LSM-tree は Cassandra のような分散 DB の名前を知らなくても身近にある。TiKV は RocksDB を、CockroachDB は RocksDB に着想を得た Pebble をストレージエンジンに使い、Kafka Streams のステートストアも標準では RocksDB だ。運用で出会う典型は 3 つある。大量に DELETE した直後に読み取りが遅くなる（tombstone を読み飛ばす作業が増えるため）、ディスクの空きが少ないと compaction が回らない（併合中は新旧の SSTable が一時的に両方ディスクに載るため）、書き込みピーク時に急にレイテンシが跳ねる（write stall）。いずれも「書き込み時に先送りした仕事が、別のタイミングで表面化した」と見ると原因を推測しやすい。</p>
       </div>
 
       <div class="hands-on">
         <div class="box-title">⌨️ 手を動かす（5 分）</div>
-        <p>メモリ上限 100MB（swap 無し）のコンテナで 1GB を予約し、予約は成功するのに書き込むと殺されることを確かめる。</p>
-        <pre class="code">docker run --rm -m 100m --memory-swap 100m python:3.12-slim python -c "
-import mmap
-def rss():
-    for l in open('/proc/self/status'):
-        if l.startswith('VmRSS'):
-            return l.strip()
-m = mmap.mmap(-1, 1 &lt;&lt; 30)
-print('1GB の予約に成功:', rss(), flush=True)
-for i in range(0, len(m), 4096):
-    m[i] = 1
-print('ここには来ない')
-"
-echo "exit code: $?"</pre>
-        <p>1 行目では 1GB を予約したのに <code>VmRSS</code> が Python 本体の分（1GB よりはるかに小さい値）に留まり、予約が物理メモリを消費していないことが分かる。その後、ページごとに 1 バイトずつ書き込むと RSS が 100MB に達した時点で SIGKILL され、「ここには来ない」は表示されず <code>exit code: 137</code> が出るはずだ。</p>
+        <p>Cassandra をローカルで起動し、同じキーを 2 回書いて flush すると SSTable が 2 つ並び、compaction で 1 つにまとまることを確かめる。起動には 1 分前後かかる。</p>
+        <pre class="code">docker run -d --name lsm cassandra:5.0
+until docker exec lsm cqlsh -e "DESCRIBE KEYSPACES" &gt;/dev/null 2&gt;&amp;1; do sleep 5; done
+
+docker exec lsm cqlsh -e "CREATE KEYSPACE demo WITH replication = {'class':'SimpleStrategy','replication_factor':1}; CREATE TABLE demo.kv (k text PRIMARY KEY, v text);"
+
+docker exec lsm cqlsh -e "INSERT INTO demo.kv (k, v) VALUES ('a', 'v1');"
+docker exec lsm nodetool flush demo kv
+docker exec lsm cqlsh -e "UPDATE demo.kv SET v = 'v2' WHERE k = 'a';"
+docker exec lsm nodetool flush demo kv
+docker exec lsm sh -c 'ls /var/lib/cassandra/data/demo/kv-*/ | grep Data.db'
+
+docker exec lsm nodetool compact demo kv
+docker exec lsm sh -c 'ls /var/lib/cassandra/data/demo/kv-*/ | grep Data.db'
+docker rm -f lsm</pre>
+        <p>1 回目の <code>ls</code> では <code>Data.db</code> で終わるファイルが 2 つ（v1 を含む SSTable と v2 を含む SSTable）表示され、<code>nodetool compact</code> の後は 1 つに減るはずだ。同じディレクトリには <code>Filter.db</code>（ブルームフィルタ）など SSTable を構成する別ファイルも並んでいる。</p>
       </div>
 
       <div class="misconceptions">
         <div class="box-title">🙅 よくある誤解</div>
         <ul>
-          <li><span class="wrong">メモリが足りなければ malloc が失敗するはずだ</span> — デフォルトのヒューリスティックモードでは予約はほぼ通り、不足は書き込み時に表面化する。そのとき失敗を返す口は無いので、結果は OOM killer による強制終了になる。</li>
-          <li><span class="wrong">OOM killer に殺されたプロセスがメモリリークの犯人だ</span> — 選ばれるのはその瞬間のスコアが最大のプロセスで、メモリを使い込んだ張本人とは限らない。ノード全体の OOM では同居プロセスの使用量も確認する。</li>
-          <li><span class="wrong">VSZ が大きいプロセスはメモリを食っている</span> — VSZ は予約済みの仮想アドレス空間の大きさで、物理メモリの消費量を表すのは RSS のほうだ。</li>
+          <li><span class="wrong">LSM-tree は B+Tree の上位互換で、新しい DB ほど LSM を使うべきだ</span> — 書き込みの速さと引き換えに、読み取りでの複数ファイル探索と compaction の負荷を抱える。範囲検索や読み取り中心なら B+Tree が有利な場面は多い。</li>
+          <li><span class="wrong">DELETE すればすぐにディスクが空く</span> — LSM-tree では削除は tombstone の追記であり、領域が空くのは compaction で tombstone と古い版がまとめて捨てられた後だ。</li>
+          <li><span class="wrong">書き込みが速いのは、ディスクに書くバイト数が少ないからだ</span> — compaction で同じデータを何度も書き直すため、総書き込み量はむしろ多くなりうる。速さの源は、書き込みの瞬間にランダムなページ更新をせず、順番に大きくまとめて書く点にある。</li>
         </ul>
       </div>
 
       <div class="glossary">
         <div class="box-title">📖 用語ミニ辞典</div>
         <dl>
-          <dt>仮想メモリ</dt><dd>プロセスごとに用意された見かけ上のアドレス空間。ページテーブルで物理メモリに対応付けられる。</dd>
-          <dt>デマンドページング</dt><dd>予約時ではなく、ページに初めて触れた時点で物理メモリを割り当てる方式。</dd>
-          <dt>ページフォールト</dt><dd>アクセスしたページに物理メモリが対応付けられていないとき CPU がカーネルに知らせる例外。</dd>
-          <dt>オーバーコミット</dt><dd>物理メモリと swap の合計を超えるメモリ予約を許すこと。<code>vm.overcommit_memory</code> で制御する。</dd>
-          <dt>OOM killer</dt><dd>物理メモリと swap が尽きたとき、スコアの高いプロセスを SIGKILL して物理メモリを回収するカーネルの機構。</dd>
-          <dt>oom_score_adj</dt><dd>OOM killer のスコアに加算する補正値。-1000〜+1000 で、-1000 は対象外を意味する。</dd>
+          <dt>LSM-tree</dt><dd>書き込みをメモリに溜め、整列済みの不変ファイルとして追記し、後で併合するストレージ構造。</dd>
+          <dt>memtable</dt><dd>書き込みを受け止める、メモリ上のキー順に整列されたバッファ。</dd>
+          <dt>SSTable</dt><dd>memtable を flush して作られる、キー順に整列された不変のファイル。</dd>
+          <dt>compaction</dt><dd>複数の SSTable を併合し、最新版だけを残して古い版や tombstone を捨てる処理。</dd>
+          <dt>tombstone</dt><dd>削除を表す時刻付きのマーカー。削除はこのマーカーの書き込みとして実現される。</dd>
+          <dt>ブルームフィルタ</dt><dd>「確実に無い」か「たぶん有る」かを少ないメモリで判定する確率的データ構造。</dd>
         </dl>
       </div>
 
       <div class="further-reading">
         <div class="box-title">🔗 もっと深く</div>
         <ul>
-          <li><a href="https://docs.kernel.org/mm/overcommit-accounting.html">Overcommit Accounting (Linux kernel documentation)</a> — <code>vm.overcommit_memory</code> の 3 モードと <code>overcommit_ratio</code> の一次情報。</li>
-          <li><a href="https://www.postgresql.org/docs/current/kernel-resources.html">PostgreSQL: Managing Kernel Resources</a> — 「Linux Memory Overcommit」節で、DB を OOM killer から守る具体的な設定手順が読める。</li>
-          <li><a href="https://kubernetes.io/docs/concepts/scheduling-eviction/node-pressure-eviction/">Node-pressure Eviction (Kubernetes)</a> — kubelet の退避と、QoS ごとの <code>oom_score_adj</code> の表がある。</li>
-          <li><a href="https://docs.docker.com/engine/containers/resource_constraints/">Resource constraints (Docker Docs)</a> — <code>--memory</code> / <code>--memory-swap</code> の組み合わせとコンテナ内 OOM の扱い。</li>
+          <li><a href="https://cassandra.apache.org/doc/latest/cassandra/architecture/storage-engine.html">Apache Cassandra: Storage Engine</a> — commit log → memtable → SSTable の書き込み経路と、SSTable を構成する各ファイルの役割が一覧できる。</li>
+          <li><a href="https://cassandra.apache.org/doc/latest/cassandra/managing/operating/compaction/overview.html">Apache Cassandra: Compaction Overview</a> — tombstone と gc_grace_seconds、STCS / LCS / TWCS / UCS の使い分けを公式の言葉で確認できる。</li>
+          <li><a href="https://github.com/facebook/rocksdb/wiki/MemTable">RocksDB Wiki: MemTable</a> — memtable のデータ構造と、flush が起きる 3 つの条件が書かれている。</li>
+          <li><a href="https://github.com/facebook/rocksdb/wiki/Leveled-Compaction">RocksDB Wiki: Leveled Compaction</a> — 階層ごとのサイズ目標と、どのファイルを併合対象に選ぶかを図付きで説明している。</li>
         </ul>
       </div>
     </article>
@@ -161,6 +154,11 @@ echo "exit code: $?"</pre>
     <!-- recent:start -->
     <section class="section recent-articles">
       <div class="section-title">最近の記事</div>
+      <div class="card">
+        <h3><a href="archive/2026-10-15.html">メモリ確保は成功したのに、なぜプロセスは後から OOM killer に殺されるのか？</a></h3>
+        <div class="summary">malloc が成功しても物理メモリは書き込み時まで割り当てられない。Linux のオーバーコミット下では不足が後から表面化し、OOM killer がスコア最大のプロセスを SIGKILL する。oom_score_adj と Kubernetes の QoS との関係も解説する。</div>
+        <div class="meta"><span class="tag tag-infra">Infra</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-15</span></div>
+      </div>
       <div class="card">
         <h3><a href="archive/2026-10-14.html">CPU は半分も使っていないのに、なぜ load average は 20 もあるのか？</a></h3>
         <div class="summary">load average は CPU 使用率ではなく、実行中・実行待ちのタスク数を時間でならした値だ。Linux はディスク I/O などの D 状態のタスクも数えるため CPU が空いていても跳ね上がる。1・5・15 分値は指数減衰で、内訳は vmstat や PSI で切り分ける。</div>
@@ -175,11 +173,6 @@ echo "exit code: $?"</pre>
         <h3><a href="archive/2026-10-12.html">created_at は正しく保存したはずなのに、なぜ画面の時刻が 9 時間ずれるのか？</a></h3>
         <div class="summary">時刻には世界で 1 つに決まる「瞬間」と場所ごとの「壁時計時刻」がある。PostgreSQL の timestamptz と timestamp の違い、Rails の列型と SQL 直書きで 9 時間ずれる仕組み、JS の Date 文字列解釈で 1 日ずれる理由と対策まで。</div>
         <div class="meta"><span class="tag tag-db">DB</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-12</span></div>
-      </div>
-      <div class="card">
-        <h3><a href="archive/2026-10-11.html">見た目は 1 文字なのに、なぜ JS は 8、Go は 18、Ruby は 5 と数えるのか？</a></h3>
-        <div class="summary">文字には符号位置・UTF-8/UTF-16 の符号化・書記素クラスタの 3 層があり、JS・Go・Ruby はそれぞれ違う層を数えている。UTF-8 の可変長設計、サロゲートペア、MySQL の utf8mb3 で絵文字が入らない理由まで。</div>
-        <div class="meta"><span class="tag tag-lang">Lang</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-11</span></div>
       </div>
       <div class="recent-more"><a href="archive/">アーカイブですべて見る →</a></div>
     </section>

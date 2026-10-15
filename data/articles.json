@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-10-16.html",
+    "date": "2026-10-16",
+    "title": "同じ「DB に書く」なのに、なぜ Cassandra や RocksDB は書き込みがあれほど速いのか？",
+    "summary": "B+Tree がページをその場で書き換えるのに対し、LSM-tree は書き込みを memtable に溜めて不変の SSTable として追記する。読み取り時の複数ファイル探索、tombstone による削除、compaction 戦略と書き込み増幅のトレードオフも解説する。",
+    "category": "db",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": ["LSM-tree", "memtable", "SSTable", "compaction", "tombstone", "ブルームフィルタ"]
+  },
+  {
     "file": "2026-10-15.html",
     "date": "2026-10-15",
     "title": "メモリ確保は成功したのに、なぜプロセスは後から OOM killer に殺されるのか？",
