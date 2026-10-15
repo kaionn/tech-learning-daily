@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-10-15.html",
+    "date": "2026-10-15",
+    "title": "メモリ確保は成功したのに、なぜプロセスは後から OOM killer に殺されるのか？",
+    "summary": "malloc が成功しても物理メモリは書き込み時まで割り当てられない。Linux のオーバーコミット下では不足が後から表面化し、OOM killer がスコア最大のプロセスを SIGKILL する。oom_score_adj と Kubernetes の QoS との関係も解説する。",
+    "category": "infra",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": ["仮想メモリ", "デマンドページング", "ページフォールト", "オーバーコミット", "OOM killer", "oom_score_adj"]
+  },
+  {
     "file": "2026-10-14.html",
     "date": "2026-10-14",
     "title": "CPU は半分も使っていないのに、なぜ load average は 20 もあるのか？",

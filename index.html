@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tech Learning Daily — CPU は半分も使っていないのに、なぜ load average は 20 もあるのか？</title>
+  <title>Tech Learning Daily — メモリ確保は成功したのに、なぜプロセスは後から OOM killer に殺されるのか？</title>
   <link rel="stylesheet" href="style.css">
   <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="feed.xml">
   <link rel="icon" href="/favicon.ico" sizes="48x48">
@@ -14,123 +14,146 @@
   <div class="container">
     <header>
       <h1>Tech Learning Daily</h1>
-      <div class="date">2026-10-14 (Wed) — 第 89 号</div>
+      <div class="date">2026-10-15 (Thu) — 第 90 号</div>
       <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
     </header>
 
     <article class="article">
       <div class="meta-bar">
-        <span class="tag tag-perf">Perf</span>
+        <span class="tag tag-infra">Infra</span>
         <span class="difficulty">🌿 基礎</span>
         <span class="read-time">⏱ 約 7 分</span>
       </div>
-      <h2 class="article-title">CPU は半分も使っていないのに、なぜ load average は 20 もあるのか？</h2>
-      <p class="lead">「サーバーが重い」と言われて <code>top</code> を開く。4 コアのマシンで CPU 使用率は 50% 程度なのに、右上の <code>load average</code> は 20 を超えている。「4 コアなら 4 が上限では？」と首をかしげたことはないだろうか。この数字は CPU の忙しさではなく、「何かを待っているタスクの数」を数えている。そして Linux は、その「待っている」の範囲が他の OS より広い。</p>
+      <h2 class="article-title">メモリ確保は成功したのに、なぜプロセスは後から OOM killer に殺されるのか？</h2>
+      <p class="lead">Sidekiq のワーカーがエラーログも残さずに消え、終了コードは 137。カーネルログには <code>Killed process</code> の一行だけが残っていた。メモリが足りないなら確保の時点で失敗してくれればいいのに、なぜ Linux は「確保は成功させておいて、後から殺す」のだろうか。</p>
 
       <div class="tldr">
         <div class="box-title">🎯 3 行まとめ</div>
         <ul>
-          <li>load average は CPU 使用率ではなく、「CPU で動いている、または動く順番を待っている」タスクの数を時間でならした値だ。</li>
-          <li>Linux はこれに加えて、ディスク I/O などで割り込み不可の待ちに入っている D 状態のタスクも数える。だから CPU が空いていても load は跳ね上がる。</li>
-          <li>1・5・15 分の値は単純平均ではなく、5 秒ごとのサンプルを指数的に減衰させた値で、増減の傾向を見るのに向いている。原因の切り分けには <code>vmstat</code> の <code>r</code> 列や PSI を使う。</li>
+          <li><code>malloc</code> が返すのは仮想アドレスの「予約」で、物理メモリは初めて書き込んだページから順に割り当てられる。</li>
+          <li>Linux は既定（<code>vm.overcommit_memory=0</code>）で物理メモリ以上の予約を許すため、足りなくなるのは確保時ではなく書き込み時になる。</li>
+          <li>書き込み時には失敗を返す相手がいないので、カーネルは OOM killer でスコアの高いプロセスを SIGKILL して物理メモリを取り戻す。</li>
         </ul>
       </div>
 
       <section class="body-section">
-        <h3>load average は「列に並んでいる人数」である</h3>
-        <p>CPU 使用率は「CPU が仕事をしていた時間の割合」なので、100% より上にはならない。一方 load average が数えるのは時間ではなく、<strong>タスクの数</strong>だ。ここでのタスクはプロセスまたはスレッドのことで、カーネルのスケジューラが CPU を割り当てる単位である。</p>
-        <p>Linux のスケジューラは、CPU で実行中のタスクと、CPU が空くのを待っているタスクを <code>R</code>（runnable）状態として扱う。CPU 待ちのタスクが並ぶ列を<strong>ランキュー</strong>と呼ぶ。4 コアのマシンで R 状態のタスクが 4 個なら全コアがちょうど埋まっている。10 個なら 6 個は列で待っている。つまり load は CPU 数を超えられ、超えた分は「待たされている仕事」を表す。</p>
-        <p>生の値は <code>/proc/loadavg</code> で読める。<code>uptime</code> や <code>top</code> もこのファイルを表示している。</p>
-        <pre class="code">$ cat /proc/loadavg
-20.31 18.02 9.47 3/812 48211</pre>
-        <p>先頭 3 つが 1・5・15 分の load average だ。4 つ目の <code>3/812</code> は「今この瞬間に実行可能なタスク数 / 存在するタスクの総数」、5 つ目は直近に作られたプロセスの PID である。ここで違和感が出る。4 つ目を見ると実行可能なタスクはたった 3 個なのに、load は 20 もある。残りの 17 はどこから来たのか。</p>
+        <h3>プロセスが見ているのは「番地」であって「メモリ」ではない</h3>
+        <p>Linux の各プロセスは<strong>仮想メモリ</strong>（プロセスごとに用意された見かけ上のアドレス空間）の上で動いている。プログラムが読み書きするアドレスは仮想アドレスで、それを実際の物理メモリの位置へ変換する対応表を<strong>ページテーブル</strong>と呼ぶ。対応付けは<strong>ページ</strong>（メモリ管理の最小単位の固定長ブロック）ごとに行われる。</p>
+        <p><code>malloc</code> や <code>mmap</code> で大きな領域を確保したとき、カーネルがやるのは「この番地の範囲はあなたのものだ」と記録することだけだ。物理メモリはまだ一切割り当てられない。プログラムがその範囲のページに初めて書き込むと、CPU は対応する物理ページが無いことに気付いて<strong>ページフォールト</strong>（変換に失敗したことをカーネルに知らせる例外）を起こし、カーネルはその場で空いている物理ページを 1 枚用意してページテーブルに書き込む。この「使われた分だけ後から割り当てる」方式を<strong>デマンドページング</strong>という。</p>
+        <p><code>ps aux</code> の <code>VSZ</code> と <code>RSS</code> の差はここから生まれる。<code>VSZ</code> は予約済みの仮想アドレス空間の大きさで、<code>RSS</code> は実際に物理メモリに載っている量だ。Java や Go のプロセスで <code>VSZ</code> が何十 GB と表示されても慌てなくてよいのは、予約しただけで触っていない範囲が大半を占めているからである。</p>
       </section>
 
       <section class="body-section">
-        <h3>Linux だけが「D 状態」も数える</h3>
-        <p>答えは、Linux が R 状態に加えて <strong>D 状態</strong>のタスクも load に足していることにある。D 状態（uninterruptible sleep、割り込み不可の待ち）とは、ディスク I/O の完了などを待っている間、シグナルを受けても起きないタスクの状態だ。<code>ps</code> や <code>top</code> の状態列に <code>D</code> と表示される。<code>sleep</code> やソケットの受信待ちのような通常の待ちは <code>S</code>（割り込み可能な待ち）で、こちらは数えない。</p>
-        <pre class="diagram"> 4 コアのマシン、ある瞬間の様子
- CPU  ┌────┬────┬────┬────┐
-      │ A  │ B  │idle│idle│  R 実行中   2
-      └────┴────┴────┴────┘
- ランキュー（空）            R 実行待ち 0
- ディスク待ち ▶ C D E … T    D 待ち    18
- ──────────────────────────────────────
- この瞬間の数 = 2 + 0 + 18 = 20
- CPU 使用率は 50% なのに load は 20</pre>
-        <p>load average は 1973 年の RFC 546 の頃から CPU の需要を測る指標だった。Linux が D 状態を加えたのは 1993 年の Linux 0.99 patchlevel 14 で、パッチ作者の Matthias Urlichs は「スワップや割り込み不可の I/O を待っているプロセスも資源を消費している」と理由を書いている。きっかけは、速いスワップディスクを遅いものに替えたらシステムは重くなったのに load が下がった、という逆転現象だった。CPU 待ちだけを数えると、I/O が詰まってタスクが CPU を使えなくなるほど数字が下がってしまう。</p>
-        <p>その結果、Linux の load は「CPU・ディスク・一部のロックに対する需要の合計」になった。Brendan Gregg の調査によれば、D 状態に入るカーネル内のコードパスは 0.99.14 では 13 箇所だったが、Linux 4.12 では 400 箇所近くに増え、一部のロック待ちも含まれる。NFS サーバーが応答しなくなったり、ディスクが遅くなったりすると、CPU は暇なのに load だけが積み上がる。冒頭の「CPU 50% で load 20」はこの状態だ。</p>
+        <h3>オーバーコミット: 物理メモリより多くを約束する</h3>
+        <p>予約と割り当てが分かれているなら、カーネルは「全プロセスの予約の合計」が物理メモリを超えても受け付けられる。これを<strong>オーバーコミット</strong>と呼ぶ。挙動は sysctl の <code>vm.overcommit_memory</code> で選べ、カーネルのドキュメントによれば値の意味は次のとおりだ。</p>
+        <pre class="code"># 0: ヒューリスティック（デフォルト）
+#    明らかに無茶な予約だけ拒否する
+# 1: 常に許可（チェックしない）
+# 2: 許可しない。予約の合計を
+#    swap + 物理メモリ × overcommit_ratio% に制限
+#    （overcommit_ratio のデフォルトは 50）
+sysctl vm.overcommit_memory vm.overcommit_ratio</pre>
+        <p>なぜデフォルトで約束を破りうる設計なのか。理由の一つは <code>fork</code> だ。10GB 使っている Ruby プロセスが <code>fork</code> すると、子プロセスは親のメモリをそのまま見られる状態で生まれるが、実体はコピーオンライト（書き込まれたページだけ後からコピーする方式）で共有されている。予約を厳密に数えると子の分としてさらに 10GB 分の約束が必要になり、ほとんど書き換えずにすぐ <code>exec</code> するだけの子プロセスのためにメモリを確保できず <code>fork</code> が失敗してしまう。疎な巨大配列やスレッドのスタックのように「予約は大きいが実際に触るのは一部」というパターンは多く、それを許すほうが物理メモリを有効に使える。</p>
+        <p>直感的には、メモリが足りなければ <code>malloc</code> が <code>NULL</code> を返して、アプリが自分でエラー処理すればよいように思える。しかし実際は、デフォルト設定では予約はほぼ通ってしまい、物理メモリが尽きるのはその後の何気ない<em>代入文</em>の瞬間になる。代入文には失敗を返す仕組みが無い。カーネルは、ページフォールトの処理を完了させるために、どこかから物理メモリを奪ってくるしかなくなる。</p>
+        <pre class="diagram">アプリ          カーネル           物理メモリ
+ │ malloc(1GB)    │                  │
+ ├──────────────▶│ 範囲を記録       │
+ │◀──────────────┤ 成功（RSS 0）    │
+ │ p[0] = 1       │                  │
+ ├──────────────▶│ ページフォールト │
+ │                ├────────────────▶│ 1枚割当
+ │   ...書き込みを続ける...          │
+ │                ├────────────────▶│ 空き 0
+ │                │ swap も満杯      │
+ │                ▼                  │
+ │          OOM killer 起動          │
+ │      スコア最大のプロセスに       │
+ │      SIGKILL（自分とは限らない）  │</pre>
       </section>
 
       <div class="analogy">
         <div class="box-title">🍱 たとえるなら</div>
-        <p>銀行の「店内の待ち人数」表示に近い。窓口で手続き中の人と、番号札を持って順番を待つ人に加え、Linux 版は「奥で書類の取り寄せを待っている人」まで数える。窓口（CPU）が半分空いていても、書類待ちの人が 18 人いれば表示は 20 になる。ここで窓口を増やしても書類は早く届かない。</p>
+        <p>航空会社のオーバーブッキングだ。一定数の乗客は来ないと見込んで座席数より多く予約を受け付ける（オーバーコミット）。予約の時点では誰も断られない。全員が搭乗口に来たとき初めて席が足りなくなり、航空会社は決められた基準で誰かを降ろす（OOM killer）。降ろされるのは最後に来た客とは限らず、予約時に「絶対に降ろさない」と約束された客（<code>oom_score_adj=-1000</code>）は対象外になる。</p>
       </div>
 
       <section class="body-section">
-        <h3>1・5・15 分は「平均」ではない</h3>
-        <p>3 つの数字は、名前から「直近 1 分間の平均」のように思える。しかし実際は、カーネルが 5 秒ごとにタスク数をサンプルし、古い値ほど重みを指数的に小さくして足し込んだ値（指数減衰移動平均）だ。1・5・15 分は「どれくらいの速さで過去を忘れるか」を決める定数にすぎない。</p>
-        <p>この計算のため、値は負荷の変化に遅れて追いつく。Gregg の実験では、アイドル状態のマシンで CPU を使い切るスレッドを 1 本だけ起動すると、1 分後の 1 分値は 1.0 ではなく約 0.62 だった。負荷が 1 分続いても、1 分値はまだ 1 に届かない。</p>
-        <p>実務での読み方は、3 つの値の大小関係だ。1 分値が 15 分値より大きければ負荷は増えている途中、小さければ収まりつつある。冒頭の <code>20.31 18.02 9.47</code> なら、15 分ほど前から負荷が積み上がり、今も高止まりしていると読める。</p>
+        <h3>OOM killer は誰を殺すのか</h3>
+        <p>物理メモリと swap がどちらも尽きると、カーネルは <strong>OOM killer</strong>（Out Of Memory 時に強制終了するプロセスを選ぶカーネルの機構）を起動する。各プロセスの「殺されやすさ」は <code>/proc/&lt;pid&gt;/oom_score</code> で見られる。カーネルのドキュメントでは、基本スコアは許されたメモリのうちそのプロセスがどれだけ使っているかの割合で、0（殺さない）から 1000（必ず殺す）の範囲になる。メモリを半分使っているプロセスなら 500 前後だ。</p>
+        <p>このスコアに加算される補正値が <code>/proc/&lt;pid&gt;/oom_score_adj</code> で、-1000 から +1000 の値を取る。-1000 にするとそのプロセスのスコアは常に 0 となり、OOM killer の対象から事実上外れる。逆に +1000 にすれば真っ先に狙われる。</p>
+        <p>ここで素朴な予想が裏切られる。メモリを食い潰した犯人が殺されるとは限らないのだ。選ばれるのはその瞬間に最もスコアが高いプロセスなので、暴走した小さなバッチではなく、普段から大きな共有バッファを持つ DB が犠牲になることがある。PostgreSQL のドキュメントは、親プロセス（postmaster）が OOM killer に殺されると既存接続は動き続けても新規接続を受け付けなくなり再起動が必要になると説明し、起動スクリプトで postmaster の <code>oom_score_adj</code> を -1000 にする方法や、専用ホストでは <code>vm.overcommit_memory=2</code> で OOM の起きる確率を大きく下げる方法を挙げている。</p>
+        <p>OOM killer が送るのは SIGKILL なので、プロセスは捕捉もクリーンアップもできない。シェルやコンテナランタイムが報告する終了コード 137 は「128 + シグナル番号 9（SIGKILL）」であり、アプリのログに何も残らないのはこのためだ。</p>
       </section>
 
       <section class="body-section">
-        <h3>CPU 数で割る目安と、その先の切り分け</h3>
-        <p>よく言われる「load が CPU 数を超えたら危険」は目安にとどまる。CPU 待ちだけを数える OS なら load ÷ CPU 数は CPU の飽和度に近いが、Linux の値には D 状態が混ざるので、割っても CPU が足りないのかディスクが遅いのかは区別できない。Gregg も、Linux の load は同じマシンの過去の値と比べる相対的な使い方を勧めている。</p>
-        <p>load が高いと分かったら、次は内訳を見る。<code>vmstat 1</code> の <code>r</code> 列は R 状態のタスク数、<code>b</code> 列は D 状態のタスク数を 1 秒ごとに表示する。<code>r</code> が CPU 数を大きく超えていれば CPU 不足、<code>b</code> が大きく <code>wa</code>（I/O 待ちの CPU 時間）も高ければディスクやネットワークストレージを疑う。D 状態のタスク名は <code>ps -eo state,pid,comm | awk '$1=="D"'</code> で列挙できる。</p>
-        <p>より直接的な指標が、Linux 4.20 で入った <strong>PSI</strong>（Pressure Stall Information）だ。タスクの数ではなく「資源待ちで止まっていた時間の割合」を CPU・メモリ・I/O 別に出す。</p>
-        <pre class="code">$ cat /proc/pressure/io
-some avg10=42.10 avg60=38.55 avg300=20.07 total=912873412
-full avg10=31.80 avg60=29.40 avg300=14.62 total=701223877</pre>
-        <p><code>some</code> は「少なくとも 1 つのタスクが I/O 待ちで止まっていた時間の割合」、<code>full</code> は「動けるはずの全タスクが同時に止まっていた時間の割合」で、<code>avg10</code>/<code>avg60</code>/<code>avg300</code> は 10・60・300 秒の平均（%）である。上の例なら直近 10 秒の約 3 割、全タスクが I/O で止まっていた。PSI は <code>CONFIG_PSI</code> を有効にしたカーネルでのみ使え、ディストリビューションによっては組み込まれていても既定で無効のため、ブートパラメータ <code>psi=1</code> で有効化する必要がある。</p>
-        <p>コンテナで見るときは注意がいる。<code>/proc/loadavg</code> はコンテナごとに分かれておらず、LXCFS のような仕組みで仮想化しない限り、コンテナ内の <code>uptime</code> はホスト全体の値を返す。一方 PSI は cgroup v2 ごとに <code>cpu.pressure</code>・<code>memory.pressure</code>・<code>io.pressure</code> を持つので、コンテナ単位の詰まりを見るならこちらを使う。</p>
+        <h3>コンテナと Kubernetes ではどう変わるか</h3>
+        <p>コンテナではホスト全体ではなく cgroup（プロセス群ごとに資源の上限を課すカーネル機能）単位でも同じことが起きる。<code>docker run -m 512m</code> のようにメモリ上限を付けると、その cgroup の使用量が上限に達した時点で、ホストに空きがあってもコンテナ内のプロセスが OOM killer に殺される。Docker のドキュメントは、<code>--memory-swap</code> を <code>--memory</code> と同じ値にするとコンテナは swap を使えなくなると説明している。</p>
+        <p>Kubernetes では kubelet が Pod の QoS クラスに応じて各コンテナの <code>oom_score_adj</code> を設定する。ノード全体がメモリ不足に陥ったとき、どの Pod から殺されるかはこの値でほぼ決まる。</p>
+        <pre class="code"># kubelet が設定する oom_score_adj（公式ドキュメントより）
+# Guaranteed : -997
+# BestEffort : 1000
+# Burstable  : min(max(2, 1000 - 1000
+#   × メモリ request ÷ ノードのメモリ容量), 999)
+# request = limit なら Guaranteed になる
+resources:
+  requests:
+    memory: "512Mi"
+  limits:
+    memory: "512Mi"</pre>
+        <p><code>requests</code> を書かない Pod は BestEffort になり、ノードのメモリが逼迫すると最初の標的になる。<code>requests</code> を実使用量より小さく書いた Burstable の Pod も、補正値が大きく実使用量の割合も高くなるため狙われやすい。なお kubelet 自身もしきい値に基づいて Pod を退避（eviction）させるが、それが間に合わずに物理メモリが尽きた場合にカーネルの OOM killer がこのスコアで選ぶ、という二段構えになっている。</p>
       </section>
 
       <div class="practical">
         <div class="box-title">💼 実務でどう出会うか</div>
-        <p>監視ダッシュボードで「load average &gt; CPU 数」のアラートが鳴ったのに CPU 使用率は低い、という場面が典型だ。このときスケールアウトして CPU を足しても、原因が EBS のスループット上限や NFS の遅延なら D 状態のタスクは減らず、load も下がらない。まず <code>vmstat 1</code> の <code>r</code> と <code>b</code> を見て CPU 起因か I/O 起因かを分け、I/O ならストレージ側のメトリクスへ進む。Kubernetes のノードで load が高い場合、その数字はノード上の全 Pod の合算なので、どの Pod が詰まっているかは各 cgroup の PSI か Pod 単位のメトリクスで確かめる。</p>
+        <p>典型は「ワーカーやコンテナがログを残さず再起動を繰り返す」症状だ。まず終了コード（137 か）と、<code>kubectl describe pod</code> の <code>Last State</code> の <code>Reason: OOMKilled</code>、ホストなら <code>dmesg</code> や <code>journalctl -k</code> の <code>Killed process</code> 行を確認する。次に「殺されたプロセスが本当に犯人か」を疑う。ノード全体の OOM なら、同居している別プロセスの膨張が原因のこともある。JVM のヒープ上限やワーカー数 × 1 プロセスの RSS がコンテナの <code>limits.memory</code> を超える構成になっていないかも、確保時ではなく使い始めてから落ちるという性質上、負荷試験で初めて表面化しやすい。</p>
       </div>
 
       <div class="hands-on">
         <div class="box-title">⌨️ 手を動かす（5 分）</div>
-        <p>Docker で CPU を使い切るループを 2 本走らせ、<code>/proc/loadavg</code> の 1 分値がどう追いつくかを 5 秒ごとに観察する（Mac の Docker Desktop なら、裏で動く Linux VM の値が見える）。</p>
-        <pre class="code">docker run --rm ubuntu bash -c '
-echo "CPU: $(nproc)"
-for i in 1 2; do (while :; do :; done) &amp; done
-for t in $(seq 1 12); do
-  sleep 5
-  echo "$(date +%T) $(cut -d" " -f1-4 /proc/loadavg)"
-done
-cat /proc/pressure/cpu 2&gt;/dev/null || echo "PSI 無効"'</pre>
-        <p>4 つ目の値（実行可能数）は最初から 2 以上になるのに、1 分値は 5 秒ごとに少しずつしか上がらず、60 秒経っても 2 に届かず 1.3 前後に留まるはずだ（VM 上の他の負荷があればその分上乗せされる）。これが指数減衰による遅れである。最後の PSI 出力では、ループ数が CPU 数を超えていれば <code>some</code> の値が上がっている。</p>
+        <p>メモリ上限 100MB（swap 無し）のコンテナで 1GB を予約し、予約は成功するのに書き込むと殺されることを確かめる。</p>
+        <pre class="code">docker run --rm -m 100m --memory-swap 100m python:3.12-slim python -c "
+import mmap
+def rss():
+    for l in open('/proc/self/status'):
+        if l.startswith('VmRSS'):
+            return l.strip()
+m = mmap.mmap(-1, 1 &lt;&lt; 30)
+print('1GB の予約に成功:', rss(), flush=True)
+for i in range(0, len(m), 4096):
+    m[i] = 1
+print('ここには来ない')
+"
+echo "exit code: $?"</pre>
+        <p>1 行目では 1GB を予約したのに <code>VmRSS</code> が Python 本体の分（1GB よりはるかに小さい値）に留まり、予約が物理メモリを消費していないことが分かる。その後、ページごとに 1 バイトずつ書き込むと RSS が 100MB に達した時点で SIGKILL され、「ここには来ない」は表示されず <code>exit code: 137</code> が出るはずだ。</p>
       </div>
 
       <div class="misconceptions">
         <div class="box-title">🙅 よくある誤解</div>
         <ul>
-          <li><span class="wrong">load average は CPU 使用率の別表現だ</span> — 数えているのは時間の割合ではなくタスクの数で、Linux ではディスク I/O 待ちなどの D 状態も含む。CPU がほぼ空いていても load は高くなりうる。</li>
-          <li><span class="wrong">1 分値は直近 1 分間の平均値だ</span> — 5 秒ごとのサンプルを指数的に減衰させて足し込んだ値で、1 分より前の負荷も少し残り、新しい負荷には遅れて追いつく。</li>
-          <li><span class="wrong">load が高いなら CPU を増やせば解決する</span> — D 状態が原因なら CPU を足しても待ちは減らない。<code>vmstat</code> の <code>r</code> と <code>b</code> で内訳を見てから対処を決める。</li>
+          <li><span class="wrong">メモリが足りなければ malloc が失敗するはずだ</span> — デフォルトのヒューリスティックモードでは予約はほぼ通り、不足は書き込み時に表面化する。そのとき失敗を返す口は無いので、結果は OOM killer による強制終了になる。</li>
+          <li><span class="wrong">OOM killer に殺されたプロセスがメモリリークの犯人だ</span> — 選ばれるのはその瞬間のスコアが最大のプロセスで、メモリを使い込んだ張本人とは限らない。ノード全体の OOM では同居プロセスの使用量も確認する。</li>
+          <li><span class="wrong">VSZ が大きいプロセスはメモリを食っている</span> — VSZ は予約済みの仮想アドレス空間の大きさで、物理メモリの消費量を表すのは RSS のほうだ。</li>
         </ul>
       </div>
 
       <div class="glossary">
         <div class="box-title">📖 用語ミニ辞典</div>
         <dl>
-          <dt>load average</dt><dd>実行中・実行待ち（Linux では D 状態も含む）のタスク数を、5 秒ごとのサンプルから指数減衰でならした値。</dd>
-          <dt>ランキュー</dt><dd>CPU が空くのを待っている R 状態のタスクが並ぶ列。</dd>
-          <dt>D 状態（uninterruptible sleep）</dt><dd>ディスク I/O 完了などを待つ間、シグナルを受けても起きない待ち状態。</dd>
-          <dt>指数減衰移動平均</dt><dd>古いサンプルほど重みを指数的に小さくして足し込む平均。直近の変化を重視しつつ過去も少し残す。</dd>
-          <dt>PSI（Pressure Stall Information）</dt><dd>CPU・メモリ・I/O の待ちでタスクが止まっていた時間の割合を出す Linux の仕組み。cgroup v2 単位でも読める。</dd>
+          <dt>仮想メモリ</dt><dd>プロセスごとに用意された見かけ上のアドレス空間。ページテーブルで物理メモリに対応付けられる。</dd>
+          <dt>デマンドページング</dt><dd>予約時ではなく、ページに初めて触れた時点で物理メモリを割り当てる方式。</dd>
+          <dt>ページフォールト</dt><dd>アクセスしたページに物理メモリが対応付けられていないとき CPU がカーネルに知らせる例外。</dd>
+          <dt>オーバーコミット</dt><dd>物理メモリと swap の合計を超えるメモリ予約を許すこと。<code>vm.overcommit_memory</code> で制御する。</dd>
+          <dt>OOM killer</dt><dd>物理メモリと swap が尽きたとき、スコアの高いプロセスを SIGKILL して物理メモリを回収するカーネルの機構。</dd>
+          <dt>oom_score_adj</dt><dd>OOM killer のスコアに加算する補正値。-1000〜+1000 で、-1000 は対象外を意味する。</dd>
         </dl>
       </div>
 
       <div class="further-reading">
         <div class="box-title">🔗 もっと深く</div>
         <ul>
-          <li><a href="https://www.brendangregg.com/blog/2017-08-08/linux-load-averages.html">Linux Load Averages: Solving the Mystery</a> — D 状態が加わった 1993 年のパッチを発掘し、計算式と実験で load の正体を解き明かした記事。</li>
-          <li><a href="https://man7.org/linux/man-pages/man5/proc_loadavg.5.html">proc_loadavg(5) — Linux manual page</a> — <code>/proc/loadavg</code> の 5 つのフィールドの公式定義。</li>
-          <li><a href="https://docs.kernel.org/accounting/psi.html">PSI - Pressure Stall Information（Linux kernel documentation）</a> — some/full の定義、<code>/proc/pressure</code> の形式、cgroup v2 での使い方とトリガー設定。</li>
+          <li><a href="https://docs.kernel.org/mm/overcommit-accounting.html">Overcommit Accounting (Linux kernel documentation)</a> — <code>vm.overcommit_memory</code> の 3 モードと <code>overcommit_ratio</code> の一次情報。</li>
+          <li><a href="https://www.postgresql.org/docs/current/kernel-resources.html">PostgreSQL: Managing Kernel Resources</a> — 「Linux Memory Overcommit」節で、DB を OOM killer から守る具体的な設定手順が読める。</li>
+          <li><a href="https://kubernetes.io/docs/concepts/scheduling-eviction/node-pressure-eviction/">Node-pressure Eviction (Kubernetes)</a> — kubelet の退避と、QoS ごとの <code>oom_score_adj</code> の表がある。</li>
+          <li><a href="https://docs.docker.com/engine/containers/resource_constraints/">Resource constraints (Docker Docs)</a> — <code>--memory</code> / <code>--memory-swap</code> の組み合わせとコンテナ内 OOM の扱い。</li>
         </ul>
       </div>
     </article>
@@ -138,6 +161,11 @@ cat /proc/pressure/cpu 2&gt;/dev/null || echo "PSI 無効"'</pre>
     <!-- recent:start -->
     <section class="section recent-articles">
       <div class="section-title">最近の記事</div>
+      <div class="card">
+        <h3><a href="archive/2026-10-14.html">CPU は半分も使っていないのに、なぜ load average は 20 もあるのか？</a></h3>
+        <div class="summary">load average は CPU 使用率ではなく、実行中・実行待ちのタスク数を時間でならした値だ。Linux はディスク I/O などの D 状態のタスクも数えるため CPU が空いていても跳ね上がる。1・5・15 分値は指数減衰で、内訳は vmstat や PSI で切り分ける。</div>
+        <div class="meta"><span class="tag tag-perf">Perf</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-14</span></div>
+      </div>
       <div class="card">
         <h3><a href="archive/2026-10-13.html">temperature を 0 にしたのに、なぜ LLM の答えは毎回同じにならないのか？</a></h3>
         <div class="summary">LLM は 1 トークンごとに確率の表を作って候補を選び、temperature・top_k・top_p はその選び方を変える。温度 0 で乱数は消えるのに出力が揺れるのは、同時処理されるリクエスト数で GPU の足し算の順序が変わりロジット自体が変わるからだ。</div>
@@ -152,11 +180,6 @@ cat /proc/pressure/cpu 2&gt;/dev/null || echo "PSI 無効"'</pre>
         <h3><a href="archive/2026-10-11.html">見た目は 1 文字なのに、なぜ JS は 8、Go は 18、Ruby は 5 と数えるのか？</a></h3>
         <div class="summary">文字には符号位置・UTF-8/UTF-16 の符号化・書記素クラスタの 3 層があり、JS・Go・Ruby はそれぞれ違う層を数えている。UTF-8 の可変長設計、サロゲートペア、MySQL の utf8mb3 で絵文字が入らない理由まで。</div>
         <div class="meta"><span class="tag tag-lang">Lang</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-11</span></div>
-      </div>
-      <div class="card">
-        <h3><a href="archive/2026-10-10.html">0.1 と 0.2 を足しただけなのに、なぜ 0.3 にならないのか？</a></h3>
-        <div class="summary">0.1 は二進数で割り切れず近似値で保存されるため、0.1+0.2 は 0.3 の近似とは別の値に着地する。IEEE 754 倍精度の目盛りの仕組みと、金額・巨大 ID を正確に扱う型の選び方を解説。</div>
-        <div class="meta"><span class="tag tag-lang">Lang</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-10</span></div>
       </div>
       <div class="recent-more"><a href="archive/">アーカイブですべて見る →</a></div>
     </section>

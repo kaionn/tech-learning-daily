@@ -36,7 +36,7 @@
         <button class="chip" data-cat="arch">Arch <span class="chip-count">9</span></button>
         <button class="chip" data-cat="security">Security <span class="chip-count">8</span></button>
         <button class="chip" data-cat="ai">AI <span class="chip-count">7</span></button>
-        <button class="chip" data-cat="infra">Infra <span class="chip-count">6</span></button>
+        <button class="chip" data-cat="infra">Infra <span class="chip-count">7</span></button>
         <button class="chip" data-cat="lang">Lang <span class="chip-count">6</span></button>
         <button class="chip" data-cat="dev" data-overflow="1" hidden>Dev <span class="chip-count">4</span></button>
         <button class="chip" data-cat="frontend" data-overflow="1" hidden>Frontend <span class="chip-count">4</span></button>
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-10">
       <div class="section-title">2026 年 10 月 <span class="count"></span></div>
+      <div class="card" data-cat="infra" data-diff="基礎"
+           data-search="メモリ確保は成功したのに、なぜプロセスは後から oom killer に殺されるのか？ malloc が成功しても物理メモリは書き込み時まで割り当てられない。linux のオーバーコミット下では不足が後から表面化し、oom killer がスコア最大のプロセスを sigkill する。oom_score_adj と kubernetes の qos との関係も解説する。" data-terms="仮想メモリ / デマンドページング / ページフォールト / オーバーコミット / OOM killer / oom_score_adj">
+        <h3><a href="2026-10-15.html">メモリ確保は成功したのに、なぜプロセスは後から OOM killer に殺されるのか？</a></h3>
+        <div class="summary">malloc が成功しても物理メモリは書き込み時まで割り当てられない。Linux のオーバーコミット下では不足が後から表面化し、OOM killer がスコア最大のプロセスを SIGKILL する。oom_score_adj と Kubernetes の QoS との関係も解説する。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-infra">Infra</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-15</span></div>
+      </div>
       <div class="card" data-cat="perf" data-diff="基礎"
            data-search="cpu は半分も使っていないのに、なぜ load average は 20 もあるのか？ load average は cpu 使用率ではなく、実行中・実行待ちのタスク数を時間でならした値だ。linux はディスク i/o などの d 状態のタスクも数えるため cpu が空いていても跳ね上がる。1・5・15 分値は指数減衰で、内訳は vmstat や psi で切り分ける。" data-terms="load average / ランキュー / D 状態（uninterruptible sleep） / 指数減衰移動平均 / PSI（Pressure Stall Information）">
         <h3><a href="2026-10-14.html">CPU は半分も使っていないのに、なぜ load average は 20 もあるのか？</a></h3>

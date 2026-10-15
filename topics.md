@@ -6,6 +6,7 @@
 
 ## 消化済み
 
+- 2026-10-15 仮想メモリのオーバーコミットと OOM killer（mallocは仮想アドレスの予約でデマンドページングにより書き込み時に物理ページが割り当てられること、VSZとRSSの違い、vm.overcommit_memory 0/1/2とovercommit_ratio、forkのコピーオンライトがオーバーコミットを必要とする理由、oom_score/oom_score_adjによる犠牲者選択と終了コード137、cgroupのメモリ上限とKubernetesのQoS別oom_score_adj）（自動選定）
 - 2026-10-14 Linux の load average（CPU使用率ではなく実行中・実行待ちのタスク数を数える指標であること、LinuxだけがD状態=割り込み不可の待ちも数える理由と1993年のパッチ、1/5/15分値が5秒サンプルの指数減衰であること、CPU数で割る目安の限界、vmstatのr/b列とPSIによる切り分け、コンテナ内ではホストの値が見える点）（自動選定）
 - 2026-10-13 LLM のサンプリングと temperature（ロジットとsoftmax、temperatureで確率分布の偏りが変わる仕組みと0で貪欲デコーディングになること、top_k/top_pの足切り、温度0でも出力が揺れる原因が浮動小数点の非結合性とバッチサイズ依存のカーネルにあること、テストでの扱い）（自動選定）
 - 2026-10-12 時刻とタイムゾーン（瞬間と壁時計時刻の区別、オフセットとIANAタイムゾーン名の違い、PostgreSQLのtimestamp/timestamptzの保存と変換、Railsのdefault_timezoneとdatetime_typeで9時間ずれる典型パターン、JSのDate文字列解釈で1日ずれる理由、未来の予定は壁時計時刻+ゾーン名で持つ理由）（自動選定）

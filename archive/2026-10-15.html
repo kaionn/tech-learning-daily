@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tech Learning Daily — メモリ確保は成功したのに、なぜプロセスは後から OOM killer に殺されるのか？</title>
+  <link rel="stylesheet" href="../style.css">
+  <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="../feed.xml">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Tech Learning Daily</h1>
+      <div class="date">2026-10-15 (Thu) — 第 90 号</div>
+      <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
+    </header>
+
+    <article class="article">
+      <div class="meta-bar">
+        <span class="tag tag-infra">Infra</span>
+        <span class="difficulty">🌿 基礎</span>
+        <span class="read-time">⏱ 約 7 分</span>
+      </div>
+      <h2 class="article-title">メモリ確保は成功したのに、なぜプロセスは後から OOM killer に殺されるのか？</h2>
+      <p class="lead">Sidekiq のワーカーがエラーログも残さずに消え、終了コードは 137。カーネルログには <code>Killed process</code> の一行だけが残っていた。メモリが足りないなら確保の時点で失敗してくれればいいのに、なぜ Linux は「確保は成功させておいて、後から殺す」のだろうか。</p>
+
+      <div class="tldr">
+        <div class="box-title">🎯 3 行まとめ</div>
+        <ul>
+          <li><code>malloc</code> が返すのは仮想アドレスの「予約」で、物理メモリは初めて書き込んだページから順に割り当てられる。</li>
+          <li>Linux は既定（<code>vm.overcommit_memory=0</code>）で物理メモリ以上の予約を許すため、足りなくなるのは確保時ではなく書き込み時になる。</li>
+          <li>書き込み時には失敗を返す相手がいないので、カーネルは OOM killer でスコアの高いプロセスを SIGKILL して物理メモリを取り戻す。</li>
+        </ul>
+      </div>
+
+      <section class="body-section">
+        <h3>プロセスが見ているのは「番地」であって「メモリ」ではない</h3>
+        <p>Linux の各プロセスは<strong>仮想メモリ</strong>（プロセスごとに用意された見かけ上のアドレス空間）の上で動いている。プログラムが読み書きするアドレスは仮想アドレスで、それを実際の物理メモリの位置へ変換する対応表を<strong>ページテーブル</strong>と呼ぶ。対応付けは<strong>ページ</strong>（メモリ管理の最小単位の固定長ブロック）ごとに行われる。</p>
+        <p><code>malloc</code> や <code>mmap</code> で大きな領域を確保したとき、カーネルがやるのは「この番地の範囲はあなたのものだ」と記録することだけだ。物理メモリはまだ一切割り当てられない。プログラムがその範囲のページに初めて書き込むと、CPU は対応する物理ページが無いことに気付いて<strong>ページフォールト</strong>（変換に失敗したことをカーネルに知らせる例外）を起こし、カーネルはその場で空いている物理ページを 1 枚用意してページテーブルに書き込む。この「使われた分だけ後から割り当てる」方式を<strong>デマンドページング</strong>という。</p>
+        <p><code>ps aux</code> の <code>VSZ</code> と <code>RSS</code> の差はここから生まれる。<code>VSZ</code> は予約済みの仮想アドレス空間の大きさで、<code>RSS</code> は実際に物理メモリに載っている量だ。Java や Go のプロセスで <code>VSZ</code> が何十 GB と表示されても慌てなくてよいのは、予約しただけで触っていない範囲が大半を占めているからである。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>オーバーコミット: 物理メモリより多くを約束する</h3>
+        <p>予約と割り当てが分かれているなら、カーネルは「全プロセスの予約の合計」が物理メモリを超えても受け付けられる。これを<strong>オーバーコミット</strong>と呼ぶ。挙動は sysctl の <code>vm.overcommit_memory</code> で選べ、カーネルのドキュメントによれば値の意味は次のとおりだ。</p>
+        <pre class="code"># 0: ヒューリスティック（デフォルト）
+#    明らかに無茶な予約だけ拒否する
+# 1: 常に許可（チェックしない）
+# 2: 許可しない。予約の合計を
+#    swap + 物理メモリ × overcommit_ratio% に制限
+#    （overcommit_ratio のデフォルトは 50）
+sysctl vm.overcommit_memory vm.overcommit_ratio</pre>
+        <p>なぜデフォルトで約束を破りうる設計なのか。理由の一つは <code>fork</code> だ。10GB 使っている Ruby プロセスが <code>fork</code> すると、子プロセスは親のメモリをそのまま見られる状態で生まれるが、実体はコピーオンライト（書き込まれたページだけ後からコピーする方式）で共有されている。予約を厳密に数えると子の分としてさらに 10GB 分の約束が必要になり、ほとんど書き換えずにすぐ <code>exec</code> するだけの子プロセスのためにメモリを確保できず <code>fork</code> が失敗してしまう。疎な巨大配列やスレッドのスタックのように「予約は大きいが実際に触るのは一部」というパターンは多く、それを許すほうが物理メモリを有効に使える。</p>
+        <p>直感的には、メモリが足りなければ <code>malloc</code> が <code>NULL</code> を返して、アプリが自分でエラー処理すればよいように思える。しかし実際は、デフォルト設定では予約はほぼ通ってしまい、物理メモリが尽きるのはその後の何気ない<em>代入文</em>の瞬間になる。代入文には失敗を返す仕組みが無い。カーネルは、ページフォールトの処理を完了させるために、どこかから物理メモリを奪ってくるしかなくなる。</p>
+        <pre class="diagram">アプリ          カーネル           物理メモリ
+ │ malloc(1GB)    │                  │
+ ├──────────────▶│ 範囲を記録       │
+ │◀──────────────┤ 成功（RSS 0）    │
+ │ p[0] = 1       │                  │
+ ├──────────────▶│ ページフォールト │
+ │                ├────────────────▶│ 1枚割当
+ │   ...書き込みを続ける...          │
+ │                ├────────────────▶│ 空き 0
+ │                │ swap も満杯      │
+ │                ▼                  │
+ │          OOM killer 起動          │
+ │      スコア最大のプロセスに       │
+ │      SIGKILL（自分とは限らない）  │</pre>
+      </section>
+
+      <div class="analogy">
+        <div class="box-title">🍱 たとえるなら</div>
+        <p>航空会社のオーバーブッキングだ。一定数の乗客は来ないと見込んで座席数より多く予約を受け付ける（オーバーコミット）。予約の時点では誰も断られない。全員が搭乗口に来たとき初めて席が足りなくなり、航空会社は決められた基準で誰かを降ろす（OOM killer）。降ろされるのは最後に来た客とは限らず、予約時に「絶対に降ろさない」と約束された客（<code>oom_score_adj=-1000</code>）は対象外になる。</p>
+      </div>
+
+      <section class="body-section">
+        <h3>OOM killer は誰を殺すのか</h3>
+        <p>物理メモリと swap がどちらも尽きると、カーネルは <strong>OOM killer</strong>（Out Of Memory 時に強制終了するプロセスを選ぶカーネルの機構）を起動する。各プロセスの「殺されやすさ」は <code>/proc/&lt;pid&gt;/oom_score</code> で見られる。カーネルのドキュメントでは、基本スコアは許されたメモリのうちそのプロセスがどれだけ使っているかの割合で、0（殺さない）から 1000（必ず殺す）の範囲になる。メモリを半分使っているプロセスなら 500 前後だ。</p>
+        <p>このスコアに加算される補正値が <code>/proc/&lt;pid&gt;/oom_score_adj</code> で、-1000 から +1000 の値を取る。-1000 にするとそのプロセスのスコアは常に 0 となり、OOM killer の対象から事実上外れる。逆に +1000 にすれば真っ先に狙われる。</p>
+        <p>ここで素朴な予想が裏切られる。メモリを食い潰した犯人が殺されるとは限らないのだ。選ばれるのはその瞬間に最もスコアが高いプロセスなので、暴走した小さなバッチではなく、普段から大きな共有バッファを持つ DB が犠牲になることがある。PostgreSQL のドキュメントは、親プロセス（postmaster）が OOM killer に殺されると既存接続は動き続けても新規接続を受け付けなくなり再起動が必要になると説明し、起動スクリプトで postmaster の <code>oom_score_adj</code> を -1000 にする方法や、専用ホストでは <code>vm.overcommit_memory=2</code> で OOM の起きる確率を大きく下げる方法を挙げている。</p>
+        <p>OOM killer が送るのは SIGKILL なので、プロセスは捕捉もクリーンアップもできない。シェルやコンテナランタイムが報告する終了コード 137 は「128 + シグナル番号 9（SIGKILL）」であり、アプリのログに何も残らないのはこのためだ。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>コンテナと Kubernetes ではどう変わるか</h3>
+        <p>コンテナではホスト全体ではなく cgroup（プロセス群ごとに資源の上限を課すカーネル機能）単位でも同じことが起きる。<code>docker run -m 512m</code> のようにメモリ上限を付けると、その cgroup の使用量が上限に達した時点で、ホストに空きがあってもコンテナ内のプロセスが OOM killer に殺される。Docker のドキュメントは、<code>--memory-swap</code> を <code>--memory</code> と同じ値にするとコンテナは swap を使えなくなると説明している。</p>
+        <p>Kubernetes では kubelet が Pod の QoS クラスに応じて各コンテナの <code>oom_score_adj</code> を設定する。ノード全体がメモリ不足に陥ったとき、どの Pod から殺されるかはこの値でほぼ決まる。</p>
+        <pre class="code"># kubelet が設定する oom_score_adj（公式ドキュメントより）
+# Guaranteed : -997
+# BestEffort : 1000
+# Burstable  : min(max(2, 1000 - 1000
+#   × メモリ request ÷ ノードのメモリ容量), 999)
+# request = limit なら Guaranteed になる
+resources:
+  requests:
+    memory: "512Mi"
+  limits:
+    memory: "512Mi"</pre>
+        <p><code>requests</code> を書かない Pod は BestEffort になり、ノードのメモリが逼迫すると最初の標的になる。<code>requests</code> を実使用量より小さく書いた Burstable の Pod も、補正値が大きく実使用量の割合も高くなるため狙われやすい。なお kubelet 自身もしきい値に基づいて Pod を退避（eviction）させるが、それが間に合わずに物理メモリが尽きた場合にカーネルの OOM killer がこのスコアで選ぶ、という二段構えになっている。</p>
+      </section>
+
+      <div class="practical">
+        <div class="box-title">💼 実務でどう出会うか</div>
+        <p>典型は「ワーカーやコンテナがログを残さず再起動を繰り返す」症状だ。まず終了コード（137 か）と、<code>kubectl describe pod</code> の <code>Last State</code> の <code>Reason: OOMKilled</code>、ホストなら <code>dmesg</code> や <code>journalctl -k</code> の <code>Killed process</code> 行を確認する。次に「殺されたプロセスが本当に犯人か」を疑う。ノード全体の OOM なら、同居している別プロセスの膨張が原因のこともある。JVM のヒープ上限やワーカー数 × 1 プロセスの RSS がコンテナの <code>limits.memory</code> を超える構成になっていないかも、確保時ではなく使い始めてから落ちるという性質上、負荷試験で初めて表面化しやすい。</p>
+      </div>
+
+      <div class="hands-on">
+        <div class="box-title">⌨️ 手を動かす（5 分）</div>
+        <p>メモリ上限 100MB（swap 無し）のコンテナで 1GB を予約し、予約は成功するのに書き込むと殺されることを確かめる。</p>
+        <pre class="code">docker run --rm -m 100m --memory-swap 100m python:3.12-slim python -c "
+import mmap
+def rss():
+    for l in open('/proc/self/status'):
+        if l.startswith('VmRSS'):
+            return l.strip()
+m = mmap.mmap(-1, 1 &lt;&lt; 30)
+print('1GB の予約に成功:', rss(), flush=True)
+for i in range(0, len(m), 4096):
+    m[i] = 1
+print('ここには来ない')
+"
+echo "exit code: $?"</pre>
+        <p>1 行目では 1GB を予約したのに <code>VmRSS</code> が Python 本体の分（1GB よりはるかに小さい値）に留まり、予約が物理メモリを消費していないことが分かる。その後、ページごとに 1 バイトずつ書き込むと RSS が 100MB に達した時点で SIGKILL され、「ここには来ない」は表示されず <code>exit code: 137</code> が出るはずだ。</p>
+      </div>
+
+      <div class="misconceptions">
+        <div class="box-title">🙅 よくある誤解</div>
+        <ul>
+          <li><span class="wrong">メモリが足りなければ malloc が失敗するはずだ</span> — デフォルトのヒューリスティックモードでは予約はほぼ通り、不足は書き込み時に表面化する。そのとき失敗を返す口は無いので、結果は OOM killer による強制終了になる。</li>
+          <li><span class="wrong">OOM killer に殺されたプロセスがメモリリークの犯人だ</span> — 選ばれるのはその瞬間のスコアが最大のプロセスで、メモリを使い込んだ張本人とは限らない。ノード全体の OOM では同居プロセスの使用量も確認する。</li>
+          <li><span class="wrong">VSZ が大きいプロセスはメモリを食っている</span> — VSZ は予約済みの仮想アドレス空間の大きさで、物理メモリの消費量を表すのは RSS のほうだ。</li>
+        </ul>
+      </div>
+
+      <div class="glossary">
+        <div class="box-title">📖 用語ミニ辞典</div>
+        <dl>
+          <dt>仮想メモリ</dt><dd>プロセスごとに用意された見かけ上のアドレス空間。ページテーブルで物理メモリに対応付けられる。</dd>
+          <dt>デマンドページング</dt><dd>予約時ではなく、ページに初めて触れた時点で物理メモリを割り当てる方式。</dd>
+          <dt>ページフォールト</dt><dd>アクセスしたページに物理メモリが対応付けられていないとき CPU がカーネルに知らせる例外。</dd>
+          <dt>オーバーコミット</dt><dd>物理メモリと swap の合計を超えるメモリ予約を許すこと。<code>vm.overcommit_memory</code> で制御する。</dd>
+          <dt>OOM killer</dt><dd>物理メモリと swap が尽きたとき、スコアの高いプロセスを SIGKILL して物理メモリを回収するカーネルの機構。</dd>
+          <dt>oom_score_adj</dt><dd>OOM killer のスコアに加算する補正値。-1000〜+1000 で、-1000 は対象外を意味する。</dd>
+        </dl>
+      </div>
+
+      <div class="further-reading">
+        <div class="box-title">🔗 もっと深く</div>
+        <ul>
+          <li><a href="https://docs.kernel.org/mm/overcommit-accounting.html">Overcommit Accounting (Linux kernel documentation)</a> — <code>vm.overcommit_memory</code> の 3 モードと <code>overcommit_ratio</code> の一次情報。</li>
+          <li><a href="https://www.postgresql.org/docs/current/kernel-resources.html">PostgreSQL: Managing Kernel Resources</a> — 「Linux Memory Overcommit」節で、DB を OOM killer から守る具体的な設定手順が読める。</li>
+          <li><a href="https://kubernetes.io/docs/concepts/scheduling-eviction/node-pressure-eviction/">Node-pressure Eviction (Kubernetes)</a> — kubelet の退避と、QoS ごとの <code>oom_score_adj</code> の表がある。</li>
+          <li><a href="https://docs.docker.com/engine/containers/resource_constraints/">Resource constraints (Docker Docs)</a> — <code>--memory</code> / <code>--memory-swap</code> の組み合わせとコンテナ内 OOM の扱い。</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- recent:start -->
+    <!-- recent:end -->
+
+    <footer>
+      <p>Generated by Claude Code (GitHub Actions)</p>
+      <a href="./" class="archive-link">過去の記事</a>
+    </footer>
+  </div>
+</body>
+</html>
