@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tech Learning Daily — 回線は 1Gbps あるのに、なぜ新しい接続の最初のダウンロードは遅いのか？</title>
+  <link rel="stylesheet" href="../style.css">
+  <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="../feed.xml">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Tech Learning Daily</h1>
+      <div class="date">2026-10-17 (Sat) — 第 92 号</div>
+      <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
+    </header>
+
+    <article class="article">
+      <div class="meta-bar">
+        <span class="tag tag-network">Network</span>
+        <span class="difficulty">🌿 基礎</span>
+        <span class="read-time">⏱ 約 8 分</span>
+      </div>
+      <h2 class="article-title">回線は 1Gbps あるのに、なぜ新しい接続の最初のダウンロードは遅いのか？</h2>
+      <p class="lead">海外リージョンの API を叩くと、レスポンスはたかだか 200KB なのに数百ミリ秒かかる。1Gbps の回線なら 200KB は計算上 2 ミリ秒もかからないはずだ。この差を「サーバーが遅いから」と片付ける前に、TCP が新しい接続で最初にしていること、つまり「いきなり全力では送らない」仕組みを見てみよう。</p>
+
+      <div class="tldr">
+        <div class="box-title">🎯 3 行まとめ</div>
+        <ul>
+          <li>TCP の送信側は途中経路の空き具合を知らないため、「確認応答を待たずに送ってよい量」（輻輳ウィンドウ）を小さく始め、往復ごとにほぼ倍へ増やす。これがスロースタートである。</li>
+          <li>初期値は 10 セグメント（約 14.6KB）なので、短い転送の所要時間は帯域ではなく往復遅延（RTT）の回数で決まる。</li>
+          <li>パケットロスを混雑の合図とみなして送信量を絞るのが CUBIC 等の従来型で、帯域と RTT を測ってペースを決めるのが BBR である。接続の使い回しは、接続ごとの「育った窓」を再利用するための工夫でもある。</li>
+        </ul>
+      </div>
+
+      <section class="body-section">
+        <h3>送信側は「道がどれだけ空いているか」を知らない</h3>
+        <p>TCP の送信側は、相手から ACK（確認応答: 「ここまで受け取った」という返信）が届く前に、まとめて何パケットか先に送ってしまう。ACK を 1 個ずつ待っていたら、1 往復で 1 パケットしか送れないからだ。問題は「ACK を待たずに何バイトまで送ってよいか」である。</p>
+        <p>その上限を決めるものは 2 つある。1 つは受信側が「これだけなら受け取れる」と申告する受信ウィンドウ。もう 1 つが送信側が自分で見積もる<code>cwnd</code>（congestion window, 輻輳ウィンドウ: 経路を詰まらせずに送れると推定した量）だ。実際に送るのは両者の小さい方になる。</p>
+        <p>受信ウィンドウは相手が教えてくれるが、途中のルーターがどれだけ空いているかは誰も教えてくれない。経路上には他人のトラフィックも流れていて、ルーターのバッファ（待ち行列）が溢れればパケットは捨てられる。全員が全力で送ると全員の再送が増えて誰も届かなくなるため、TCP は 1980 年代から「様子を見ながら増やし、詰まったら減らす」という輻輳制御（congestion control）を各送信者に求めてきた。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>スロースタート: 14.6KB から始めて往復ごとに倍</h3>
+        <p>新しい接続の <code>cwnd</code> の初期値は、RFC 6928 で上限 10 セグメントと定められている。一般的な Ethernet の MSS（Maximum Segment Size: 1 パケットに載せられるデータ量）1460 バイトなら 14,600 バイトだ。Linux は 2011 年にこの初期値を 10 に引き上げている。それ以前の規定は約 4KB で、RFC 6928 は Web のレスポンスが大きくなったことを引き上げの理由に挙げている。</p>
+        <p>RFC 5681 によれば、スロースタート中は新しいデータの ACK が 1 つ届くたびに <code>cwnd</code> を最大 1 セグメントずつ増やす。1 往復で送った 10 セグメント分の ACK が返れば 10 増えて 20 になり、次は 40 になる。名前は「スロー」だが、1 往復ごとにほぼ倍という指数的な増え方だ。名前は「最初の量が小さい」ことを指している。</p>
+        <pre class="diagram">RTT 100ms・初期 cwnd 10 の場合
+（TCP/TLS ハンドシェイクを除く）
+
+RTT#  sent/RTT           total
+──────────────────────────────
+ 1    ==        14.6KB   14.6KB
+ 2    ====      29.2KB   43.8KB
+ 3    ========  58.4KB  102.2KB
+ 4    ================
+               116.8KB  219.0KB
+──────────────────────────────
+▶ 200KB を受け取り終えるのは 4 往復目
+▶ 所要 ≒ 4 × 100ms = 400ms</pre>
+        <p>リードの疑問はこれで解ける。200KB のレスポンスは帯域の上では一瞬でも、<code>cwnd</code> が育つまでに 4 往復かかる。RTT が 100ms の経路なら、それだけで 400ms だ。最初の往復で送れる 14.6KB を 100ms で割ると約 1.2Mbps 相当で、1Gbps の回線はほぼ遊んでいる。短い転送の速さを決めるのは回線の太さではなく往復の回数と RTT である。</p>
+        <p>では、どこまで増やせば十分なのか。経路を満杯にするのに必要な量は「帯域 × RTT」（BDP: Bandwidth-Delay Product）で計算できる。1Gbps × 100ms なら 12.5MB で、14.6KB から倍々で到達するには 10 往復ほどかかる。</p>
+      </section>
+
+      <div class="analogy">
+        <div class="box-title">🍱 たとえるなら</div>
+        <p>初めて使う配送ルートに荷物を流す運送会社だ。道路の混み具合は分からないので、初日はトラック 10 台だけ出す。全車が無事に着いたと連絡が来たら翌便は 20 台、次は 40 台と倍にしていく。どこかで 1 台が渋滞に巻き込まれて行方不明になったら「この道はもう限界だ」と判断して台数を減らす。ただし判断材料は「荷物が着いたという連絡」しかないので、連絡が往復するのに時間のかかる遠いルートほど、台数が増えるのも遅い。</p>
+      </div>
+
+      <section class="body-section">
+        <h3>増やし続けた先: ロスで減らす CUBIC、測って決める BBR</h3>
+        <p>倍々に増やせばいつか経路のどこかでバッファが溢れ、パケットが失われる。RFC 5681 の基本形（Reno と呼ばれる系統）では、ロスを検知するとしきい値 <code>ssthresh</code>（slow start threshold: スロースタートをやめる境目）を送信中データ量の半分に下げ、以後は 1 往復あたり 1 セグメントずつしか増やさない輻輳回避に移る。再送タイマーが切れるほど深刻な場合は <code>cwnd</code> を 1 セグメントまで落としてスロースタートからやり直す。</p>
+        <p>現在 Linux・Windows・Apple の標準は CUBIC（RFC 9438）である。ロスを合図に減らす点は Reno と同じだが、減らし幅は半分ではなく 0.7 倍で、その後は「前回ロスした大きさ」に向けて時間の 3 次関数で素早く戻る。RTT の長い高帯域経路で、Reno のように 1 往復 1 セグメントずつ増やしていては回復に時間がかかりすぎるためだ。</p>
+        <p>ロスこそ混雑のサインだと思いがちだが、実際には両者は一致しないことがある。ルーターのバッファが深いと、ロスが起きる前に待ち行列が伸びて遅延が膨らむ（bufferbloat）。逆に Wi-Fi などでは混雑と無関係なロスが起きて、送信側が不要に減速する。Google が開発した BBR は、ロスではなく「最近測れた最大の配送速度」と「最小の RTT」から経路のモデルを作り、その速度に合わせて送る。Google の 2017 年の報告では、YouTube で CUBIC に比べスループットが平均 4% 上がり、RTT が 33% 下がったとしている。</p>
+        <pre class="code"># 使える方式と、いま使われている方式を見る（Linux）
+sysctl net.ipv4.tcp_available_congestion_control
+sysctl net.ipv4.tcp_congestion_control
+
+# BBR に切り替える（tcp_bbr モジュールが必要）
+sudo modprobe tcp_bbr
+sudo sysctl -w net.ipv4.tcp_congestion_control=bbr</pre>
+        <p>この設定が効くのは「そのマシンが送る方向」だけである。ダウンロードが遅いからといってクライアント側を BBR にしても、データを送っているのはサーバーなので変化しない。切り替えるならレスポンスを大量に送る側（Web サーバーや CDN のオリジン）で行う。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>育った窓を捨てない: アイドル後のリセットと initcwnd</h3>
+        <p>スロースタートの代償は接続ごとに払う。そのため HTTP の keep-alive やコネクションプールで接続を使い回すと、TCP ハンドシェイクだけでなく育った <code>cwnd</code> も再利用できる。ただし、しばらく何も送らなかった接続では、経路の状況が変わっている可能性があるので窓は縮められる。RFC 5681 は、再送タイムアウトより長く送信が止まった場合は <code>cwnd</code> を初期値以下に戻すよう定めている。</p>
+        <pre class="code"># アイドル後に cwnd を初期値へ戻すか（既定 1 = 戻す）
+sysctl net.ipv4.tcp_slow_start_after_idle
+
+# 0 にすると、間欠的に大きな応答を返す長寿命接続で
+# 毎回スロースタートをやり直さずに済む
+sudo sysctl -w net.ipv4.tcp_slow_start_after_idle=0</pre>
+        <p>0 にすると、数秒おきに大きなレスポンスを返す接続（HTTP/2 や gRPC の長寿命接続など）で毎回 4 往復を払わずに済む。代わりに、混雑が始まっている経路へいきなり大きな窓で送り込む可能性がある。初期値そのものはルート単位で変えられ、<code>ip route</code> の <code>initcwnd</code> オプションで宛先ごとに指定できる。</p>
+        <pre class="code"># 既定ルートの初期 cwnd を 20 セグメントにする例
+ip route show default
+sudo ip route change default via 192.0.2.1 dev eth0 initcwnd 20</pre>
+        <p><code>192.0.2.1</code> と <code>eth0</code> は自分の環境の <code>ip route show default</code> の出力に置き換える。大きくすると最初の往復で送れる量は増えるが、RFC 6928 が 10 で止めているのは経路を詰まらせる危険との兼ね合いである。自社で計測できる環境以外では、触る前に CDN の利用や接続の使い回しを検討する方がよい。</p>
+      </section>
+
+      <div class="practical">
+        <div class="box-title">💼 実務でどう出会うか</div>
+        <p>海外リージョンの API や DB を叩くと遅い、という相談の多くは RTT × 往復回数で説明できる。CDN が速いのはキャッシュに加え、エッジがユーザーの近くにあって RTT そのものが短いからだ。同じ理由で、HTTP クライアントを毎回作り直してコネクションプールを使わないコードは、リクエストのたびにハンドシェイクとスロースタートを払う。ページ表示では「最初の 14KB 程度に表示に必要な HTML と CSS を収める」という最適化の目安があり、これは初期 <code>cwnd</code> の大きさから来ている。リージョン間の大容量コピーで単一接続が伸びない場合は、BDP に対して受信バッファ（<code>tcp_rmem</code> の上限）が足りているかと、ロスで CUBIC が減速していないかを疑う。</p>
+      </div>
+
+      <div class="hands-on">
+        <div class="box-title">⌨️ 手を動かす（5 分）</div>
+        <p>Docker の Linux コンテナから Cloudflare の速度測定エンドポイントへ 50MB をアップロードし、送信側（コンテナ）の <code>cwnd</code> が増えていく様子を <code>ss</code> で観察する。Docker Desktop では値はホストの Mac ではなく Docker の Linux VM のカーネルのものになる。</p>
+        <pre class="code">docker run --rm alpine sh -c '
+apk add -q --no-cache curl iproute2
+cat /proc/sys/net/ipv4/tcp_congestion_control
+cat /proc/sys/net/ipv4/tcp_slow_start_after_idle
+head -c 50000000 /dev/zero | curl -s -o /dev/null \
+  -X POST -T - https://speed.cloudflare.com/__up &amp;
+for i in 1 2 3 4 5 6 7 8; do
+  ss -tin dport = :443 | grep -o "cwnd:[0-9]*"
+  sleep 0.3
+done
+kill $! 2&gt;/dev/null'</pre>
+        <p>1 行目に使われている輻輳制御方式（多くの環境で <code>cubic</code>）、2 行目にアイドル後リセットの設定が出る。続く <code>cwnd:</code> の数値は単位がセグメントで、0.3 秒ごとに増えていくはずだ。ロスが起きると値が一度下がってから再び伸びる様子が見えることもある。具体的な数値は回線と RTT によって変わる。</p>
+      </div>
+
+      <div class="misconceptions">
+        <div class="box-title">🙅 よくある誤解</div>
+        <ul>
+          <li><span class="wrong">回線を太くすれば API のレスポンスは速くなる</span> — 数百 KB 程度の短い転送はスロースタートの途中で終わるので、所要時間は往復回数 × RTT でほぼ決まる。効くのは RTT を縮める（近いリージョン・CDN）か、往復を減らす（接続の使い回し）方である。</li>
+          <li><span class="wrong">スロースタートは「ゆっくり増やす」仕組みだ</span> — 実際は 1 往復ごとにほぼ倍になる指数的な増加である。ゆっくり（1 往復 1 セグメント）増やすのは、ロス後の輻輳回避の段階だ。</li>
+          <li><span class="wrong">クライアントの輻輳制御を BBR にすればダウンロードが速くなる</span> — 輻輳制御はデータを送る側で働く。ダウンロードで効くのはサーバー側の設定で、クライアント側の設定はアップロードにしか効かない。</li>
+        </ul>
+      </div>
+
+      <div class="glossary">
+        <div class="box-title">📖 用語ミニ辞典</div>
+        <dl>
+          <dt>cwnd（輻輳ウィンドウ）</dt><dd>送信側が、経路を詰まらせずに ACK を待たず送れると推定したデータ量。</dd>
+          <dt>スロースタート</dt><dd>cwnd を小さな初期値から始め、ACK のたびに増やして 1 往復ごとにほぼ倍にする段階。</dd>
+          <dt>RTT</dt><dd>パケットを送ってから応答が返るまでの往復時間。短い転送の所要時間を左右する。</dd>
+          <dt>BDP（帯域遅延積）</dt><dd>帯域 × RTT。経路を満杯にするために必要な送信中データ量。</dd>
+          <dt>CUBIC</dt><dd>ロスを混雑の合図として 0.7 倍に減らし、3 次関数で元の大きさへ戻す、主要 OS 標準の輻輳制御方式。</dd>
+          <dt>BBR</dt><dd>配送速度と最小 RTT を測って経路モデルを作り、送信ペースを決める Google 発の輻輳制御方式。</dd>
+        </dl>
+      </div>
+
+      <div class="further-reading">
+        <div class="box-title">🔗 もっと深く</div>
+        <ul>
+          <li><a href="https://www.rfc-editor.org/rfc/rfc5681.html">RFC 5681: TCP Congestion Control</a> — スロースタート・輻輳回避・高速再送・アイドル後の再開という基本動作の定義そのもの。</li>
+          <li><a href="https://www.rfc-editor.org/rfc/rfc6928.html">RFC 6928: Increasing TCP's Initial Window</a> — 初期 cwnd を 10 にした理由を、Web レスポンスの大きさと往復回数のデータで説明している。</li>
+          <li><a href="https://www.rfc-editor.org/rfc/rfc9438.html">RFC 9438: CUBIC for Fast and Long-Distance Networks</a> — 主要 OS 標準の CUBIC がなぜ 3 次関数で窓を戻すのかが分かる。</li>
+          <li><a href="https://cloud.google.com/blog/products/networking/tcp-bbr-congestion-control-comes-to-gcp-your-internet-just-got-faster">TCP BBR congestion control comes to GCP</a> — ロスベースの限界と BBR の発想、YouTube での計測結果を Google 自身が解説している。</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- recent:start -->
+    <!-- recent:end -->
+
+    <footer>
+      <p>Generated by Claude Code (GitHub Actions)</p>
+      <a href="./" class="archive-link">過去の記事</a>
+    </footer>
+  </div>
+</body>
+</html>

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tech Learning Daily — 同じ「DB に書く」なのに、なぜ Cassandra や RocksDB は書き込みがあれほど速いのか？</title>
+  <title>Tech Learning Daily — 回線は 1Gbps あるのに、なぜ新しい接続の最初のダウンロードは遅いのか？</title>
   <link rel="stylesheet" href="style.css">
   <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="feed.xml">
   <link rel="icon" href="/favicon.ico" sizes="48x48">
@@ -14,139 +14,142 @@
   <div class="container">
     <header>
       <h1>Tech Learning Daily</h1>
-      <div class="date">2026-10-16 (Fri) — 第 91 号</div>
+      <div class="date">2026-10-17 (Sat) — 第 92 号</div>
       <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
     </header>
 
     <article class="article">
       <div class="meta-bar">
-        <span class="tag tag-db">DB</span>
+        <span class="tag tag-network">Network</span>
         <span class="difficulty">🌿 基礎</span>
-        <span class="read-time">⏱ 約 7 分</span>
+        <span class="read-time">⏱ 約 8 分</span>
       </div>
-      <h2 class="article-title">同じ「DB に書く」なのに、なぜ Cassandra や RocksDB は書き込みがあれほど速いのか？</h2>
-      <p class="lead">ログやイベントを大量に書き込む用途の設計レビューで「書き込みが多いなら PostgreSQL より Cassandra」と言われたことはないだろうか。どちらもデータをディスクに置くことに変わりはないのに、なぜ書き込みの得意・不得意が分かれるのか。答えは「既存のデータを書き換えるか、書き換えずに足していくか」というディスクの使い方の違いにある。</p>
+      <h2 class="article-title">回線は 1Gbps あるのに、なぜ新しい接続の最初のダウンロードは遅いのか？</h2>
+      <p class="lead">海外リージョンの API を叩くと、レスポンスはたかだか 200KB なのに数百ミリ秒かかる。1Gbps の回線なら 200KB は計算上 2 ミリ秒もかからないはずだ。この差を「サーバーが遅いから」と片付ける前に、TCP が新しい接続で最初にしていること、つまり「いきなり全力では送らない」仕組みを見てみよう。</p>
 
       <div class="tldr">
         <div class="box-title">🎯 3 行まとめ</div>
         <ul>
-          <li>B+Tree はデータをディスク上の決まった位置で書き換えるため、書き込みのたびにランダムな位置のページ更新が発生する。</li>
-          <li>LSM-tree は書き込みをメモリ上の memtable に溜め、整列済みの不変ファイル SSTable としてまとめて追記するので、書き込みが速い。</li>
-          <li>代償として読み取りは複数ファイルを探す必要があり、古い版や削除マーカーは compaction が後から裏で掃除する。</li>
+          <li>TCP の送信側は途中経路の空き具合を知らないため、「確認応答を待たずに送ってよい量」（輻輳ウィンドウ）を小さく始め、往復ごとにほぼ倍へ増やす。これがスロースタートである。</li>
+          <li>初期値は 10 セグメント（約 14.6KB）なので、短い転送の所要時間は帯域ではなく往復遅延（RTT）の回数で決まる。</li>
+          <li>パケットロスを混雑の合図とみなして送信量を絞るのが CUBIC 等の従来型で、帯域と RTT を測ってペースを決めるのが BBR である。接続の使い回しは、接続ごとの「育った窓」を再利用するための工夫でもある。</li>
         </ul>
       </div>
 
       <section class="body-section">
-        <h3>B+Tree の書き込みは「その場で書き換える」</h3>
-        <p>PostgreSQL や MySQL（InnoDB）のインデックスは B+Tree で、キーの順に並んだ<strong>ページ</strong>（ディスクを読み書きする固定長のブロック）を木構造でたどってデータを探す。この構造は読み取りが速い反面、書き込みには手間がかかる。新しいキーを入れるにはまず木をたどって「そのキーが入るべきページ」を見つけ、そのページを更新しなければならない。このように既存データの置き場所を直接書き換える方式を<strong>インプレース更新</strong>と呼ぶ。</p>
-        <p>問題は、書き込むキーがばらばらなら、更新されるページもディスク上のばらばらな位置になることだ。1 行だけ変えたくてもページ丸ごとを書く必要があり、ページが満杯なら分割も起きる。インデックスが 3 本あるテーブルなら、1 行の INSERT で 3 本の木それぞれのページを書き換えることになる。書き込みが毎秒何万件と押し寄せると、このランダムな位置への小さな書き込みの積み重ねがボトルネックになる。</p>
+        <h3>送信側は「道がどれだけ空いているか」を知らない</h3>
+        <p>TCP の送信側は、相手から ACK（確認応答: 「ここまで受け取った」という返信）が届く前に、まとめて何パケットか先に送ってしまう。ACK を 1 個ずつ待っていたら、1 往復で 1 パケットしか送れないからだ。問題は「ACK を待たずに何バイトまで送ってよいか」である。</p>
+        <p>その上限を決めるものは 2 つある。1 つは受信側が「これだけなら受け取れる」と申告する受信ウィンドウ。もう 1 つが送信側が自分で見積もる<code>cwnd</code>（congestion window, 輻輳ウィンドウ: 経路を詰まらせずに送れると推定した量）だ。実際に送るのは両者の小さい方になる。</p>
+        <p>受信ウィンドウは相手が教えてくれるが、途中のルーターがどれだけ空いているかは誰も教えてくれない。経路上には他人のトラフィックも流れていて、ルーターのバッファ（待ち行列）が溢れればパケットは捨てられる。全員が全力で送ると全員の再送が増えて誰も届かなくなるため、TCP は 1980 年代から「様子を見ながら増やし、詰まったら減らす」という輻輳制御（congestion control）を各送信者に求めてきた。</p>
       </section>
 
       <section class="body-section">
-        <h3>LSM-tree: 書き換えず、溜めてからまとめて追記する</h3>
-        <p><strong>LSM-tree</strong>（Log-Structured Merge-tree）は発想を逆にする。書き込みが来たら、まず WAL（クラッシュ復旧用の追記専用ログ）に追記し、次にメモリ上の <strong>memtable</strong>（キー順に整列された書き込みバッファ）に入れる。ここで書き込みは完了だ。ディスクへの書き込みは WAL の末尾への追記だけで、木をたどってページを探す作業は発生しない。</p>
-        <p>memtable が一定サイズに達すると凍結され、中身がキー順のまま 1 つのファイルとしてディスクに書き出される。この操作を <strong>flush</strong>、書き出されたファイルを <strong>SSTable</strong>（Sorted String Table: キー順に整列された、作成後は二度と変更されない不変ファイル）と呼ぶ。大きな塊を順番に書くだけなので、ディスクにとっては最も効率の良い書き方になる。flush が済めば、その分の WAL は不要になり捨てられる。</p>
-        <pre class="diagram">書き込み
-  │
-  ├──▶ WAL に追記（復旧用）
-  ▼
-┌──────────────┐
-│ memtable     │ メモリ上・キー順
-└──────┬───────┘
-       │ 満杯で flush
-       ▼
-┌──────────────┐
-│ SSTable #3   │ 新 ─┐
-│ SSTable #2   │     │ 読み取りは
-│ SSTable #1   │ 古 ─┘ 新しい順に探す
-└──────┬───────┘
-       │ compaction（裏で併合）
-       ▼
-┌──────────────┐
-│ SSTable #4   │ 最新版だけ残る
-└──────────────┘</pre>
-        <p>memtable の大きさは設定で決まる。RocksDB では <code>write_buffer_size</code>（デフォルト 64MB）が 1 個の memtable の上限で、<code>max_write_buffer_number</code>（デフォルト 2）が flush 待ちを含めてメモリに置ける memtable の数だ。<code>write_buffer_size</code> を大きくすると flush の回数が減り SSTable の数も少なくなるが、メモリ使用量と、クラッシュ後に WAL から再生する量が増える。</p>
-        <pre class="code"># RocksDB の options ファイル（抜粋）
-[CFOptions "default"]
-  write_buffer_size=134217728   # 128MB に倍増
-  max_write_buffer_number=4     # flush 待ちに余裕を持たせる</pre>
+        <h3>スロースタート: 14.6KB から始めて往復ごとに倍</h3>
+        <p>新しい接続の <code>cwnd</code> の初期値は、RFC 6928 で上限 10 セグメントと定められている。一般的な Ethernet の MSS（Maximum Segment Size: 1 パケットに載せられるデータ量）1460 バイトなら 14,600 バイトだ。Linux は 2011 年にこの初期値を 10 に引き上げている。それ以前の規定は約 4KB で、RFC 6928 は Web のレスポンスが大きくなったことを引き上げの理由に挙げている。</p>
+        <p>RFC 5681 によれば、スロースタート中は新しいデータの ACK が 1 つ届くたびに <code>cwnd</code> を最大 1 セグメントずつ増やす。1 往復で送った 10 セグメント分の ACK が返れば 10 増えて 20 になり、次は 40 になる。名前は「スロー」だが、1 往復ごとにほぼ倍という指数的な増え方だ。名前は「最初の量が小さい」ことを指している。</p>
+        <pre class="diagram">RTT 100ms・初期 cwnd 10 の場合
+（TCP/TLS ハンドシェイクを除く）
+
+RTT#  sent/RTT           total
+──────────────────────────────
+ 1    ==        14.6KB   14.6KB
+ 2    ====      29.2KB   43.8KB
+ 3    ========  58.4KB  102.2KB
+ 4    ================
+               116.8KB  219.0KB
+──────────────────────────────
+▶ 200KB を受け取り終えるのは 4 往復目
+▶ 所要 ≒ 4 × 100ms = 400ms</pre>
+        <p>リードの疑問はこれで解ける。200KB のレスポンスは帯域の上では一瞬でも、<code>cwnd</code> が育つまでに 4 往復かかる。RTT が 100ms の経路なら、それだけで 400ms だ。最初の往復で送れる 14.6KB を 100ms で割ると約 1.2Mbps 相当で、1Gbps の回線はほぼ遊んでいる。短い転送の速さを決めるのは回線の太さではなく往復の回数と RTT である。</p>
+        <p>では、どこまで増やせば十分なのか。経路を満杯にするのに必要な量は「帯域 × RTT」（BDP: Bandwidth-Delay Product）で計算できる。1Gbps × 100ms なら 12.5MB で、14.6KB から倍々で到達するには 10 往復ほどかかる。</p>
       </section>
 
       <div class="analogy">
         <div class="box-title">🍱 たとえるなら</div>
-        <p>消しゴムを使わない帳簿だ。金額を訂正したいときも、前の行は消さずに新しいページへ「3 月分、訂正 5,000 円」と書き足す。書くのはいつも最後のページなので速い。そのかわり、ある項目の今の金額を知りたいときは最新のページから遡って探す必要がある。ページが増えすぎたら、ときどき別のノートへ最新の値だけを清書して古いノートを捨てる。この清書が compaction にあたる。</p>
+        <p>初めて使う配送ルートに荷物を流す運送会社だ。道路の混み具合は分からないので、初日はトラック 10 台だけ出す。全車が無事に着いたと連絡が来たら翌便は 20 台、次は 40 台と倍にしていく。どこかで 1 台が渋滞に巻き込まれて行方不明になったら「この道はもう限界だ」と判断して台数を減らす。ただし判断材料は「荷物が着いたという連絡」しかないので、連絡が往復するのに時間のかかる遠いルートほど、台数が増えるのも遅い。</p>
       </div>
 
       <section class="body-section">
-        <h3>代償は読み取りと削除に回ってくる</h3>
-        <p>SSTable を書き換えないなら、UPDATE はどう実現するのか。答えは「同じキーの新しい版を書く」だ。キー <code>user:42</code> を 3 回更新すれば、3 つの SSTable にそれぞれの版が残る。読み取りは memtable、新しい SSTable、古い SSTable の順に探し、最初に見つかった版を正解とする。SSTable が増えるほど 1 回の読み取りで調べるファイルが増え、読み取りは遅くなる。</p>
-        <p>この探索を減らすのが<strong>ブルームフィルタ</strong>（「このキーは確実に無い」か「たぶん有る」かを少ないメモリで答える確率的データ構造）だ。Cassandra は SSTable ごとにブルームフィルタを持ち、「確実に無い」と分かったファイルは開かずに飛ばす。誤って「有る」と答える確率は <code>bloom_filter_fp_chance</code> で決まり、デフォルトは LeveledCompactionStrategy のテーブルで 0.1、それ以外で 0.01 だ。値を下げれば無駄な読み取りは減るが、フィルタのメモリ使用量は増える。</p>
-        <p>削除はもっと直感に反する。DELETE を実行すればディスクが空くように思える。しかし実際は、SSTable を書き換えられないので、削除は <strong>tombstone</strong>（「このキーは削除された」という時刻付きのマーカー）を新たに<em>書き込む</em>操作になる。削除した直後はディスク使用量がむしろ増えるのだ。Cassandra では tombstone はテーブル設定 <code>gc_grace_seconds</code>（デフォルト 864000 秒 = 10 日）が過ぎるまで消されない。早く消しすぎると、削除を受け取れなかった停止中のノードが復帰したときに古いデータが「生き返って」しまうからだ。</p>
+        <h3>増やし続けた先: ロスで減らす CUBIC、測って決める BBR</h3>
+        <p>倍々に増やせばいつか経路のどこかでバッファが溢れ、パケットが失われる。RFC 5681 の基本形（Reno と呼ばれる系統）では、ロスを検知するとしきい値 <code>ssthresh</code>（slow start threshold: スロースタートをやめる境目）を送信中データ量の半分に下げ、以後は 1 往復あたり 1 セグメントずつしか増やさない輻輳回避に移る。再送タイマーが切れるほど深刻な場合は <code>cwnd</code> を 1 セグメントまで落としてスロースタートからやり直す。</p>
+        <p>現在 Linux・Windows・Apple の標準は CUBIC（RFC 9438）である。ロスを合図に減らす点は Reno と同じだが、減らし幅は半分ではなく 0.7 倍で、その後は「前回ロスした大きさ」に向けて時間の 3 次関数で素早く戻る。RTT の長い高帯域経路で、Reno のように 1 往復 1 セグメントずつ増やしていては回復に時間がかかりすぎるためだ。</p>
+        <p>ロスこそ混雑のサインだと思いがちだが、実際には両者は一致しないことがある。ルーターのバッファが深いと、ロスが起きる前に待ち行列が伸びて遅延が膨らむ（bufferbloat）。逆に Wi-Fi などでは混雑と無関係なロスが起きて、送信側が不要に減速する。Google が開発した BBR は、ロスではなく「最近測れた最大の配送速度」と「最小の RTT」から経路のモデルを作り、その速度に合わせて送る。Google の 2017 年の報告では、YouTube で CUBIC に比べスループットが平均 4% 上がり、RTT が 33% 下がったとしている。</p>
+        <pre class="code"># 使える方式と、いま使われている方式を見る（Linux）
+sysctl net.ipv4.tcp_available_congestion_control
+sysctl net.ipv4.tcp_congestion_control
+
+# BBR に切り替える（tcp_bbr モジュールが必要）
+sudo modprobe tcp_bbr
+sudo sysctl -w net.ipv4.tcp_congestion_control=bbr</pre>
+        <p>この設定が効くのは「そのマシンが送る方向」だけである。ダウンロードが遅いからといってクライアント側を BBR にしても、データを送っているのはサーバーなので変化しない。切り替えるならレスポンスを大量に送る側（Web サーバーや CDN のオリジン）で行う。</p>
       </section>
 
       <section class="body-section">
-        <h3>compaction: 後回しにした掃除のやり方を選ぶ</h3>
-        <p>増え続ける SSTable を併合し、各キーの最新版だけを残して古い版と期限切れの tombstone を捨てる処理が <strong>compaction</strong> だ。入力の SSTable はどれもキー順に整列済みなので、マージソートの要領で順番に読みながら新しいファイルへ書ける。併合が済めば古い SSTable は削除される。</p>
-        <p>どの SSTable をいつ併合するかは戦略で選ぶ。Cassandra のデフォルトは <strong>SizeTieredCompactionStrategy（STCS）</strong>で、似たサイズの SSTable がいくつか溜まったらまとめる。書き込みに強いが、同じキーの版が多くのファイルに散らばりやすい。<strong>LeveledCompactionStrategy（LCS）</strong>はデータを階層に分け、各階層内ではキーの範囲が重ならないように保つ。読み取りで調べるファイルが少なくなるので、読み取りが多いテーブルや更新・削除が多いテーブルに向く。</p>
-        <pre class="code">-- 読み取り中心のテーブルを LCS に切り替える
-ALTER TABLE shop.orders
-  WITH compaction = {'class': 'LeveledCompactionStrategy'};</pre>
-        <p>LCS にもコストはある。同じデータを階層ごとに何度も書き直すので、<strong>書き込み増幅</strong>（アプリが書いたバイト数に対して実際にディスクへ書かれたバイト数の比）が大きくなる。RocksDB の wiki は、leveled compaction の書き込み増幅はしばしば 10 を超えると書いている。「書き込み、読み取り、ディスク容量のどれを我慢するか」を選ぶのが compaction 戦略の選択だ。compaction が書き込みの速さに追いつかなくなると SSTable が溜まり続けるため、RocksDB は書き込み自体を遅らせたり止めたりして（write stall）バランスを取る。</p>
+        <h3>育った窓を捨てない: アイドル後のリセットと initcwnd</h3>
+        <p>スロースタートの代償は接続ごとに払う。そのため HTTP の keep-alive やコネクションプールで接続を使い回すと、TCP ハンドシェイクだけでなく育った <code>cwnd</code> も再利用できる。ただし、しばらく何も送らなかった接続では、経路の状況が変わっている可能性があるので窓は縮められる。RFC 5681 は、再送タイムアウトより長く送信が止まった場合は <code>cwnd</code> を初期値以下に戻すよう定めている。</p>
+        <pre class="code"># アイドル後に cwnd を初期値へ戻すか（既定 1 = 戻す）
+sysctl net.ipv4.tcp_slow_start_after_idle
+
+# 0 にすると、間欠的に大きな応答を返す長寿命接続で
+# 毎回スロースタートをやり直さずに済む
+sudo sysctl -w net.ipv4.tcp_slow_start_after_idle=0</pre>
+        <p>0 にすると、数秒おきに大きなレスポンスを返す接続（HTTP/2 や gRPC の長寿命接続など）で毎回 4 往復を払わずに済む。代わりに、混雑が始まっている経路へいきなり大きな窓で送り込む可能性がある。初期値そのものはルート単位で変えられ、<code>ip route</code> の <code>initcwnd</code> オプションで宛先ごとに指定できる。</p>
+        <pre class="code"># 既定ルートの初期 cwnd を 20 セグメントにする例
+ip route show default
+sudo ip route change default via 192.0.2.1 dev eth0 initcwnd 20</pre>
+        <p><code>192.0.2.1</code> と <code>eth0</code> は自分の環境の <code>ip route show default</code> の出力に置き換える。大きくすると最初の往復で送れる量は増えるが、RFC 6928 が 10 で止めているのは経路を詰まらせる危険との兼ね合いである。自社で計測できる環境以外では、触る前に CDN の利用や接続の使い回しを検討する方がよい。</p>
       </section>
 
       <div class="practical">
         <div class="box-title">💼 実務でどう出会うか</div>
-        <p>LSM-tree は Cassandra のような分散 DB の名前を知らなくても身近にある。TiKV は RocksDB を、CockroachDB は RocksDB に着想を得た Pebble をストレージエンジンに使い、Kafka Streams のステートストアも標準では RocksDB だ。運用で出会う典型は 3 つある。大量に DELETE した直後に読み取りが遅くなる（tombstone を読み飛ばす作業が増えるため）、ディスクの空きが少ないと compaction が回らない（併合中は新旧の SSTable が一時的に両方ディスクに載るため）、書き込みピーク時に急にレイテンシが跳ねる（write stall）。いずれも「書き込み時に先送りした仕事が、別のタイミングで表面化した」と見ると原因を推測しやすい。</p>
+        <p>海外リージョンの API や DB を叩くと遅い、という相談の多くは RTT × 往復回数で説明できる。CDN が速いのはキャッシュに加え、エッジがユーザーの近くにあって RTT そのものが短いからだ。同じ理由で、HTTP クライアントを毎回作り直してコネクションプールを使わないコードは、リクエストのたびにハンドシェイクとスロースタートを払う。ページ表示では「最初の 14KB 程度に表示に必要な HTML と CSS を収める」という最適化の目安があり、これは初期 <code>cwnd</code> の大きさから来ている。リージョン間の大容量コピーで単一接続が伸びない場合は、BDP に対して受信バッファ（<code>tcp_rmem</code> の上限）が足りているかと、ロスで CUBIC が減速していないかを疑う。</p>
       </div>
 
       <div class="hands-on">
         <div class="box-title">⌨️ 手を動かす（5 分）</div>
-        <p>Cassandra をローカルで起動し、同じキーを 2 回書いて flush すると SSTable が 2 つ並び、compaction で 1 つにまとまることを確かめる。起動には 1 分前後かかる。</p>
-        <pre class="code">docker run -d --name lsm cassandra:5.0
-until docker exec lsm cqlsh -e "DESCRIBE KEYSPACES" &gt;/dev/null 2&gt;&amp;1; do sleep 5; done
-
-docker exec lsm cqlsh -e "CREATE KEYSPACE demo WITH replication = {'class':'SimpleStrategy','replication_factor':1}; CREATE TABLE demo.kv (k text PRIMARY KEY, v text);"
-
-docker exec lsm cqlsh -e "INSERT INTO demo.kv (k, v) VALUES ('a', 'v1');"
-docker exec lsm nodetool flush demo kv
-docker exec lsm cqlsh -e "UPDATE demo.kv SET v = 'v2' WHERE k = 'a';"
-docker exec lsm nodetool flush demo kv
-docker exec lsm sh -c 'ls /var/lib/cassandra/data/demo/kv-*/ | grep Data.db'
-
-docker exec lsm nodetool compact demo kv
-docker exec lsm sh -c 'ls /var/lib/cassandra/data/demo/kv-*/ | grep Data.db'
-docker rm -f lsm</pre>
-        <p>1 回目の <code>ls</code> では <code>Data.db</code> で終わるファイルが 2 つ（v1 を含む SSTable と v2 を含む SSTable）表示され、<code>nodetool compact</code> の後は 1 つに減るはずだ。同じディレクトリには <code>Filter.db</code>（ブルームフィルタ）など SSTable を構成する別ファイルも並んでいる。</p>
+        <p>Docker の Linux コンテナから Cloudflare の速度測定エンドポイントへ 50MB をアップロードし、送信側（コンテナ）の <code>cwnd</code> が増えていく様子を <code>ss</code> で観察する。Docker Desktop では値はホストの Mac ではなく Docker の Linux VM のカーネルのものになる。</p>
+        <pre class="code">docker run --rm alpine sh -c '
+apk add -q --no-cache curl iproute2
+cat /proc/sys/net/ipv4/tcp_congestion_control
+cat /proc/sys/net/ipv4/tcp_slow_start_after_idle
+head -c 50000000 /dev/zero | curl -s -o /dev/null \
+  -X POST -T - https://speed.cloudflare.com/__up &amp;
+for i in 1 2 3 4 5 6 7 8; do
+  ss -tin dport = :443 | grep -o "cwnd:[0-9]*"
+  sleep 0.3
+done
+kill $! 2&gt;/dev/null'</pre>
+        <p>1 行目に使われている輻輳制御方式（多くの環境で <code>cubic</code>）、2 行目にアイドル後リセットの設定が出る。続く <code>cwnd:</code> の数値は単位がセグメントで、0.3 秒ごとに増えていくはずだ。ロスが起きると値が一度下がってから再び伸びる様子が見えることもある。具体的な数値は回線と RTT によって変わる。</p>
       </div>
 
       <div class="misconceptions">
         <div class="box-title">🙅 よくある誤解</div>
         <ul>
-          <li><span class="wrong">LSM-tree は B+Tree の上位互換で、新しい DB ほど LSM を使うべきだ</span> — 書き込みの速さと引き換えに、読み取りでの複数ファイル探索と compaction の負荷を抱える。範囲検索や読み取り中心なら B+Tree が有利な場面は多い。</li>
-          <li><span class="wrong">DELETE すればすぐにディスクが空く</span> — LSM-tree では削除は tombstone の追記であり、領域が空くのは compaction で tombstone と古い版がまとめて捨てられた後だ。</li>
-          <li><span class="wrong">書き込みが速いのは、ディスクに書くバイト数が少ないからだ</span> — compaction で同じデータを何度も書き直すため、総書き込み量はむしろ多くなりうる。速さの源は、書き込みの瞬間にランダムなページ更新をせず、順番に大きくまとめて書く点にある。</li>
+          <li><span class="wrong">回線を太くすれば API のレスポンスは速くなる</span> — 数百 KB 程度の短い転送はスロースタートの途中で終わるので、所要時間は往復回数 × RTT でほぼ決まる。効くのは RTT を縮める（近いリージョン・CDN）か、往復を減らす（接続の使い回し）方である。</li>
+          <li><span class="wrong">スロースタートは「ゆっくり増やす」仕組みだ</span> — 実際は 1 往復ごとにほぼ倍になる指数的な増加である。ゆっくり（1 往復 1 セグメント）増やすのは、ロス後の輻輳回避の段階だ。</li>
+          <li><span class="wrong">クライアントの輻輳制御を BBR にすればダウンロードが速くなる</span> — 輻輳制御はデータを送る側で働く。ダウンロードで効くのはサーバー側の設定で、クライアント側の設定はアップロードにしか効かない。</li>
         </ul>
       </div>
 
       <div class="glossary">
         <div class="box-title">📖 用語ミニ辞典</div>
         <dl>
-          <dt>LSM-tree</dt><dd>書き込みをメモリに溜め、整列済みの不変ファイルとして追記し、後で併合するストレージ構造。</dd>
-          <dt>memtable</dt><dd>書き込みを受け止める、メモリ上のキー順に整列されたバッファ。</dd>
-          <dt>SSTable</dt><dd>memtable を flush して作られる、キー順に整列された不変のファイル。</dd>
-          <dt>compaction</dt><dd>複数の SSTable を併合し、最新版だけを残して古い版や tombstone を捨てる処理。</dd>
-          <dt>tombstone</dt><dd>削除を表す時刻付きのマーカー。削除はこのマーカーの書き込みとして実現される。</dd>
-          <dt>ブルームフィルタ</dt><dd>「確実に無い」か「たぶん有る」かを少ないメモリで判定する確率的データ構造。</dd>
+          <dt>cwnd（輻輳ウィンドウ）</dt><dd>送信側が、経路を詰まらせずに ACK を待たず送れると推定したデータ量。</dd>
+          <dt>スロースタート</dt><dd>cwnd を小さな初期値から始め、ACK のたびに増やして 1 往復ごとにほぼ倍にする段階。</dd>
+          <dt>RTT</dt><dd>パケットを送ってから応答が返るまでの往復時間。短い転送の所要時間を左右する。</dd>
+          <dt>BDP（帯域遅延積）</dt><dd>帯域 × RTT。経路を満杯にするために必要な送信中データ量。</dd>
+          <dt>CUBIC</dt><dd>ロスを混雑の合図として 0.7 倍に減らし、3 次関数で元の大きさへ戻す、主要 OS 標準の輻輳制御方式。</dd>
+          <dt>BBR</dt><dd>配送速度と最小 RTT を測って経路モデルを作り、送信ペースを決める Google 発の輻輳制御方式。</dd>
         </dl>
       </div>
 
       <div class="further-reading">
         <div class="box-title">🔗 もっと深く</div>
         <ul>
-          <li><a href="https://cassandra.apache.org/doc/latest/cassandra/architecture/storage-engine.html">Apache Cassandra: Storage Engine</a> — commit log → memtable → SSTable の書き込み経路と、SSTable を構成する各ファイルの役割が一覧できる。</li>
-          <li><a href="https://cassandra.apache.org/doc/latest/cassandra/managing/operating/compaction/overview.html">Apache Cassandra: Compaction Overview</a> — tombstone と gc_grace_seconds、STCS / LCS / TWCS / UCS の使い分けを公式の言葉で確認できる。</li>
-          <li><a href="https://github.com/facebook/rocksdb/wiki/MemTable">RocksDB Wiki: MemTable</a> — memtable のデータ構造と、flush が起きる 3 つの条件が書かれている。</li>
-          <li><a href="https://github.com/facebook/rocksdb/wiki/Leveled-Compaction">RocksDB Wiki: Leveled Compaction</a> — 階層ごとのサイズ目標と、どのファイルを併合対象に選ぶかを図付きで説明している。</li>
+          <li><a href="https://www.rfc-editor.org/rfc/rfc5681.html">RFC 5681: TCP Congestion Control</a> — スロースタート・輻輳回避・高速再送・アイドル後の再開という基本動作の定義そのもの。</li>
+          <li><a href="https://www.rfc-editor.org/rfc/rfc6928.html">RFC 6928: Increasing TCP's Initial Window</a> — 初期 cwnd を 10 にした理由を、Web レスポンスの大きさと往復回数のデータで説明している。</li>
+          <li><a href="https://www.rfc-editor.org/rfc/rfc9438.html">RFC 9438: CUBIC for Fast and Long-Distance Networks</a> — 主要 OS 標準の CUBIC がなぜ 3 次関数で窓を戻すのかが分かる。</li>
+          <li><a href="https://cloud.google.com/blog/products/networking/tcp-bbr-congestion-control-comes-to-gcp-your-internet-just-got-faster">TCP BBR congestion control comes to GCP</a> — ロスベースの限界と BBR の発想、YouTube での計測結果を Google 自身が解説している。</li>
         </ul>
       </div>
     </article>
@@ -154,6 +157,11 @@ docker rm -f lsm</pre>
     <!-- recent:start -->
     <section class="section recent-articles">
       <div class="section-title">最近の記事</div>
+      <div class="card">
+        <h3><a href="archive/2026-10-16.html">同じ「DB に書く」なのに、なぜ Cassandra や RocksDB は書き込みがあれほど速いのか？</a></h3>
+        <div class="summary">B+Tree がページをその場で書き換えるのに対し、LSM-tree は書き込みを memtable に溜めて不変の SSTable として追記する。読み取り時の複数ファイル探索、tombstone による削除、compaction 戦略と書き込み増幅のトレードオフも解説する。</div>
+        <div class="meta"><span class="tag tag-db">DB</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-16</span></div>
+      </div>
       <div class="card">
         <h3><a href="archive/2026-10-15.html">メモリ確保は成功したのに、なぜプロセスは後から OOM killer に殺されるのか？</a></h3>
         <div class="summary">malloc が成功しても物理メモリは書き込み時まで割り当てられない。Linux のオーバーコミット下では不足が後から表面化し、OOM killer がスコア最大のプロセスを SIGKILL する。oom_score_adj と Kubernetes の QoS との関係も解説する。</div>
@@ -168,11 +176,6 @@ docker rm -f lsm</pre>
         <h3><a href="archive/2026-10-13.html">temperature を 0 にしたのに、なぜ LLM の答えは毎回同じにならないのか？</a></h3>
         <div class="summary">LLM は 1 トークンごとに確率の表を作って候補を選び、temperature・top_k・top_p はその選び方を変える。温度 0 で乱数は消えるのに出力が揺れるのは、同時処理されるリクエスト数で GPU の足し算の順序が変わりロジット自体が変わるからだ。</div>
         <div class="meta"><span class="tag tag-ai">AI</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-13</span></div>
-      </div>
-      <div class="card">
-        <h3><a href="archive/2026-10-12.html">created_at は正しく保存したはずなのに、なぜ画面の時刻が 9 時間ずれるのか？</a></h3>
-        <div class="summary">時刻には世界で 1 つに決まる「瞬間」と場所ごとの「壁時計時刻」がある。PostgreSQL の timestamptz と timestamp の違い、Rails の列型と SQL 直書きで 9 時間ずれる仕組み、JS の Date 文字列解釈で 1 日ずれる理由と対策まで。</div>
-        <div class="meta"><span class="tag tag-db">DB</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-12</span></div>
       </div>
       <div class="recent-more"><a href="archive/">アーカイブですべて見る →</a></div>
     </section>

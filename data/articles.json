@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-10-17.html",
+    "date": "2026-10-17",
+    "title": "回線は 1Gbps あるのに、なぜ新しい接続の最初のダウンロードは遅いのか？",
+    "summary": "TCP は輻輳ウィンドウを約 14.6KB から往復ごとに倍へ増やすスロースタートを行うため、短い転送の所要時間は回線の太さではなく RTT × 往復回数で決まる。CUBIC と BBR の違い、アイドル後のリセットと initcwnd も扱う。",
+    "category": "network",
+    "difficulty": "基礎",
+    "readTime": 8,
+    "terms": ["cwnd（輻輳ウィンドウ）", "スロースタート", "RTT", "BDP（帯域遅延積）", "CUBIC", "BBR"]
+  },
+  {
     "file": "2026-10-16.html",
     "date": "2026-10-16",
     "title": "同じ「DB に書く」なのに、なぜ Cassandra や RocksDB は書き込みがあれほど速いのか？",

@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-10-16T08:45:54+09:00</updated>
+  <updated>2026-10-17T08:43:43+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>回線は 1Gbps あるのに、なぜ新しい接続の最初のダウンロードは遅いのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-10-17.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-10-17.html</id>
+    <updated>2026-10-17T08:43:43+09:00</updated>
+    <summary>TCP は経路の空きを知らないため輻輳ウィンドウを約 14.6KB から往復ごとに倍へ増やすので、短い転送の速さは帯域ではなく RTT と往復回数で決まる。ロスで減らす CUBIC と測って決める BBR の違いも見る。</summary>
+  </entry>
   <entry>
     <title>同じ「DB に書く」なのに、なぜ Cassandra や RocksDB は書き込みがあれほど速いのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-10-16.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-10-04.html</id>
     <updated>2026-10-04T08:55:55+09:00</updated>
     <summary>デッドロックは複数トランザクションが互いのロックを待ち合う循環待ちで、DBは事前に防がず待ちグラフで検出して片方を中止する。PostgreSQLのdeadlock_timeout、ロック待ちタイムアウトとの違い、ロック順序の統一と再実行による対策を解説。</summary>
-  </entry>
-  <entry>
-    <title>etcd は過半数を割ると書き込みが止まるのに、なぜ DynamoDB は止まらないのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-10-03.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-10-03.html</id>
-    <updated>2026-10-03T09:39:29+09:00</updated>
-    <summary>CAP定理が強制するのはネットワーク分断時だけの一貫性か可用性かの二択で、etcdはRaftのクォーラムで少数派の書き込みを止めCPを選び、DynamoDB/Cassandraは分断時も書き込みを受け付けAPを選ぶ。PACELCによる平常時のレイテンシとの別トレードオフも解説。</summary>
   </entry>
 </feed>
