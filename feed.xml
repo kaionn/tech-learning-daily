@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-10-17T08:43:43+09:00</updated>
+  <updated>2026-10-18T08:13:41+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>同じイメージからコンテナを 10 個起動したのに、なぜディスクは 10 倍にならないのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-10-18.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-10-18.html</id>
+    <updated>2026-10-18T08:13:41+09:00</updated>
+    <summary>コンテナは共有の読み取り専用レイヤーに薄い書き込み層を OverlayFS で重ねるだけなのでディスクが増えず、書き込みは copy-up、削除は whiteout になるため後のレイヤーで消してもイメージは縮まない。</summary>
+  </entry>
   <entry>
     <title>回線は 1Gbps あるのに、なぜ新しい接続の最初のダウンロードは遅いのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-10-17.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-10-05.html</id>
     <updated>2026-10-05T09:02:03+09:00</updated>
     <summary>TCPソケットもパイプもファイルディスクリプタとして数えられ、プロセスごとの上限RLIMIT_NOFILEに達するとEMFILEになる。systemdのソフト1024はselect()互換のため。上限の上げ方と、fd漏れの見分け方を解説。</summary>
-  </entry>
-  <entry>
-    <title>正しい UPDATE を書いただけなのに、なぜ DB はトランザクションを片方だけ殺すのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-10-04.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-10-04.html</id>
-    <updated>2026-10-04T08:55:55+09:00</updated>
-    <summary>デッドロックは複数トランザクションが互いのロックを待ち合う循環待ちで、DBは事前に防がず待ちグラフで検出して片方を中止する。PostgreSQLのdeadlock_timeout、ロック待ちタイムアウトとの違い、ロック順序の統一と再実行による対策を解説。</summary>
   </entry>
 </feed>

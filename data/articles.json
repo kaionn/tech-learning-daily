@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-10-18.html",
+    "date": "2026-10-18",
+    "title": "同じイメージからコンテナを 10 個起動したのに、なぜディスクは 10 倍にならないのか？",
+    "summary": "コンテナは共有の読み取り専用イメージレイヤーに薄い書き込み層を OverlayFS で重ねるだけなのでディスクが増えない。初回書き込みはファイル丸ごとの copy-up、削除は whiteout になるため、別レイヤーで消してもイメージは縮まない。ボリュームと ephemeral-storage も扱う。",
+    "category": "container",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": ["イメージレイヤー", "書き込み層（コンテナ層）", "OverlayFS", "copy-up", "whiteout", "ephemeral-storage"]
+  },
+  {
     "file": "2026-10-17.html",
     "date": "2026-10-17",
     "title": "回線は 1Gbps あるのに、なぜ新しい接続の最初のダウンロードは遅いのか？",

@@ -6,6 +6,7 @@
 
 ## 消化済み
 
+- 2026-10-18 Docker イメージのレイヤーと OverlayFS（同じイメージのコンテナがレイヤーを共有し書き込み層だけを持つ仕組み、lowerdir/upperdir/merged、ファイル単位のcopy-upとwhiteout・opaqueディレクトリ、別RUNでのrmがイメージを縮めない理由と同一RUN/マルチステージ、docker ps -sのsize/virtual、Docker 29のcontainerdイメージストア、ボリュームとKubernetesのephemeral-storage limitによるeviction）（自動選定）
 - 2026-10-17 TCP の輻輳制御とスロースタート（接続直後に輻輳ウィンドウを初期10セグメント=約14.6KBから往復ごとに倍へ増やす仕組みと短い転送がRTT×往復回数で決まる理由、BDP、ロスベースのReno/CUBIC(0.7倍減)と帯域・RTTを測るBBRの違い、tcp_congestion_control/tcp_slow_start_after_idle/initcwndの設定と効く方向、keep-alive・CDNとの関係）（自動選定）
 - 2026-10-16 LSM-tree と compaction（B+Treeのインプレース更新とランダム書き込みに対し、WAL+memtableに溜めて不変のSSTableとしてflushする書き込み経路、RocksDBのwrite_buffer_size/max_write_buffer_number、読み取りが新しい順に複数SSTableを探す代償とブルームフィルタ・bloom_filter_fp_chance、tombstoneによる削除とgc_grace_seconds、STCS/LCSの違いと書き込み増幅・write stall）（自動選定）
 - 2026-10-15 仮想メモリのオーバーコミットと OOM killer（mallocは仮想アドレスの予約でデマンドページングにより書き込み時に物理ページが割り当てられること、VSZとRSSの違い、vm.overcommit_memory 0/1/2とovercommit_ratio、forkのコピーオンライトがオーバーコミットを必要とする理由、oom_score/oom_score_adjによる犠牲者選択と終了コード137、cgroupのメモリ上限とKubernetesのQoS別oom_score_adj）（自動選定）

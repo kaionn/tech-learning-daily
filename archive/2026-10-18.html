@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tech Learning Daily — 同じイメージからコンテナを 10 個起動したのに、なぜディスクは 10 倍にならないのか？</title>
+  <link rel="stylesheet" href="../style.css">
+  <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="../feed.xml">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Tech Learning Daily</h1>
+      <div class="date">2026-10-18 (Sun) — 第 93 号</div>
+      <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
+    </header>
+
+    <article class="article">
+      <div class="meta-bar">
+        <span class="tag tag-container">Container</span>
+        <span class="difficulty">🌿 基礎</span>
+        <span class="read-time">⏱ 約 7 分</span>
+      </div>
+      <h2 class="article-title">同じイメージからコンテナを 10 個起動したのに、なぜディスクは 10 倍にならないのか？</h2>
+      <p class="lead">数百 MB のイメージから <code>docker run</code> でコンテナを 10 個立ち上げても、ディスクの空きはほとんど減らない。一方で Dockerfile に <code>RUN rm</code> を足して巨大ファイルを消したのに、イメージは 1 バイトも小さくならない。この 2 つの不思議は、どちらも「コンテナのファイルシステムは複数のディレクトリを重ねて見せているだけ」という同じ仕組みから生まれている。</p>
+
+      <div class="tldr">
+        <div class="box-title">🎯 3 行まとめ</div>
+        <ul>
+          <li>イメージは読み取り専用の「差分レイヤー」の積み重ねで、同じイメージから作ったコンテナは全員がそのレイヤーを共有し、各自は薄い書き込み層だけを持つ</li>
+          <li>OverlayFS が下層（lowerdir）と書き込み層（upperdir）を 1 つのディレクトリ（merged）に重ねて見せ、既存ファイルへの初回書き込み時だけファイル丸ごとを上にコピーする（copy-up）</li>
+          <li>削除は下層を消さず「無いことにする印（whiteout）」を上に置くだけなので、後のレイヤーで消してもイメージは縮まない。書き込み層はコンテナ削除で消えるため、永続データや書き込みの多いデータはボリュームへ逃がす</li>
+        </ul>
+      </div>
+
+      <section class="body-section">
+        <h3>イメージは「差分の積み重ね」でできている</h3>
+        <p>コンテナイメージは 1 つの大きなファイルではなく、<strong>レイヤー</strong>の積み重ねである。レイヤーとは、Dockerfile の命令ごとに「直前の状態から何が増えた・変わった・消えたか」だけを記録したファイル群のことだ。<code>FROM alpine</code> のベース、<code>RUN apk add</code> で増えたファイル、<code>COPY</code> で置いたアプリのコード、とそれぞれが別のレイヤーになる。</p>
+        <p>レイヤーは一度作られたら読み取り専用（RO）で、後から書き換えられることはない。書き換えないと決めているからこそ、同じ内容のレイヤーをディスク上に 1 つだけ置き、複数のイメージやコンテナから安全に参照できる。<code>docker pull</code> で「Already exists」と表示されて一部のレイヤーがダウンロードされないのも、手元に同じレイヤーがすでにあるからだ。</p>
+        <p>コンテナを起動すると、Docker はこの読み取り専用レイヤーの山の一番上に、そのコンテナ専用の空の<strong>書き込み層（コンテナ層）</strong>を 1 枚だけ足す。コンテナ内での変更はすべてこの層に入り、下のイメージレイヤーは変わらない。10 個起動しても増えるのは 10 枚の薄い書き込み層だけなので、ディスクは 10 倍にならない。これが lead の 1 つ目の問いへの答えである。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>OverlayFS ―― ディレクトリを重ねて 1 枚に見せる</h3>
+        <p>では、別々に置かれた複数のレイヤーが、コンテナの中からはなぜ普通の 1 つの <code>/</code> に見えるのか。これを担うのが Linux カーネルの <strong>OverlayFS</strong> で、複数のディレクトリを上下に重ね、1 つのディレクトリとして見せるファイルシステムである。読み取り専用の下層を <code>lowerdir</code>、書き込みを受ける上層を <code>upperdir</code>、重ねた結果見える場所を <code>merged</code> と呼ぶ（<code>workdir</code> は OverlayFS が内部処理に使う作業用ディレクトリ）。</p>
+        <pre class="diagram"> container A          container B
+┌────────────┐       ┌────────────┐
+│ upper (RW) │       │ upper (RW) │
+└────────────┘       └────────────┘
+       │                    │
+       └─────────┐ ┌────────┘
+                 ▼ ▼
+┌──────────────────────────────┐
+│ layer3: COPY app/      (RO)  │
+├──────────────────────────────┤
+│ layer2: RUN apk add    (RO)  │
+├──────────────────────────────┤
+│ layer1: alpine base    (RO)  │
+└──────────────────────────────┘
+  lowerdir: 全コンテナで共有</pre>
+        <p>ファイルを読むとき、OverlayFS は上の層から順に探し、最初に見つかったものを返す。同じ名前のファイルが上下両方にあれば、上層（コンテナ層）のものが下層のものを覆い隠す。中身を手で組み立てるなら、カーネルのドキュメントにある次の 1 行と同じことを Docker がやっている。</p>
+        <pre class="code">mount -t overlay overlay \
+  -olowerdir=/lower,upperdir=/upper,workdir=/work /merged</pre>
+        <p>なお Docker Engine 29.0 以降の新規インストールでは、イメージの保存は従来の <code>overlay2</code> ストレージドライバではなく containerd のイメージストアが既定になり、その中で <code>overlayfs</code> スナップショッタが使われる。管理する主体は変わったが、OverlayFS で層を重ねるという仕組み自体は同じだ。自分の環境がどちらかは <code>docker info -f '{{ .DriverStatus }}'</code> で確認でき、containerd 側なら <code>io.containerd.snapshotter.v1</code> と表示される。</p>
+      </section>
+
+      <div class="analogy">
+        <div class="box-title">🍱 たとえるなら</div>
+        <p>全員で共有する 1 冊の原本と、各自に配られた透明なフィルムに近い。原本には誰も書き込めない。あるページを直したい人は、そのページを丸ごとコピーして自分のフィルムに貼り、そこに書き込む（copy-up）。ページを「消したい」ときは原本を破るのではなく、フィルムに「このページは無い」と書いた黒い紙を貼る（whiteout）。だから原本は 1 冊のままで、人数分増えるのはフィルムだけだし、黒い紙を何枚貼っても原本は 1 グラムも軽くならない。</p>
+      </div>
+
+      <section class="body-section">
+        <h3>書き込みと削除 ―― copy-up と whiteout</h3>
+        <p>下層にあるファイルを初めて書き換えるとき、OverlayFS はそのファイルをまず上層へコピーし、コピーの方を書き換える。これを <strong>copy-up</strong> と呼ぶ。OverlayFS はブロック単位ではなくファイル単位で動くため、1 GB のファイルの末尾に 1 バイト追記するだけでも、最初の 1 回はファイル全体のコピーが走る。2 回目以降の書き込みはすでに上層にあるコピーへ直接行われる。権限や所有者の変更（<code>chmod</code> / <code>chown</code>）でも copy-up が起きる。</p>
+        <pre class="diagram">操作         upper で起きること
+read  a.txt  何もしない（下層を読む）
+write a.txt  a.txt を丸ごと複製して書換
+rm    b.txt  b.txt の whiteout を作る</pre>
+        <p>削除はさらに意外な動きをする。下層は読み取り専用なので、ファイルを本当に消すことはできない。代わりに上層へ<strong>whiteout</strong>（カーネルの実装ではデバイス番号 0/0 のキャラクタデバイス）を置き、「この名前は存在しないことにする」と OverlayFS に伝える。ディレクトリ丸ごとの削除では、上層のディレクトリに opaque（不透明）の印を付けて下層の中身を隠す。</p>
+        <p>ここで lead の 2 つ目の問いが回収できる。Dockerfile で <code>RUN</code> を 2 行に分けて「巨大ファイルを置く」「それを消す」と書くと、1 つ目のレイヤーには巨大ファイルが残り、2 つ目のレイヤーには whiteout が載るだけだ。消したように見えるのは重ねた結果の見え方であって、イメージにはファイルの実体が残り続ける。サイズを減らしたければ、取得と削除を同じ <code>RUN</code> 内で行うか、マルチステージビルドで成果物だけを最終イメージに <code>COPY</code> する必要がある。</p>
+        <pre class="code"># NG: 1 つ目のレイヤーに実体が残る
+RUN curl -o /tmp/sdk.tgz https://example.com/sdk.tgz
+RUN tar xzf /tmp/sdk.tgz -C /opt &amp;&amp; rm /tmp/sdk.tgz
+
+# OK: 同じレイヤー内で消すので実体が残らない
+RUN curl -o /tmp/sdk.tgz https://example.com/sdk.tgz \
+ &amp;&amp; tar xzf /tmp/sdk.tgz -C /opt &amp;&amp; rm /tmp/sdk.tgz</pre>
+      </section>
+
+      <section class="body-section">
+        <h3>コンテナ層に書いてはいけないもの</h3>
+        <p>書き込み層はコンテナと運命を共にする。<code>docker rm</code> するとコンテナ層ごと削除されるため、そこに書いたアップロード画像や SQLite のファイルも消える。また書き込みのたびに OverlayFS を経由し、大きなファイルでは初回に copy-up も挟まるので、DB のデータファイルのように書き込みの多いデータには向かない。Docker のドキュメントも、書き込みの多いデータやコンテナより長生きさせたいデータには<strong>ボリューム</strong>を使うよう勧めている。ボリュームはホスト側のディレクトリをそのままマウントするので、OverlayFS の層を通らない。</p>
+        <pre class="code"># /var/lib/postgresql/data だけ層の外（ボリューム）に出す
+docker run -d -v pgdata:/var/lib/postgresql/data postgres:17</pre>
+        <p>Kubernetes では、コンテナ層への書き込みは <strong>ephemeral-storage</strong>（ノードのローカルディスク上の一時領域）として計上される。kubelet が数えるのは書き込み層、<code>emptyDir</code>、Pod のログなどで、コンテナの書き込み層とログの合計が <code>limits.ephemeral-storage</code> を超えると、kubelet はその Pod を退避（eviction）対象にする。limit を書かなければ上限なしでノードのディスクを食い続け、ノード全体のディスク逼迫として別の Pod まで巻き込みうる。</p>
+        <pre class="code">resources:
+  requests:
+    ephemeral-storage: "1Gi"
+  limits:
+    ephemeral-storage: "2Gi"   # 超えると Pod が evict される</pre>
+        <p>アプリがログを標準出力ではなくコンテナ内のファイルに書き続けていると、それは書き込み層に溜まり、ephemeral-storage を消費し続ける。「メモリもCPUも余裕なのに Pod が Evicted になる」とき、まず疑う場所がここである。</p>
+      </section>
+
+      <div class="practical">
+        <div class="box-title">💼 実務でどう出会うか</div>
+        <p>多いのは 3 つの場面だ。1 つ目は「Dockerfile で削除したのにイメージが痩せない」で、<code>docker history</code> でどのレイヤーが重いかを見れば、消したはずのファイルがどの命令で入ったかが分かる。2 つ目は Pod の <code>Evicted</code> で、<code>kubectl describe pod</code> に ephemeral-storage 関連のメッセージが出ていれば、コンテナ内へのログ書き出しや一時ファイルの溜め込みを疑う。3 つ目は、大きなファイルを開いて書き換える処理だけが初回に妙に遅い、というケースで、copy-up が原因のことがある。また OverlayFS では、下層にあるファイルやディレクトリに対する <code>rename(2)</code> が <code>EXDEV</code> エラーになる場合があり、一部のツールが「コピーして消す」方式にフォールバックするのはこのためだ。</p>
+      </div>
+
+      <div class="hands-on">
+        <div class="box-title">⌨️ 手を動かす（5 分）</div>
+        <p>Docker Desktop が動く Mac で、(1) コンテナを増やしても増えるのは書き込み層だけであること、(2) 別レイヤーでの削除がイメージを縮めないことを確かめる。</p>
+        <pre class="code"># (1) 同じイメージから 3 個起動し、1 個だけに 50MB 書く
+for i in 1 2 3; do docker run -d --name cow$i nginx:alpine; done
+docker exec cow1 dd if=/dev/zero of=/big bs=1M count=50
+docker ps -s --filter name=cow
+docker diff cow1 | head
+
+# (2) 50MB 置いて、次のレイヤーで消す
+printf 'FROM alpine\nRUN dd if=/dev/zero of=/big bs=1M count=50\nRUN rm /big\n' \
+  | docker build -t cowtest -
+docker history cowtest
+
+# 後片付け
+docker rm -f cow1 cow2 cow3 &amp;&amp; docker rmi cowtest</pre>
+        <p>(1) の <code>SIZE</code> 列は、cow1 だけが約 50MB で cow2・cow3 はごく小さい。括弧内の virtual（イメージ分を足した見かけの大きさ）は 3 つとも同程度だが、イメージ部分は共有なので足し算してはいけない。<code>docker diff</code> には追加を表す <code>A /big</code> が出る。(2) の <code>docker history</code> では <code>RUN dd</code> の行が約 50MB、<code>RUN rm</code> の行がほぼ 0B と表示され、削除がサイズを取り戻していないことが分かる。</p>
+      </div>
+
+      <div class="misconceptions">
+        <div class="box-title">🙅 よくある誤解</div>
+        <ul>
+          <li><span class="wrong">コンテナを起動するたびにイメージがまるごと複製される</span> — 複製されるのは何もなく、イメージレイヤーは全コンテナで共有される。各コンテナに増えるのは変更分だけを持つ書き込み層である。</li>
+          <li><span class="wrong">Dockerfile の後半で <code>rm</code> すればイメージは小さくなる</span> — 別の <code>RUN</code> での削除は whiteout を足すだけで、前のレイヤーに実体が残る。同じ <code>RUN</code> 内で消すか、マルチステージビルドを使う。</li>
+          <li><span class="wrong">コンテナ内の書き込みは再起動で消える</span> — 消えるのはコンテナを削除したときで、<code>docker stop</code> → <code>start</code> の再起動では書き込み層は残る。逆に Kubernetes では再起動のたびに新しいコンテナが作られるため、書き込み層の中身は引き継がれない前提で設計する。</li>
+        </ul>
+      </div>
+
+      <div class="glossary">
+        <div class="box-title">📖 用語ミニ辞典</div>
+        <dl>
+          <dt>イメージレイヤー</dt><dd>Dockerfile の命令ごとの差分を記録した読み取り専用のファイル群。複数のイメージ・コンテナで共有される。</dd>
+          <dt>書き込み層（コンテナ層）</dt><dd>コンテナごとに 1 枚だけ足される読み書き可能な最上層。コンテナ削除とともに消える。</dd>
+          <dt>OverlayFS</dt><dd>lowerdir（下層）と upperdir（上層）を重ね、merged に 1 つのディレクトリとして見せる Linux カーネルのファイルシステム。</dd>
+          <dt>copy-up</dt><dd>下層のファイルを初めて変更するとき、ファイル全体を上層へコピーしてから書き換える OverlayFS の動作。</dd>
+          <dt>whiteout</dt><dd>下層のファイルを「存在しないことにする」ために上層へ置く印。下層の実体は残る。</dd>
+          <dt>ephemeral-storage</dt><dd>Kubernetes が書き込み層・emptyDir・ログなどのノードローカルな一時ディスク使用量を数えるリソース。</dd>
+        </dl>
+      </div>
+
+      <div class="further-reading">
+        <div class="box-title">🔗 もっと深く</div>
+        <ul>
+          <li><a href="https://docs.docker.com/engine/storage/drivers/">Storage drivers | Docker Docs</a> — レイヤー・コンテナ層・copy-on-write と <code>docker ps --size</code> の size / virtual size の読み方の一次資料。</li>
+          <li><a href="https://docs.docker.com/engine/storage/drivers/overlayfs-driver/">OverlayFS storage driver | Docker Docs</a> — lowerdir / upperdir / merged の対応、copy-up のコスト、whiteout、rename の制約まで実装寄りに説明している。</li>
+          <li><a href="https://docs.kernel.org/filesystems/overlayfs.html">Overlay Filesystem — The Linux Kernel documentation</a> — whiteout がデバイス番号 0/0 のキャラクタデバイスであることなど、カーネル側の定義。</li>
+          <li><a href="https://kubernetes.io/docs/concepts/storage/ephemeral-storage/">Local ephemeral storage | Kubernetes</a> — 書き込み層とログが ephemeral-storage に計上され、limit 超過で eviction される条件。</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- recent:start -->
+    <!-- recent:end -->
+
+    <footer>
+      <p>Generated by Claude Code (GitHub Actions)</p>
+      <a href="./" class="archive-link">過去の記事</a>
+    </footer>
+  </div>
+</body>
+</html>
