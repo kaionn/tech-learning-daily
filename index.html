@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tech Learning Daily — 同じイメージからコンテナを 10 個起動したのに、なぜディスクは 10 倍にならないのか？</title>
+  <title>Tech Learning Daily — Prometheus の p99 はどこから出てくるのか？ 生の数字は増え続けるカウンタだけなのに</title>
   <link rel="stylesheet" href="style.css">
   <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="feed.xml">
   <link rel="icon" href="/favicon.ico" sizes="48x48">
@@ -14,148 +14,147 @@
   <div class="container">
     <header>
       <h1>Tech Learning Daily</h1>
-      <div class="date">2026-10-18 (Sun) — 第 93 号</div>
+      <div class="date">2026-10-19 (Mon) — 第 94 号</div>
       <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
     </header>
 
     <article class="article">
       <div class="meta-bar">
-        <span class="tag tag-container">Container</span>
+        <span class="tag tag-obs">Obs</span>
         <span class="difficulty">🌿 基礎</span>
-        <span class="read-time">⏱ 約 7 分</span>
+        <span class="read-time">⏱ 約 8 分</span>
       </div>
-      <h2 class="article-title">同じイメージからコンテナを 10 個起動したのに、なぜディスクは 10 倍にならないのか？</h2>
-      <p class="lead">数百 MB のイメージから <code>docker run</code> でコンテナを 10 個立ち上げても、ディスクの空きはほとんど減らない。一方で Dockerfile に <code>RUN rm</code> を足して巨大ファイルを消したのに、イメージは 1 バイトも小さくならない。この 2 つの不思議は、どちらも「コンテナのファイルシステムは複数のディレクトリを重ねて見せているだけ」という同じ仕組みから生まれている。</p>
+      <h2 class="article-title">Prometheus の p99 はどこから出てくるのか？ 生の数字は増え続けるカウンタだけなのに</h2>
+      <p class="lead">アプリの <code>/metrics</code> を <code>curl</code> で覗くと、<code>http_requests_total 183042</code> のような、増え続けるだけの数字が並んでいる。ところが Grafana には「秒間 12.4 リクエスト」「p99 = 0.43 秒」がきれいに描かれる。生データには秒間の値もパーセンタイルも書かれていないのに、この 2 つの数字はどこで計算されているのだろうか。</p>
 
       <div class="tldr">
         <div class="box-title">🎯 3 行まとめ</div>
         <ul>
-          <li>イメージは読み取り専用の「差分レイヤー」の積み重ねで、同じイメージから作ったコンテナは全員がそのレイヤーを共有し、各自は薄い書き込み層だけを持つ</li>
-          <li>OverlayFS が下層（lowerdir）と書き込み層（upperdir）を 1 つのディレクトリ（merged）に重ねて見せ、既存ファイルへの初回書き込み時だけファイル丸ごとを上にコピーする（copy-up）</li>
-          <li>削除は下層を消さず「無いことにする印（whiteout）」を上に置くだけなので、後のレイヤーで消してもイメージは縮まない。書き込み層はコンテナ削除で消えるため、永続データや書き込みの多いデータはボリュームへ逃がす</li>
+          <li>アプリが公開するのは「起動からの累計」であるカウンタで、秒間の値は Prometheus 側の <code>rate()</code> が時間窓の両端の差から計算する。累計なので取りこぼしやプロセス再起動があっても計算が壊れにくい</li>
+          <li>レイテンシは histogram として「閾値 <code>le</code> 以下だった件数」をバケットごとのカウンタで持ち、<code>histogram_quantile()</code> がバケット内を一様分布と仮定した線形補間で p99 を推定する。だから値の精度はバケットの幅で決まる</li>
+          <li>集計は「<code>rate()</code> が先、<code>sum</code> が後」。summary のパーセンタイルは複数インスタンスで平均できないが、histogram のバケットは足し合わせてから分位数を出せる</li>
         </ul>
       </div>
 
       <section class="body-section">
-        <h3>イメージは「差分の積み重ね」でできている</h3>
-        <p>コンテナイメージは 1 つの大きなファイルではなく、<strong>レイヤー</strong>の積み重ねである。レイヤーとは、Dockerfile の命令ごとに「直前の状態から何が増えた・変わった・消えたか」だけを記録したファイル群のことだ。<code>FROM alpine</code> のベース、<code>RUN apk add</code> で増えたファイル、<code>COPY</code> で置いたアプリのコード、とそれぞれが別のレイヤーになる。</p>
-        <p>レイヤーは一度作られたら読み取り専用（RO）で、後から書き換えられることはない。書き換えないと決めているからこそ、同じ内容のレイヤーをディスク上に 1 つだけ置き、複数のイメージやコンテナから安全に参照できる。<code>docker pull</code> で「Already exists」と表示されて一部のレイヤーがダウンロードされないのも、手元に同じレイヤーがすでにあるからだ。</p>
-        <p>コンテナを起動すると、Docker はこの読み取り専用レイヤーの山の一番上に、そのコンテナ専用の空の<strong>書き込み層（コンテナ層）</strong>を 1 枚だけ足す。コンテナ内での変更はすべてこの層に入り、下のイメージレイヤーは変わらない。10 個起動しても増えるのは 10 枚の薄い書き込み層だけなので、ディスクは 10 倍にならない。これが lead の 1 つ目の問いへの答えである。</p>
+        <h3>アプリは「累計」しか教えない</h3>
+        <p>Prometheus はプル型の監視システムで、設定した間隔（<code>scrape_interval</code>）ごとにアプリの <code>/metrics</code> を HTTP で取りに行き（スクレイプ）、その時点の値を時刻と一緒に保存する。保存された「時刻と値の列」を<strong>時系列</strong>と呼ぶ。</p>
+        <p>リクエスト数のような「起きた回数」は<strong>カウンタ</strong>として公開する。カウンタとは、増えることしかなく、プロセスの再起動時にだけ 0 に戻る累計値のことだ。現在のメモリ使用量のように上下する値は<strong>ゲージ</strong>と呼び、カウンタとは区別する。</p>
+        <p>直感的には「直近 1 秒のリクエスト数」をアプリが直接出す方が素直に思える。しかしそうすると、スクレイプが 1 回失敗しただけでその区間のリクエストは誰にも数えられずに消える。累計なら、次にスクレイプが成功したときの値に失敗区間の分も含まれているので、2 点の差を取れば何件起きたかは失われない。アプリ側は整数を 1 足すだけで済み、集計のコストを Prometheus 側に寄せられる点も累計方式の利点である。</p>
       </section>
 
       <section class="body-section">
-        <h3>OverlayFS ―― ディレクトリを重ねて 1 枚に見せる</h3>
-        <p>では、別々に置かれた複数のレイヤーが、コンテナの中からはなぜ普通の 1 つの <code>/</code> に見えるのか。これを担うのが Linux カーネルの <strong>OverlayFS</strong> で、複数のディレクトリを上下に重ね、1 つのディレクトリとして見せるファイルシステムである。読み取り専用の下層を <code>lowerdir</code>、書き込みを受ける上層を <code>upperdir</code>、重ねた結果見える場所を <code>merged</code> と呼ぶ（<code>workdir</code> は OverlayFS が内部処理に使う作業用ディレクトリ）。</p>
-        <pre class="diagram"> container A          container B
-┌────────────┐       ┌────────────┐
-│ upper (RW) │       │ upper (RW) │
-└────────────┘       └────────────┘
-       │                    │
-       └─────────┐ ┌────────┘
-                 ▼ ▼
-┌──────────────────────────────┐
-│ layer3: COPY app/      (RO)  │
-├──────────────────────────────┤
-│ layer2: RUN apk add    (RO)  │
-├──────────────────────────────┤
-│ layer1: alpine base    (RO)  │
-└──────────────────────────────┘
-  lowerdir: 全コンテナで共有</pre>
-        <p>ファイルを読むとき、OverlayFS は上の層から順に探し、最初に見つかったものを返す。同じ名前のファイルが上下両方にあれば、上層（コンテナ層）のものが下層のものを覆い隠す。中身を手で組み立てるなら、カーネルのドキュメントにある次の 1 行と同じことを Docker がやっている。</p>
-        <pre class="code">mount -t overlay overlay \
-  -olowerdir=/lower,upperdir=/upper,workdir=/work /merged</pre>
-        <p>なお Docker Engine 29.0 以降の新規インストールでは、イメージの保存は従来の <code>overlay2</code> ストレージドライバではなく containerd のイメージストアが既定になり、その中で <code>overlayfs</code> スナップショッタが使われる。管理する主体は変わったが、OverlayFS で層を重ねるという仕組み自体は同じだ。自分の環境がどちらかは <code>docker info -f '{{ .DriverStatus }}'</code> で確認でき、containerd 側なら <code>io.containerd.snapshotter.v1</code> と表示される。</p>
+        <h3>rate() は「差 ÷ 時間」に 2 つの補正を足したもの</h3>
+        <p><code>rate(http_requests_total[5m])</code> は、直近 5 分の窓に入ったサンプルから 1 秒あたりの平均増加量を返す。基本は「最後の値 − 最初の値」を経過秒数で割る計算だが、2 つの補正が入る。</p>
+        <p>1 つ目は<strong>カウンタリセット</strong>の補正だ。公式ドキュメントは、ターゲットの再起動などによる単調性の崩れを自動で補正すると明記している。値が前より小さくなったら「0 に戻ってからまた数え始めた」とみなし、戻る前の値を足し込む。たとえば 1000 → 1030 → 5 → 35 と並んだら、増加量は 30 + 5 + 30 = 65 と数える。</p>
+        <pre class="diagram">値
+1030 ┤   ●
+1000 ┤ ●  │ 再起動で 0 に戻る
+     │    │
+  35 ┤    │      ●
+   5 ┤    └─●
+     └─┬──┬──┬───┬──▶ 時刻
+増加:   +30 +5  +30   = 65</pre>
+        <p>2 つ目は<strong>外挿</strong>である。窓の端ちょうどにサンプルがあるとは限らないので、<code>rate()</code> と <code>increase()</code> は窓の両端まで傾きを延ばして推定する。このため <code>increase(...[5m])</code> は「5 分間に何件増えたか」を返すのに、結果が 29.97 のような小数になることがある。壊れているのではなく、推定値として設計どおりの挙動だ。</p>
+        <p>窓の幅には目安がある。窓に 2 点以上のサンプルが入らないと差が取れず、結果が空になる。Grafana は窓をスクレイプ間隔の 4 倍以上にすることを勧めており、そのための変数 <code>$__rate_interval</code> を用意している。窓を広げるほど線はなめらかになるが、短いスパイクはならされて見えなくなる。直近 2 点だけで計算する <code>irate()</code> は逆に鋭く反応するが揺れが大きく、アラート条件には向かない。</p>
       </section>
 
       <div class="analogy">
         <div class="box-title">🍱 たとえるなら</div>
-        <p>全員で共有する 1 冊の原本と、各自に配られた透明なフィルムに近い。原本には誰も書き込めない。あるページを直したい人は、そのページを丸ごとコピーして自分のフィルムに貼り、そこに書き込む（copy-up）。ページを「消したい」ときは原本を破るのではなく、フィルムに「このページは無い」と書いた黒い紙を貼る（whiteout）。だから原本は 1 冊のままで、人数分増えるのはフィルムだけだし、黒い紙を何枚貼っても原本は 1 グラムも軽くならない。</p>
+        <p>車の走行距離計（オドメーター）に近い。時速は記録していなくても、2 回の記録時刻の距離計の差を時間で割れば平均速度が出る。途中で記録を 1 回取り損ねても、次の記録の距離計にはその区間の走行分が入っているので距離は失われない。メーターを交換して 0 に戻ったら、交換前の数字を足してつなげばよい。<code>rate()</code> がやっているのはこの計算である。</p>
       </div>
 
       <section class="body-section">
-        <h3>書き込みと削除 ―― copy-up と whiteout</h3>
-        <p>下層にあるファイルを初めて書き換えるとき、OverlayFS はそのファイルをまず上層へコピーし、コピーの方を書き換える。これを <strong>copy-up</strong> と呼ぶ。OverlayFS はブロック単位ではなくファイル単位で動くため、1 GB のファイルの末尾に 1 バイト追記するだけでも、最初の 1 回はファイル全体のコピーが走る。2 回目以降の書き込みはすでに上層にあるコピーへ直接行われる。権限や所有者の変更（<code>chmod</code> / <code>chown</code>）でも copy-up が起きる。</p>
-        <pre class="diagram">操作         upper で起きること
-read  a.txt  何もしない（下層を読む）
-write a.txt  a.txt を丸ごと複製して書換
-rm    b.txt  b.txt の whiteout を作る</pre>
-        <p>削除はさらに意外な動きをする。下層は読み取り専用なので、ファイルを本当に消すことはできない。代わりに上層へ<strong>whiteout</strong>（カーネルの実装ではデバイス番号 0/0 のキャラクタデバイス）を置き、「この名前は存在しないことにする」と OverlayFS に伝える。ディレクトリ丸ごとの削除では、上層のディレクトリに opaque（不透明）の印を付けて下層の中身を隠す。</p>
-        <p>ここで lead の 2 つ目の問いが回収できる。Dockerfile で <code>RUN</code> を 2 行に分けて「巨大ファイルを置く」「それを消す」と書くと、1 つ目のレイヤーには巨大ファイルが残り、2 つ目のレイヤーには whiteout が載るだけだ。消したように見えるのは重ねた結果の見え方であって、イメージにはファイルの実体が残り続ける。サイズを減らしたければ、取得と削除を同じ <code>RUN</code> 内で行うか、マルチステージビルドで成果物だけを最終イメージに <code>COPY</code> する必要がある。</p>
-        <pre class="code"># NG: 1 つ目のレイヤーに実体が残る
-RUN curl -o /tmp/sdk.tgz https://example.com/sdk.tgz
-RUN tar xzf /tmp/sdk.tgz -C /opt &amp;&amp; rm /tmp/sdk.tgz
-
-# OK: 同じレイヤー内で消すので実体が残らない
-RUN curl -o /tmp/sdk.tgz https://example.com/sdk.tgz \
- &amp;&amp; tar xzf /tmp/sdk.tgz -C /opt &amp;&amp; rm /tmp/sdk.tgz</pre>
+        <h3>histogram は「何秒以下が何件」の累積カウンタ</h3>
+        <p>レイテンシの p99 を出すには、1 件ずつの所要時間を全部保存すれば確実だ。しかしリクエストのたびに値を保存すると、データ量はトラフィックに比例して増えていく。そこで <strong>histogram</strong> は、あらかじめ決めた境界値ごとに「この秒数以下だった件数」をカウンタで数える。境界値ごとの数え箱を<strong>バケット</strong>と呼び、ラベル <code>le</code>（less than or equal、以下）で境界を表す。</p>
+        <pre class="diagram"> 0     0.1     0.25     0.5     1 (秒)
+ ├──────┼───────┼────────┼──────┤
+ │ 50件 │ 40件  │  8件   │ 2件  │
+ └──────┴───────┴────────┴──────┘
+ le="0.1"  =  50
+ le="0.25" =  90 (50+40)
+ le="0.5"  =  98 (90+8)
+ le="1"    = 100
+ le="+Inf" = 100 = _count</pre>
+        <p>各バケットは自分の境界以下の全件を数える累積値なので、<code>le="+Inf"</code> は全件数と一致し、これが <code>_count</code> になる。合計時間の <code>_sum</code> も一緒に公開されるので、<code>rate(_sum[5m]) / rate(_count[5m])</code> で平均レイテンシも出せる。どれもただのカウンタなので、前節の <code>rate()</code> がそのまま使える。</p>
+        <p>境界はアプリ側で決める。Go のクライアントライブラリの既定値 <code>DefBuckets</code> は <code>.005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10</code>（秒）で、ドキュメント自身が「たいていは用途に合わせて定義し直す必要がある」と書いている。境界は時系列の数そのものなので、増やせば精度は上がるが、ラベルの組み合わせ × バケット数だけ保存量が増える。</p>
       </section>
 
       <section class="body-section">
-        <h3>コンテナ層に書いてはいけないもの</h3>
-        <p>書き込み層はコンテナと運命を共にする。<code>docker rm</code> するとコンテナ層ごと削除されるため、そこに書いたアップロード画像や SQLite のファイルも消える。また書き込みのたびに OverlayFS を経由し、大きなファイルでは初回に copy-up も挟まるので、DB のデータファイルのように書き込みの多いデータには向かない。Docker のドキュメントも、書き込みの多いデータやコンテナより長生きさせたいデータには<strong>ボリューム</strong>を使うよう勧めている。ボリュームはホスト側のディレクトリをそのままマウントするので、OverlayFS の層を通らない。</p>
-        <pre class="code"># /var/lib/postgresql/data だけ層の外（ボリューム）に出す
-docker run -d -v pgdata:/var/lib/postgresql/data postgres:17</pre>
-        <p>Kubernetes では、コンテナ層への書き込みは <strong>ephemeral-storage</strong>（ノードのローカルディスク上の一時領域）として計上される。kubelet が数えるのは書き込み層、<code>emptyDir</code>、Pod のログなどで、コンテナの書き込み層とログの合計が <code>limits.ephemeral-storage</code> を超えると、kubelet はその Pod を退避（eviction）対象にする。limit を書かなければ上限なしでノードのディスクを食い続け、ノード全体のディスク逼迫として別の Pod まで巻き込みうる。</p>
-        <pre class="code">resources:
-  requests:
-    ephemeral-storage: "1Gi"
-  limits:
-    ephemeral-storage: "2Gi"   # 超えると Pod が evict される</pre>
-        <p>アプリがログを標準出力ではなくコンテナ内のファイルに書き続けていると、それは書き込み層に溜まり、ephemeral-storage を消費し続ける。「メモリもCPUも余裕なのに Pod が Evicted になる」とき、まず疑う場所がここである。</p>
+        <h3>p99 は「バケットの中を均等とみなした」推定値</h3>
+        <p><code>histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))</code> は、上の図から p95 を次のように求める。100 件中 95 番目の観測は、90 件目まで（0.25 秒以下）と 98 件目まで（0.5 秒以下）の間、つまり 0.25〜0.5 秒のバケットにある。このバケットの 8 件の中では 5 番目なので、公式ドキュメントのとおりバケット内の観測が一様に分布していると仮定し、0.25 + 0.25 × 5/8 ≒ <strong>0.406 秒</strong>と答える。</p>
+        <p>ここに落とし穴がある。実際の 8 件が全部 0.26 秒付近に固まっていても、計算結果は 0.406 秒のままだ。誤差の大きさはその分位数が入ったバケットの幅で決まる。公式の解説には、本当の p95 が約 220ms なのに 200〜300ms のバケットに入ったせいで 295ms と出て、300ms の SLO をほぼ破っているように見えた例が載っている。また分位数が最上位の <code>+Inf</code> バケットに入ると、2 番目に高いバケットの上限がそのまま返る。上の例で境界の最大が 1 秒なら、本当は 8 秒かかっていても p99 は 1 秒と表示される。</p>
+        <p>だからバケットの境界は SLO の閾値に合わせて置く。「300ms 以内に 95%」を見たいなら <code>le="0.3"</code> を作れば、<code>rate(..._bucket{le="0.3"}[5m]) / rate(..._count[5m])</code> で「300ms 以内に返せた割合」を補間なしで正確に計算できる。分位数を推定するより、閾値以下の割合を見る方が histogram の得意な使い方だ。</p>
+        <pre class="code">// Go: SLO 300ms の前後を細かく区切る
+prometheus.NewHistogram(prometheus.HistogramOpts{
+  Name:    "http_request_duration_seconds",
+  Buckets: []float64{.05, .1, .2, .3, .45, .6, 1, 2.5},
+})</pre>
+      </section>
+
+      <section class="body-section">
+        <h3>集計は rate() が先、sum が後</h3>
+        <p>Pod が 10 個あれば、バケットの時系列も 10 組ある。全体の p99 は、まずインスタンスごとに <code>rate()</code> を取り、<code>le</code> ラベルを残したまま足し合わせてから <code>histogram_quantile()</code> に渡す。</p>
+        <pre class="code">histogram_quantile(0.99,
+  sum by (le) (rate(http_request_duration_seconds_bucket[5m])))</pre>
+        <p>順番を逆にして先に <code>sum</code> すると壊れる。1 つの Pod が再起動してそのカウンタが 0 に戻ると、合計値ががくんと下がる。<code>rate()</code> はこれを合計全体のリセットと誤認するため、存在しない急増がグラフに現れる。公式ドキュメントが「必ず先に <code>rate()</code>、それから集計」と書いているのはこのためだ。<code>by (le)</code> を付け忘れて <code>le</code> を消してしまうと、どのバケットの値か分からなくなり分位数は計算できない。</p>
+        <p>似た型に <strong>summary</strong> があり、こちらはアプリ側で p99 などの分位数そのものを計算して公開する。精度は高いが、分位数は平均できない。Pod A の p99 が 0.1 秒、Pod B が 0.9 秒でも、全体の p99 は 0.5 秒とは限らず、リクエスト数の偏り次第で大きく変わる。公式の解説も summary の分位数の <code>avg()</code> を「統計的に無意味」として誤りの例に挙げている。複数インスタンスで動く Web アプリでは、足し算で合算できる histogram を選ぶのが基本になる。なお最近の Prometheus には、境界を事前に決めなくてよく誤差も小さい native histogram があり、公式はクライアントが対応していればこちらを推奨している。</p>
       </section>
 
       <div class="practical">
         <div class="box-title">💼 実務でどう出会うか</div>
-        <p>多いのは 3 つの場面だ。1 つ目は「Dockerfile で削除したのにイメージが痩せない」で、<code>docker history</code> でどのレイヤーが重いかを見れば、消したはずのファイルがどの命令で入ったかが分かる。2 つ目は Pod の <code>Evicted</code> で、<code>kubectl describe pod</code> に ephemeral-storage 関連のメッセージが出ていれば、コンテナ内へのログ書き出しや一時ファイルの溜め込みを疑う。3 つ目は、大きなファイルを開いて書き換える処理だけが初回に妙に遅い、というケースで、copy-up が原因のことがある。また OverlayFS では、下層にあるファイルやディレクトリに対する <code>rename(2)</code> が <code>EXDEV</code> エラーになる場合があり、一部のツールが「コピーして消す」方式にフォールバックするのはこのためだ。</p>
+        <p>よくあるのは 3 つの場面だ。1 つ目は「p99 がいつ見てもぴったり 0.5 や 1 に張り付いている」で、ほとんどの場合、分位数が最上位バケットに入っており境界の上限が返っているだけである。境界を足すか、<code>le="+Inf"</code> と 1 つ下のバケットの件数差を見れば、範囲外の遅いリクエストが何件あるか分かる。2 つ目はデプロイのたびにリクエスト数のグラフにスパイクが立つケースで、<code>rate(sum(...))</code> のように集計の順番が逆になっていないかを疑う。3 つ目は短い窓（<code>[1m]</code> など）のグラフが途切れ途切れになるケースで、窓にサンプルが 2 点入っていない。Grafana では窓を <code>$__rate_interval</code> にしておくのが無難だ。</p>
       </div>
 
       <div class="hands-on">
         <div class="box-title">⌨️ 手を動かす（5 分）</div>
-        <p>Docker Desktop が動く Mac で、(1) コンテナを増やしても増えるのは書き込み層だけであること、(2) 別レイヤーでの削除がイメージを縮めないことを確かめる。</p>
-        <pre class="code"># (1) 同じイメージから 3 個起動し、1 個だけに 50MB 書く
-for i in 1 2 3; do docker run -d --name cow$i nginx:alpine; done
-docker exec cow1 dd if=/dev/zero of=/big bs=1M count=50
-docker ps -s --filter name=cow
-docker diff cow1 | head
+        <p>Prometheus は自分自身のメトリクスをスクレイプする設定で起動するので、それを使って生のカウンタとバケット、<code>rate()</code> と <code>histogram_quantile()</code> の結果を見比べる。</p>
+        <pre class="code">docker run -d --name prom -p 9090:9090 prom/prometheus
 
-# (2) 50MB 置いて、次のレイヤーで消す
-printf 'FROM alpine\nRUN dd if=/dev/zero of=/big bs=1M count=50\nRUN rm /big\n' \
-  | docker build -t cowtest -
-docker history cowtest
+# (1) 生データ: 累計カウンタと累積バケット
+curl -s localhost:9090/metrics | grep '^prometheus_http_request_duration_seconds_bucket{handler="/metrics"'
 
-# 後片付け
-docker rm -f cow1 cow2 cow3 &amp;&amp; docker rmi cowtest</pre>
-        <p>(1) の <code>SIZE</code> 列は、cow1 だけが約 50MB で cow2・cow3 はごく小さい。括弧内の virtual（イメージ分を足した見かけの大きさ）は 3 つとも同程度だが、イメージ部分は共有なので足し算してはいけない。<code>docker diff</code> には追加を表す <code>A /big</code> が出る。(2) の <code>docker history</code> では <code>RUN dd</code> の行が約 50MB、<code>RUN rm</code> の行がほぼ 0B と表示され、削除がサイズを取り戻していないことが分かる。</p>
+# 1〜2 分待って何度か curl し、リクエストを発生させてから:
+# (2) 秒間リクエスト数（Prometheus 側で計算）
+curl -s localhost:9090/api/v1/query \
+  --data-urlencode 'query=sum by (handler) (rate(prometheus_http_requests_total[2m]))'
+
+# (3) p99 の推定値
+curl -s localhost:9090/api/v1/query \
+  --data-urlencode 'query=histogram_quantile(0.99, sum by (le) (rate(prometheus_http_request_duration_seconds_bucket[2m])))'
+
+docker rm -f prom</pre>
+        <p>(1) では <code>le</code> が大きくなるほど値が増えていき、<code>le="+Inf"</code> が最大になる累積の形が見える。(2) の <code>value</code> は小数の秒間値で、生データには無かった数字だ。(3) を何度か叩くと、p99 が境界値の間を補間した半端な値、あるいはどこかのバケットの境界値ちょうどになることがある。後者は分位数が最上位付近のバケットに落ちたときの挙動である。ブラウザで <code>http://localhost:9090</code> を開いて同じクエリを Graph タブで描いてもよい。</p>
       </div>
 
       <div class="misconceptions">
         <div class="box-title">🙅 よくある誤解</div>
         <ul>
-          <li><span class="wrong">コンテナを起動するたびにイメージがまるごと複製される</span> — 複製されるのは何もなく、イメージレイヤーは全コンテナで共有される。各コンテナに増えるのは変更分だけを持つ書き込み層である。</li>
-          <li><span class="wrong">Dockerfile の後半で <code>rm</code> すればイメージは小さくなる</span> — 別の <code>RUN</code> での削除は whiteout を足すだけで、前のレイヤーに実体が残る。同じ <code>RUN</code> 内で消すか、マルチステージビルドを使う。</li>
-          <li><span class="wrong">コンテナ内の書き込みは再起動で消える</span> — 消えるのはコンテナを削除したときで、<code>docker stop</code> → <code>start</code> の再起動では書き込み層は残る。逆に Kubernetes では再起動のたびに新しいコンテナが作られるため、書き込み層の中身は引き継がれない前提で設計する。</li>
+          <li><span class="wrong"><code>increase(x[5m])</code> は 5 分間の正確な件数を返す</span> — 窓の両端まで外挿した推定値なので小数になり、実際の件数と少しずれる。課金のような厳密な件数が要る用途には使わない。</li>
+          <li><span class="wrong">histogram の p99 は実測値である</span> — バケット内を一様分布とみなした補間による推定値で、誤差はバケットの幅で決まる。最上位バケットに入れば境界の上限しか返らない。</li>
+          <li><span class="wrong">各 Pod の p99 を平均すれば全体の p99 になる</span> — 分位数は平均できない。histogram のバケットを <code>sum by (le)</code> で足してから <code>histogram_quantile()</code> に渡す。</li>
         </ul>
       </div>
 
       <div class="glossary">
         <div class="box-title">📖 用語ミニ辞典</div>
         <dl>
-          <dt>イメージレイヤー</dt><dd>Dockerfile の命令ごとの差分を記録した読み取り専用のファイル群。複数のイメージ・コンテナで共有される。</dd>
-          <dt>書き込み層（コンテナ層）</dt><dd>コンテナごとに 1 枚だけ足される読み書き可能な最上層。コンテナ削除とともに消える。</dd>
-          <dt>OverlayFS</dt><dd>lowerdir（下層）と upperdir（上層）を重ね、merged に 1 つのディレクトリとして見せる Linux カーネルのファイルシステム。</dd>
-          <dt>copy-up</dt><dd>下層のファイルを初めて変更するとき、ファイル全体を上層へコピーしてから書き換える OverlayFS の動作。</dd>
-          <dt>whiteout</dt><dd>下層のファイルを「存在しないことにする」ために上層へ置く印。下層の実体は残る。</dd>
-          <dt>ephemeral-storage</dt><dd>Kubernetes が書き込み層・emptyDir・ログなどのノードローカルな一時ディスク使用量を数えるリソース。</dd>
+          <dt>カウンタ</dt><dd>増えることしかなく、再起動時にだけ 0 に戻る累計値のメトリクス。</dd>
+          <dt>rate()</dt><dd>時間窓内のカウンタの増加を、リセット補正と外挿を加えて 1 秒あたりの値にする PromQL 関数。</dd>
+          <dt>histogram</dt><dd>境界 <code>le</code> 以下の観測件数をバケットごとの累積カウンタで持ち、<code>_sum</code> と <code>_count</code> も公開するメトリクス型。</dd>
+          <dt>バケット</dt><dd>histogram の境界値ごとの数え箱。境界の置き方が分位数の精度を決める。</dd>
+          <dt>histogram_quantile()</dt><dd>バケット内を一様分布と仮定した線形補間で、histogram から分位数を推定する PromQL 関数。</dd>
+          <dt>summary</dt><dd>アプリ側で分位数を計算して公開するメトリクス型。精度は高いがインスタンス間で集計できない。</dd>
         </dl>
       </div>
 
       <div class="further-reading">
         <div class="box-title">🔗 もっと深く</div>
         <ul>
-          <li><a href="https://docs.docker.com/engine/storage/drivers/">Storage drivers | Docker Docs</a> — レイヤー・コンテナ層・copy-on-write と <code>docker ps --size</code> の size / virtual size の読み方の一次資料。</li>
-          <li><a href="https://docs.docker.com/engine/storage/drivers/overlayfs-driver/">OverlayFS storage driver | Docker Docs</a> — lowerdir / upperdir / merged の対応、copy-up のコスト、whiteout、rename の制約まで実装寄りに説明している。</li>
-          <li><a href="https://docs.kernel.org/filesystems/overlayfs.html">Overlay Filesystem — The Linux Kernel documentation</a> — whiteout がデバイス番号 0/0 のキャラクタデバイスであることなど、カーネル側の定義。</li>
-          <li><a href="https://kubernetes.io/docs/concepts/storage/ephemeral-storage/">Local ephemeral storage | Kubernetes</a> — 書き込み層とログが ephemeral-storage に計上され、limit 超過で eviction される条件。</li>
+          <li><a href="https://prometheus.io/docs/practices/histograms/">Histograms and summaries | Prometheus</a> — histogram と summary の比較表と、バケット幅のせいで p95 が大きくずれる具体例</li>
+          <li><a href="https://prometheus.io/docs/prometheus/latest/querying/functions/">Query functions | Prometheus</a> — <code>rate()</code> のリセット補正・外挿と <code>histogram_quantile()</code> の補間規則の一次情報</li>
+          <li><a href="https://prometheus.io/docs/concepts/metric_types/">Metric types | Prometheus</a> — counter / gauge / histogram / summary の定義と native histogram の位置づけ</li>
+          <li><a href="https://grafana.com/blog/new-in-grafana-7-2-rate-interval-for-prometheus-rate-queries-that-just-work/">New in Grafana 7.2: $__rate_interval | Grafana Labs</a> — rate の窓が短すぎると何が起きるか、スクレイプ間隔 4 倍の目安の理由</li>
         </ul>
       </div>
     </article>
@@ -163,6 +162,11 @@ docker rm -f cow1 cow2 cow3 &amp;&amp; docker rmi cowtest</pre>
     <!-- recent:start -->
     <section class="section recent-articles">
       <div class="section-title">最近の記事</div>
+      <div class="card">
+        <h3><a href="archive/2026-10-18.html">同じイメージからコンテナを 10 個起動したのに、なぜディスクは 10 倍にならないのか？</a></h3>
+        <div class="summary">コンテナは共有の読み取り専用イメージレイヤーに薄い書き込み層を OverlayFS で重ねるだけなのでディスクが増えない。初回書き込みはファイル丸ごとの copy-up、削除は whiteout になるため、別レイヤーで消してもイメージは縮まない。ボリュームと ephemeral-storage も扱う。</div>
+        <div class="meta"><span class="tag tag-container">Container</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-18</span></div>
+      </div>
       <div class="card">
         <h3><a href="archive/2026-10-17.html">回線は 1Gbps あるのに、なぜ新しい接続の最初のダウンロードは遅いのか？</a></h3>
         <div class="summary">TCP は輻輳ウィンドウを約 14.6KB から往復ごとに倍へ増やすスロースタートを行うため、短い転送の所要時間は回線の太さではなく RTT × 往復回数で決まる。CUBIC と BBR の違い、アイドル後のリセットと initcwnd も扱う。</div>
@@ -177,11 +181,6 @@ docker rm -f cow1 cow2 cow3 &amp;&amp; docker rmi cowtest</pre>
         <h3><a href="archive/2026-10-15.html">メモリ確保は成功したのに、なぜプロセスは後から OOM killer に殺されるのか？</a></h3>
         <div class="summary">malloc が成功しても物理メモリは書き込み時まで割り当てられない。Linux のオーバーコミット下では不足が後から表面化し、OOM killer がスコア最大のプロセスを SIGKILL する。oom_score_adj と Kubernetes の QoS との関係も解説する。</div>
         <div class="meta"><span class="tag tag-infra">Infra</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-15</span></div>
-      </div>
-      <div class="card">
-        <h3><a href="archive/2026-10-14.html">CPU は半分も使っていないのに、なぜ load average は 20 もあるのか？</a></h3>
-        <div class="summary">load average は CPU 使用率ではなく、実行中・実行待ちのタスク数を時間でならした値だ。Linux はディスク I/O などの D 状態のタスクも数えるため CPU が空いていても跳ね上がる。1・5・15 分値は指数減衰で、内訳は vmstat や PSI で切り分ける。</div>
-        <div class="meta"><span class="tag tag-perf">Perf</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-14</span></div>
       </div>
       <div class="recent-more"><a href="archive/">アーカイブですべて見る →</a></div>
     </section>

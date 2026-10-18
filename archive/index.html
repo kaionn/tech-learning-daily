@@ -40,8 +40,8 @@
         <button class="chip" data-cat="lang">Lang <span class="chip-count">6</span></button>
         <button class="chip" data-cat="dev" data-overflow="1" hidden>Dev <span class="chip-count">4</span></button>
         <button class="chip" data-cat="frontend" data-overflow="1" hidden>Frontend <span class="chip-count">4</span></button>
+        <button class="chip" data-cat="obs" data-overflow="1" hidden>Obs <span class="chip-count">4</span></button>
         <button class="chip" data-cat="perf" data-overflow="1" hidden>Perf <span class="chip-count">4</span></button>
-        <button class="chip" data-cat="obs" data-overflow="1" hidden>Obs <span class="chip-count">3</span></button>
         <button class="chip chip-more" id="chip-more">+ 4 件</button>
       </div>
       <div class="chip-row" id="diff-chips">
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-10">
       <div class="section-title">2026 年 10 月 <span class="count"></span></div>
+      <div class="card" data-cat="obs" data-diff="基礎"
+           data-search="prometheus の p99 はどこから出てくるのか？ 生の数字は増え続けるカウンタだけなのに アプリが公開するのは起動からの累計カウンタだけで、秒間の値は rate() がリセット補正と外挿を加えて計算する。histogram は「何秒以下が何件」の累積バケットで、p99 は histogram_quantile() がバケット内を一様とみなした補間で推定する。集計順と summary との違いも扱う。" data-terms="カウンタ / rate() / histogram / バケット / histogram_quantile() / summary">
+        <h3><a href="2026-10-19.html">Prometheus の p99 はどこから出てくるのか？ 生の数字は増え続けるカウンタだけなのに</a></h3>
+        <div class="summary">アプリが公開するのは起動からの累計カウンタだけで、秒間の値は rate() がリセット補正と外挿を加えて計算する。histogram は「何秒以下が何件」の累積バケットで、p99 は histogram_quantile() がバケット内を一様とみなした補間で推定する。集計順と summary との違いも扱う。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-obs">Obs</span><span>🌿 基礎</span><span>⏱ 約 8 分</span><span>2026-10-19</span></div>
+      </div>
       <div class="card" data-cat="container" data-diff="基礎"
            data-search="同じイメージからコンテナを 10 個起動したのに、なぜディスクは 10 倍にならないのか？ コンテナは共有の読み取り専用イメージレイヤーに薄い書き込み層を overlayfs で重ねるだけなのでディスクが増えない。初回書き込みはファイル丸ごとの copy-up、削除は whiteout になるため、別レイヤーで消してもイメージは縮まない。ボリュームと ephemeral-storage も扱う。" data-terms="イメージレイヤー / 書き込み層（コンテナ層） / OverlayFS / copy-up / whiteout / ephemeral-storage">
         <h3><a href="2026-10-18.html">同じイメージからコンテナを 10 個起動したのに、なぜディスクは 10 倍にならないのか？</a></h3>

@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-10-19.html",
+    "date": "2026-10-19",
+    "title": "Prometheus の p99 はどこから出てくるのか？ 生の数字は増え続けるカウンタだけなのに",
+    "summary": "アプリが公開するのは起動からの累計カウンタだけで、秒間の値は rate() がリセット補正と外挿を加えて計算する。histogram は「何秒以下が何件」の累積バケットで、p99 は histogram_quantile() がバケット内を一様とみなした補間で推定する。集計順と summary との違いも扱う。",
+    "category": "obs",
+    "difficulty": "基礎",
+    "readTime": 8,
+    "terms": ["カウンタ", "rate()", "histogram", "バケット", "histogram_quantile()", "summary"]
+  },
+  {
     "file": "2026-10-18.html",
     "date": "2026-10-18",
     "title": "同じイメージからコンテナを 10 個起動したのに、なぜディスクは 10 倍にならないのか？",

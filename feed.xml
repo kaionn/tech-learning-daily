@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-10-18T08:13:41+09:00</updated>
+  <updated>2026-10-19T08:23:28+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>Prometheus の p99 はどこから出てくるのか？ 生の数字は増え続けるカウンタだけなのに</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-10-19.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-10-19.html</id>
+    <updated>2026-10-19T08:23:28+09:00</updated>
+    <summary>アプリが公開するのは累計カウンタと「何秒以下が何件」の累積バケットだけで、秒間値は rate() が差分から、p99 は histogram_quantile() がバケット内の線形補間で推定する。集計は rate が先、sum が後。</summary>
+  </entry>
   <entry>
     <title>同じイメージからコンテナを 10 個起動したのに、なぜディスクは 10 倍にならないのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-10-18.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-10-06.html</id>
     <updated>2026-10-06T10:49:38+09:00</updated>
     <summary>TCPで先に接続を閉じた側は遅延パケットと最後のACK再送に備えTIME_WAITで4つ組を60秒保持するため、同じ宛先へ毎回新規接続するとエフェメラルポートが尽きる。tcp_tw_reuseなどの設定と、keep-alive・コネクションプールによる本当の対策を解説。</summary>
-  </entry>
-  <entry>
-    <title>ファイルなんて開いていないのに、なぜ「Too many open files」でサーバーが落ちるのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-10-05.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-10-05.html</id>
-    <updated>2026-10-05T09:02:03+09:00</updated>
-    <summary>TCPソケットもパイプもファイルディスクリプタとして数えられ、プロセスごとの上限RLIMIT_NOFILEに達するとEMFILEになる。systemdのソフト1024はselect()互換のため。上限の上げ方と、fd漏れの見分け方を解説。</summary>
   </entry>
 </feed>

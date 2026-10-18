@@ -6,6 +6,7 @@
 
 ## 消化済み
 
+- 2026-10-19 Prometheus のカウンタと rate()・histogram_quantile()（累計カウンタから秒間値を出す仕組みとカウンタリセット補正・外挿、窓幅をスクレイプ間隔の4倍以上にする目安とirate、histogram の累積バケット le/_sum/_count と DefBuckets、バケット内一様分布の線形補間による p99 推定の誤差と +Inf バケットの挙動、SLO 閾値にバケット境界を置く設計、sum by (le) (rate()) の順序と summary が集計できない理由、native histogram）（自動選定）
 - 2026-10-18 Docker イメージのレイヤーと OverlayFS（同じイメージのコンテナがレイヤーを共有し書き込み層だけを持つ仕組み、lowerdir/upperdir/merged、ファイル単位のcopy-upとwhiteout・opaqueディレクトリ、別RUNでのrmがイメージを縮めない理由と同一RUN/マルチステージ、docker ps -sのsize/virtual、Docker 29のcontainerdイメージストア、ボリュームとKubernetesのephemeral-storage limitによるeviction）（自動選定）
 - 2026-10-17 TCP の輻輳制御とスロースタート（接続直後に輻輳ウィンドウを初期10セグメント=約14.6KBから往復ごとに倍へ増やす仕組みと短い転送がRTT×往復回数で決まる理由、BDP、ロスベースのReno/CUBIC(0.7倍減)と帯域・RTTを測るBBRの違い、tcp_congestion_control/tcp_slow_start_after_idle/initcwndの設定と効く方向、keep-alive・CDNとの関係）（自動選定）
 - 2026-10-16 LSM-tree と compaction（B+Treeのインプレース更新とランダム書き込みに対し、WAL+memtableに溜めて不変のSSTableとしてflushする書き込み経路、RocksDBのwrite_buffer_size/max_write_buffer_number、読み取りが新しい順に複数SSTableを探す代償とブルームフィルタ・bloom_filter_fp_chance、tombstoneによる削除とgc_grace_seconds、STCS/LCSの違いと書き込み増幅・write stall）（自動選定）
