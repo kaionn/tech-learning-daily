@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tech Learning Daily — 同じファイルを 2 人で編集したのに、なぜ git はほとんど自動でマージできるのか？</title>
+  <link rel="stylesheet" href="../style.css">
+  <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="../feed.xml">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Tech Learning Daily</h1>
+      <div class="date">2026-10-20 (Tue) — 第 95 号</div>
+      <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
+    </header>
+
+    <article class="article">
+      <div class="meta-bar">
+        <span class="tag tag-dev">Dev</span>
+        <span class="difficulty">🌿 基礎</span>
+        <span class="read-time">⏱ 約 7 分</span>
+      </div>
+      <h2 class="article-title">同じファイルを 2 人で編集したのに、なぜ git はほとんど自動でマージできるのか？</h2>
+      <p class="lead">あなたも昨日、同僚と同じ設定ファイルを触った PR を main に取り込んだはずだ。数十行の変更が衝突せずに混ざり、ある 1 行だけが <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code> に囲まれて止まった。git はどうやって「この行は混ぜてよく、この行は人間に聞くべき」と判断したのだろうか。</p>
+
+      <div class="tldr">
+        <div class="box-title">🎯 3 行まとめ</div>
+        <ul>
+          <li>git は 2 つのブランチを比べているのではなく、両者の共通祖先（マージベース）を加えた 3 つの版を比べる「3-way マージ」で、どちらが変えたのかを判定している</li>
+          <li>片側だけが変えた箇所はその変更を採用し、両側が同じ領域を別々に変えた箇所だけをコンフリクトにする。隣接する行の変更も「同じ領域」とみなされる</li>
+          <li>コンフリクトが出なかったことは、行単位で衝突しなかったという意味でしかない。関数名の変更と呼び出しの追加のような意味上の衝突は、テストでしか見つからない</li>
+        </ul>
+      </div>
+
+      <section class="body-section">
+        <h3>2 つの版を見比べるだけでは決められない</h3>
+        <p>マージは「2 つのファイルの差分を取って混ぜる」作業のように思える。しかし 2 つだけでは判定できない場面がすぐに出てくる。main では <code>timeout = 10</code>、feature では <code>timeout = 30</code> になっているとき、どちらが新しい値なのかは 2 つの版を眺めても分からない。main が 30 から 10 に変えたのかもしれないし、feature が 10 から 30 に変えたのかもしれない。</p>
+        <p>この曖昧さは、元の値が分かれば消える。元が 30 なら「main だけが変えた」ので 10 を採ればよい。そこで git は、2 つのブランチが分岐した地点のコミットをもう 1 つの比較対象として持ち出す。これがマージベース（2 つのコミットに共通する祖先のうち、最も新しいもの）だ。</p>
+        <p>以前の記事で見たとおり、git のコミットは差分ではなくスナップショット全体を指している。だからマージのたびに、git はマージベースのスナップショットを起点として「ours（今いるブランチ）がどう変えたか」「theirs（取り込むブランチ）がどう変えたか」という 2 本の差分をその場で計算する。マージベースは <code>git merge-base main feature</code> で確認できる。</p>
+<pre class="diagram">     マージベース (base)
+     timeout=30, log=info
+       ┌──────┴──────┐
+       ▼             ▼
+  main (ours)    feature (theirs)
+  timeout=10     timeout=60
+  log=debug      log=info
+       └──────┬──────┘
+              ▼
+     マージ結果: log=debug
+     timeout は衝突 → 人間へ</pre>
+      </section>
+
+      <section class="body-section">
+        <h3>3-way マージの判定ルール</h3>
+        <p>3-way マージ（base・ours・theirs の 3 つを突き合わせて結果を決める方式）の規則は、ファイルの領域ごとに次の 4 通りしかない。base と ours が同じなら theirs を採る。base と theirs が同じなら ours を採る。ours と theirs が同じ内容に変わっていれば、それを採る。3 つとも違うときだけ、git は機械的に選べないのでコンフリクトとして人間に返す。</p>
+        <p>git の公式ドキュメントもこの動作を「共通祖先からの変更のうち、重ならないもの（片側がある領域を変え、もう片側はその領域に触れていない）はそのまま結果に取り込まれる」と説明している。数十行の変更がほぼ自動で混ざるのは、2 人の変更がたいていファイルの別々の場所に散らばっていて、上の最初の 2 規則で片付くからだ。</p>
+        <p>ここで素朴な予想が 1 つ外れる。「違う行を編集していれば衝突しない」と考えがちだが、git は隣り合う行への変更も同じ領域への変更とみなしてコンフリクトにする。9 行目を ours が、10 行目を theirs が書き換えると、間に無変更の行が 1 行も挟まらないため 2 つの差分が 1 つの塊になる。git のメーリングリストでは、隣接する行はコードでは 1 つの振る舞いを構成していることが多く、人間に確認させる方が安全だという設計判断として説明されている。</p>
+      </section>
+
+      <div class="analogy">
+        <div class="box-title">🍱 たとえるなら</div>
+        <p>共有のレシピ原本を 2 人がそれぞれコピーして書き込んだ場面に似ている。2 枚のコピーだけを並べると「砂糖 10g」と「砂糖 30g」のどちらが書き換えたほうか分からない。手元に原本があれば、原本と同じほうが「触っていない側」だと分かり、もう一方を採用できる。原本から 2 人とも別の数字に書き換えていたときだけ、作った本人たちに相談する。</p>
+      </div>
+
+      <section class="body-section">
+        <h3>コンフリクトマーカーの読み方と diff3 / zdiff3</h3>
+        <p>コンフリクトした領域は、作業ツリーのファイルにコンフリクトマーカー（<code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code>・<code>=======</code>・<code>&gt;&gt;&gt;&gt;&gt;&gt;&gt;</code> で両側の内容を囲んだ印）付きで書き出される。<code>=======</code> より上が ours、下が theirs だ。ただしデフォルトのスタイル <code>merge</code> は base の内容を表示しないので、2 人がそれぞれ何を変えたのかは推測するしかない。</p>
+        <p>設定 <code>merge.conflictStyle</code> を <code>diff3</code> にすると、<code>|||||||</code> の行に続けて base の内容も表示される。<code>zdiff3</code> は diff3 と同じ情報に加え、領域の先頭と末尾で両側が一致している行をマーカーの外へ出して、衝突範囲を狭く表示する。</p>
+<pre class="code">git config --global merge.conflictStyle zdiff3</pre>
+        <p>この設定を入れていないと、例えば ours が値を 10 に、theirs が 60 に変えた衝突で「元は 30 だった」ことが画面に出ず、ours が「下げた」のか theirs が「上げた」のかを判断できない。base が見えれば、両者の意図（片方は短くしたい、片方は長くしたい）を読んで第 3 の値に落とす判断ができる。</p>
+        <p>マージが止まっている間、3 つの版はインデックス（次のコミットの中身を組み立てる領域）にステージ番号付きで保存されている。ステージ 1 が base、2 が ours（HEAD）、3 が theirs（MERGE_HEAD）で、<code>git show :1:app.conf</code> のように取り出せる。設定を後から変えた場合でも、<code>git checkout --conflict=diff3 app.conf</code> でマーカーを base 付きに書き直せる。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>コンフリクトが出なかった ＝ 正しい、ではない</h3>
+        <p>3-way マージの判定は行のテキストだけを見ている。そのため、ours が関数 <code>fetch_user</code> を <code>find_user</code> に改名し、theirs が別ファイルに <code>fetch_user</code> の新しい呼び出しを足すと、行としては一切重ならないのでマージは綺麗に成功し、結果のコードは壊れる。こうした意味上の衝突は git には検出できず、マージ後のコードでテストやビルドを走らせて初めて見つかる。</p>
+        <p>2 つのブランチが互いのマージを何度も取り込み合うと、マージベースの候補が 2 つ以上になることがある（criss-cross マージ）。現在のデフォルト戦略 <code>ort</code> は、この場合に複数の共通祖先をいったん合成した仮想的な base を作り、それを基準に 3-way マージを行う。<code>ort</code> は Git 2.34 からデフォルトで（それ以前の <code>recursive</code> は v2.33.0 までのデフォルト）、v2.50.0 以降は <code>-s recursive</code> を指定しても <code>ort</code> が使われる。</p>
+      </section>
+
+      <div class="practical">
+        <div class="box-title">💼 実務でどう出会うか</div>
+        <p>最もよく出会うのは、長く生きたブランチを main に追従させるたびに同じ箇所でコンフリクトが繰り返す場面だ。<code>git config --global rerere.enabled true</code> を入れておくと、git は一度解消したコンフリクトとその解消結果を記録し、同じ衝突が再び現れたときに作業ツリーへ自動で適用する（インデックスには載せないので、<code>git diff</code> で確認してから <code>git add</code> する）。CHANGELOG のように末尾へ 1 行ずつ足すファイルは隣接行ルールで毎回衝突しやすく、<code>.gitattributes</code> に <code>CHANGELOG.md merge=union</code> と書けば両側の行を全部残すようになる。ただし公式ドキュメントが警告するとおり行の順序は保証されないので、コードには使わない。</p>
+        <p>rebase 中のコンフリクトでは ours と theirs の意味が逆転する点にも注意したい。rebase は取り込み先の上に自分のコミットを 1 つずつ積み直すので、ours は「積み直し中の取り込み先側」、theirs は「自分の作業ブランチ側」になる。<code>git checkout --ours</code> で自分の変更を残したつもりが、相手の変更を採っていたという事故はこれが原因だ。</p>
+      </div>
+
+      <div class="hands-on">
+        <div class="box-title">⌨️ 手を動かす（5 分）</div>
+        <p>片側だけが変えた行は自動で混ざり、両側が変えた行だけが衝突することを確かめる。base・ours・theirs の 3 版をインデックスから取り出すところまで見る。</p>
+        <pre class="code">mkdir -p /tmp/merge3-demo &amp;&amp; cd /tmp/merge3-demo
+git init -q -b main
+printf 'timeout = 30\nretries = 3\nlog = info\nport = 8080\nhost = localhost\n' &gt; app.conf
+git add app.conf &amp;&amp; git commit -q -m base
+git switch -q -c feature
+printf 'timeout = 60\nretries = 3\nlog = info\nport = 8080\nhost = 0.0.0.0\n' &gt; app.conf
+git commit -q -am "feature: timeout 60, host 0.0.0.0"
+git switch -q main
+printf 'timeout = 10\nretries = 3\nlog = debug\nport = 8080\nhost = localhost\n' &gt; app.conf
+git commit -q -am "main: timeout 10, log debug"
+git merge-base main feature
+git merge feature
+cat app.conf
+git checkout --conflict=diff3 app.conf &amp;&amp; cat app.conf
+git ls-files -u
+git show :1:app.conf | head -1
+git merge --abort</pre>
+        <p>最初の <code>cat</code> では <code>timeout</code> の 1 行だけがマーカーに囲まれ、<code>log = debug</code>（main だけが変更）と <code>host = 0.0.0.0</code>（feature だけが変更）は自動で採用されているはずだ。diff3 で書き直した後は <code>|||||||</code> の下に base の <code>timeout = 30</code> が現れ、<code>git ls-files -u</code> は同じ <code>app.conf</code> をステージ 1・2・3 の 3 行で表示する。<code>git merge-base</code> が出力するハッシュは、最初の base コミットのものと一致する。</p>
+      </div>
+
+      <div class="misconceptions">
+        <div class="box-title">🙅 よくある誤解</div>
+        <ul>
+          <li><span class="wrong">違う行を編集していれば衝突しない</span> — git は隣接する行への変更も同じ領域として扱うため、間に無変更の行が無ければ別々の行の編集でもコンフリクトになる。</li>
+          <li><span class="wrong">コンフリクトが出なければマージ結果は正しい</span> — git が見ているのは行テキストの重なりだけで、改名と呼び出し追加のような意味上の衝突は素通りする。マージ後のコードでテストを走らせて初めて分かる。</li>
+          <li><span class="wrong">ours はいつも自分の変更を指す</span> — merge では ours が今いるブランチだが、rebase では取り込み先の側が ours、自分の作業が theirs になる。</li>
+        </ul>
+      </div>
+
+      <div class="glossary">
+        <div class="box-title">📖 用語ミニ辞典</div>
+        <dl>
+          <dt>マージベース</dt><dd>2 つのコミットの共通祖先のうち最も新しいもの。3-way マージの比較基準になる。</dd>
+          <dt>3-way マージ</dt><dd>base・ours・theirs の 3 版を比べ、片側だけの変更は採用し、両側の変更が重なる領域だけをコンフリクトにする方式。</dd>
+          <dt>コンフリクトマーカー</dt><dd>衝突した領域を囲む <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code>・<code>=======</code>・<code>&gt;&gt;&gt;&gt;&gt;&gt;&gt;</code> の印。diff3 系では base を示す <code>|||||||</code> が加わる。</dd>
+          <dt>インデックスのステージ</dt><dd>衝突中のファイルについて、base を 1、ours を 2、theirs を 3 の番号で保持する仕組み。</dd>
+          <dt>ort</dt><dd>Git 2.34 以降のデフォルトのマージ戦略。複数のマージベースを合成した仮想 base を作り、リネームも検出する。</dd>
+          <dt>rerere</dt><dd>一度解消したコンフリクトの解き方を記録し、同じ衝突の再発時に自動で適用する機能。</dd>
+        </dl>
+      </div>
+
+      <div class="further-reading">
+        <div class="box-title">🔗 もっと深く</div>
+        <ul>
+          <li><a href="https://git-scm.com/docs/git-merge">git-merge Documentation</a> — コンフリクトの表示形式（merge / diff3 / zdiff3 の実例）、インデックスのステージ、ort と recursive の関係を定義する一次資料。</li>
+          <li><a href="https://git-scm.com/docs/git-merge-base">git-merge-base Documentation</a> — 「最良の共通祖先」の定義と、criss-cross マージでマージベースが複数になる図解。</li>
+          <li><a href="https://git-scm.com/book/en/v2/Git-Tools-Advanced-Merging">Git Tools - Advanced Merging | Pro Git</a> — <code>git show :1:</code> での版の取り出し、<code>checkout --conflict=diff3</code>、<code>git merge-file</code> による手動再マージの実例。</li>
+          <li><a href="https://git-scm.com/docs/git-rerere">git-rerere Documentation</a> — 解消結果を記録して再利用する仕組みと、長命ブランチでの使いどころ。</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- recent:start -->
+    <!-- recent:end -->
+
+    <footer>
+      <p>Generated by Claude Code (GitHub Actions)</p>
+      <a href="./" class="archive-link">過去の記事</a>
+    </footer>
+  </div>
+</body>
+</html>

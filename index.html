@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tech Learning Daily — Prometheus の p99 はどこから出てくるのか？ 生の数字は増え続けるカウンタだけなのに</title>
+  <title>Tech Learning Daily — 同じファイルを 2 人で編集したのに、なぜ git はほとんど自動でマージできるのか？</title>
   <link rel="stylesheet" href="style.css">
   <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="feed.xml">
   <link rel="icon" href="/favicon.ico" sizes="48x48">
@@ -14,147 +14,130 @@
   <div class="container">
     <header>
       <h1>Tech Learning Daily</h1>
-      <div class="date">2026-10-19 (Mon) — 第 94 号</div>
+      <div class="date">2026-10-20 (Tue) — 第 95 号</div>
       <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
     </header>
 
     <article class="article">
       <div class="meta-bar">
-        <span class="tag tag-obs">Obs</span>
+        <span class="tag tag-dev">Dev</span>
         <span class="difficulty">🌿 基礎</span>
-        <span class="read-time">⏱ 約 8 分</span>
+        <span class="read-time">⏱ 約 7 分</span>
       </div>
-      <h2 class="article-title">Prometheus の p99 はどこから出てくるのか？ 生の数字は増え続けるカウンタだけなのに</h2>
-      <p class="lead">アプリの <code>/metrics</code> を <code>curl</code> で覗くと、<code>http_requests_total 183042</code> のような、増え続けるだけの数字が並んでいる。ところが Grafana には「秒間 12.4 リクエスト」「p99 = 0.43 秒」がきれいに描かれる。生データには秒間の値もパーセンタイルも書かれていないのに、この 2 つの数字はどこで計算されているのだろうか。</p>
+      <h2 class="article-title">同じファイルを 2 人で編集したのに、なぜ git はほとんど自動でマージできるのか？</h2>
+      <p class="lead">あなたも昨日、同僚と同じ設定ファイルを触った PR を main に取り込んだはずだ。数十行の変更が衝突せずに混ざり、ある 1 行だけが <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code> に囲まれて止まった。git はどうやって「この行は混ぜてよく、この行は人間に聞くべき」と判断したのだろうか。</p>
 
       <div class="tldr">
         <div class="box-title">🎯 3 行まとめ</div>
         <ul>
-          <li>アプリが公開するのは「起動からの累計」であるカウンタで、秒間の値は Prometheus 側の <code>rate()</code> が時間窓の両端の差から計算する。累計なので取りこぼしやプロセス再起動があっても計算が壊れにくい</li>
-          <li>レイテンシは histogram として「閾値 <code>le</code> 以下だった件数」をバケットごとのカウンタで持ち、<code>histogram_quantile()</code> がバケット内を一様分布と仮定した線形補間で p99 を推定する。だから値の精度はバケットの幅で決まる</li>
-          <li>集計は「<code>rate()</code> が先、<code>sum</code> が後」。summary のパーセンタイルは複数インスタンスで平均できないが、histogram のバケットは足し合わせてから分位数を出せる</li>
+          <li>git は 2 つのブランチを比べているのではなく、両者の共通祖先（マージベース）を加えた 3 つの版を比べる「3-way マージ」で、どちらが変えたのかを判定している</li>
+          <li>片側だけが変えた箇所はその変更を採用し、両側が同じ領域を別々に変えた箇所だけをコンフリクトにする。隣接する行の変更も「同じ領域」とみなされる</li>
+          <li>コンフリクトが出なかったことは、行単位で衝突しなかったという意味でしかない。関数名の変更と呼び出しの追加のような意味上の衝突は、テストでしか見つからない</li>
         </ul>
       </div>
 
       <section class="body-section">
-        <h3>アプリは「累計」しか教えない</h3>
-        <p>Prometheus はプル型の監視システムで、設定した間隔（<code>scrape_interval</code>）ごとにアプリの <code>/metrics</code> を HTTP で取りに行き（スクレイプ）、その時点の値を時刻と一緒に保存する。保存された「時刻と値の列」を<strong>時系列</strong>と呼ぶ。</p>
-        <p>リクエスト数のような「起きた回数」は<strong>カウンタ</strong>として公開する。カウンタとは、増えることしかなく、プロセスの再起動時にだけ 0 に戻る累計値のことだ。現在のメモリ使用量のように上下する値は<strong>ゲージ</strong>と呼び、カウンタとは区別する。</p>
-        <p>直感的には「直近 1 秒のリクエスト数」をアプリが直接出す方が素直に思える。しかしそうすると、スクレイプが 1 回失敗しただけでその区間のリクエストは誰にも数えられずに消える。累計なら、次にスクレイプが成功したときの値に失敗区間の分も含まれているので、2 点の差を取れば何件起きたかは失われない。アプリ側は整数を 1 足すだけで済み、集計のコストを Prometheus 側に寄せられる点も累計方式の利点である。</p>
+        <h3>2 つの版を見比べるだけでは決められない</h3>
+        <p>マージは「2 つのファイルの差分を取って混ぜる」作業のように思える。しかし 2 つだけでは判定できない場面がすぐに出てくる。main では <code>timeout = 10</code>、feature では <code>timeout = 30</code> になっているとき、どちらが新しい値なのかは 2 つの版を眺めても分からない。main が 30 から 10 に変えたのかもしれないし、feature が 10 から 30 に変えたのかもしれない。</p>
+        <p>この曖昧さは、元の値が分かれば消える。元が 30 なら「main だけが変えた」ので 10 を採ればよい。そこで git は、2 つのブランチが分岐した地点のコミットをもう 1 つの比較対象として持ち出す。これがマージベース（2 つのコミットに共通する祖先のうち、最も新しいもの）だ。</p>
+        <p>以前の記事で見たとおり、git のコミットは差分ではなくスナップショット全体を指している。だからマージのたびに、git はマージベースのスナップショットを起点として「ours（今いるブランチ）がどう変えたか」「theirs（取り込むブランチ）がどう変えたか」という 2 本の差分をその場で計算する。マージベースは <code>git merge-base main feature</code> で確認できる。</p>
+<pre class="diagram">     マージベース (base)
+     timeout=30, log=info
+       ┌──────┴──────┐
+       ▼             ▼
+  main (ours)    feature (theirs)
+  timeout=10     timeout=60
+  log=debug      log=info
+       └──────┬──────┘
+              ▼
+     マージ結果: log=debug
+     timeout は衝突 → 人間へ</pre>
       </section>
 
       <section class="body-section">
-        <h3>rate() は「差 ÷ 時間」に 2 つの補正を足したもの</h3>
-        <p><code>rate(http_requests_total[5m])</code> は、直近 5 分の窓に入ったサンプルから 1 秒あたりの平均増加量を返す。基本は「最後の値 − 最初の値」を経過秒数で割る計算だが、2 つの補正が入る。</p>
-        <p>1 つ目は<strong>カウンタリセット</strong>の補正だ。公式ドキュメントは、ターゲットの再起動などによる単調性の崩れを自動で補正すると明記している。値が前より小さくなったら「0 に戻ってからまた数え始めた」とみなし、戻る前の値を足し込む。たとえば 1000 → 1030 → 5 → 35 と並んだら、増加量は 30 + 5 + 30 = 65 と数える。</p>
-        <pre class="diagram">値
-1030 ┤   ●
-1000 ┤ ●  │ 再起動で 0 に戻る
-     │    │
-  35 ┤    │      ●
-   5 ┤    └─●
-     └─┬──┬──┬───┬──▶ 時刻
-増加:   +30 +5  +30   = 65</pre>
-        <p>2 つ目は<strong>外挿</strong>である。窓の端ちょうどにサンプルがあるとは限らないので、<code>rate()</code> と <code>increase()</code> は窓の両端まで傾きを延ばして推定する。このため <code>increase(...[5m])</code> は「5 分間に何件増えたか」を返すのに、結果が 29.97 のような小数になることがある。壊れているのではなく、推定値として設計どおりの挙動だ。</p>
-        <p>窓の幅には目安がある。窓に 2 点以上のサンプルが入らないと差が取れず、結果が空になる。Grafana は窓をスクレイプ間隔の 4 倍以上にすることを勧めており、そのための変数 <code>$__rate_interval</code> を用意している。窓を広げるほど線はなめらかになるが、短いスパイクはならされて見えなくなる。直近 2 点だけで計算する <code>irate()</code> は逆に鋭く反応するが揺れが大きく、アラート条件には向かない。</p>
+        <h3>3-way マージの判定ルール</h3>
+        <p>3-way マージ（base・ours・theirs の 3 つを突き合わせて結果を決める方式）の規則は、ファイルの領域ごとに次の 4 通りしかない。base と ours が同じなら theirs を採る。base と theirs が同じなら ours を採る。ours と theirs が同じ内容に変わっていれば、それを採る。3 つとも違うときだけ、git は機械的に選べないのでコンフリクトとして人間に返す。</p>
+        <p>git の公式ドキュメントもこの動作を「共通祖先からの変更のうち、重ならないもの（片側がある領域を変え、もう片側はその領域に触れていない）はそのまま結果に取り込まれる」と説明している。数十行の変更がほぼ自動で混ざるのは、2 人の変更がたいていファイルの別々の場所に散らばっていて、上の最初の 2 規則で片付くからだ。</p>
+        <p>ここで素朴な予想が 1 つ外れる。「違う行を編集していれば衝突しない」と考えがちだが、git は隣り合う行への変更も同じ領域への変更とみなしてコンフリクトにする。9 行目を ours が、10 行目を theirs が書き換えると、間に無変更の行が 1 行も挟まらないため 2 つの差分が 1 つの塊になる。git のメーリングリストでは、隣接する行はコードでは 1 つの振る舞いを構成していることが多く、人間に確認させる方が安全だという設計判断として説明されている。</p>
       </section>
 
       <div class="analogy">
         <div class="box-title">🍱 たとえるなら</div>
-        <p>車の走行距離計（オドメーター）に近い。時速は記録していなくても、2 回の記録時刻の距離計の差を時間で割れば平均速度が出る。途中で記録を 1 回取り損ねても、次の記録の距離計にはその区間の走行分が入っているので距離は失われない。メーターを交換して 0 に戻ったら、交換前の数字を足してつなげばよい。<code>rate()</code> がやっているのはこの計算である。</p>
+        <p>共有のレシピ原本を 2 人がそれぞれコピーして書き込んだ場面に似ている。2 枚のコピーだけを並べると「砂糖 10g」と「砂糖 30g」のどちらが書き換えたほうか分からない。手元に原本があれば、原本と同じほうが「触っていない側」だと分かり、もう一方を採用できる。原本から 2 人とも別の数字に書き換えていたときだけ、作った本人たちに相談する。</p>
       </div>
 
       <section class="body-section">
-        <h3>histogram は「何秒以下が何件」の累積カウンタ</h3>
-        <p>レイテンシの p99 を出すには、1 件ずつの所要時間を全部保存すれば確実だ。しかしリクエストのたびに値を保存すると、データ量はトラフィックに比例して増えていく。そこで <strong>histogram</strong> は、あらかじめ決めた境界値ごとに「この秒数以下だった件数」をカウンタで数える。境界値ごとの数え箱を<strong>バケット</strong>と呼び、ラベル <code>le</code>（less than or equal、以下）で境界を表す。</p>
-        <pre class="diagram"> 0     0.1     0.25     0.5     1 (秒)
- ├──────┼───────┼────────┼──────┤
- │ 50件 │ 40件  │  8件   │ 2件  │
- └──────┴───────┴────────┴──────┘
- le="0.1"  =  50
- le="0.25" =  90 (50+40)
- le="0.5"  =  98 (90+8)
- le="1"    = 100
- le="+Inf" = 100 = _count</pre>
-        <p>各バケットは自分の境界以下の全件を数える累積値なので、<code>le="+Inf"</code> は全件数と一致し、これが <code>_count</code> になる。合計時間の <code>_sum</code> も一緒に公開されるので、<code>rate(_sum[5m]) / rate(_count[5m])</code> で平均レイテンシも出せる。どれもただのカウンタなので、前節の <code>rate()</code> がそのまま使える。</p>
-        <p>境界はアプリ側で決める。Go のクライアントライブラリの既定値 <code>DefBuckets</code> は <code>.005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10</code>（秒）で、ドキュメント自身が「たいていは用途に合わせて定義し直す必要がある」と書いている。境界は時系列の数そのものなので、増やせば精度は上がるが、ラベルの組み合わせ × バケット数だけ保存量が増える。</p>
+        <h3>コンフリクトマーカーの読み方と diff3 / zdiff3</h3>
+        <p>コンフリクトした領域は、作業ツリーのファイルにコンフリクトマーカー（<code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code>・<code>=======</code>・<code>&gt;&gt;&gt;&gt;&gt;&gt;&gt;</code> で両側の内容を囲んだ印）付きで書き出される。<code>=======</code> より上が ours、下が theirs だ。ただしデフォルトのスタイル <code>merge</code> は base の内容を表示しないので、2 人がそれぞれ何を変えたのかは推測するしかない。</p>
+        <p>設定 <code>merge.conflictStyle</code> を <code>diff3</code> にすると、<code>|||||||</code> の行に続けて base の内容も表示される。<code>zdiff3</code> は diff3 と同じ情報に加え、領域の先頭と末尾で両側が一致している行をマーカーの外へ出して、衝突範囲を狭く表示する。</p>
+<pre class="code">git config --global merge.conflictStyle zdiff3</pre>
+        <p>この設定を入れていないと、例えば ours が値を 10 に、theirs が 60 に変えた衝突で「元は 30 だった」ことが画面に出ず、ours が「下げた」のか theirs が「上げた」のかを判断できない。base が見えれば、両者の意図（片方は短くしたい、片方は長くしたい）を読んで第 3 の値に落とす判断ができる。</p>
+        <p>マージが止まっている間、3 つの版はインデックス（次のコミットの中身を組み立てる領域）にステージ番号付きで保存されている。ステージ 1 が base、2 が ours（HEAD）、3 が theirs（MERGE_HEAD）で、<code>git show :1:app.conf</code> のように取り出せる。設定を後から変えた場合でも、<code>git checkout --conflict=diff3 app.conf</code> でマーカーを base 付きに書き直せる。</p>
       </section>
 
       <section class="body-section">
-        <h3>p99 は「バケットの中を均等とみなした」推定値</h3>
-        <p><code>histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))</code> は、上の図から p95 を次のように求める。100 件中 95 番目の観測は、90 件目まで（0.25 秒以下）と 98 件目まで（0.5 秒以下）の間、つまり 0.25〜0.5 秒のバケットにある。このバケットの 8 件の中では 5 番目なので、公式ドキュメントのとおりバケット内の観測が一様に分布していると仮定し、0.25 + 0.25 × 5/8 ≒ <strong>0.406 秒</strong>と答える。</p>
-        <p>ここに落とし穴がある。実際の 8 件が全部 0.26 秒付近に固まっていても、計算結果は 0.406 秒のままだ。誤差の大きさはその分位数が入ったバケットの幅で決まる。公式の解説には、本当の p95 が約 220ms なのに 200〜300ms のバケットに入ったせいで 295ms と出て、300ms の SLO をほぼ破っているように見えた例が載っている。また分位数が最上位の <code>+Inf</code> バケットに入ると、2 番目に高いバケットの上限がそのまま返る。上の例で境界の最大が 1 秒なら、本当は 8 秒かかっていても p99 は 1 秒と表示される。</p>
-        <p>だからバケットの境界は SLO の閾値に合わせて置く。「300ms 以内に 95%」を見たいなら <code>le="0.3"</code> を作れば、<code>rate(..._bucket{le="0.3"}[5m]) / rate(..._count[5m])</code> で「300ms 以内に返せた割合」を補間なしで正確に計算できる。分位数を推定するより、閾値以下の割合を見る方が histogram の得意な使い方だ。</p>
-        <pre class="code">// Go: SLO 300ms の前後を細かく区切る
-prometheus.NewHistogram(prometheus.HistogramOpts{
-  Name:    "http_request_duration_seconds",
-  Buckets: []float64{.05, .1, .2, .3, .45, .6, 1, 2.5},
-})</pre>
-      </section>
-
-      <section class="body-section">
-        <h3>集計は rate() が先、sum が後</h3>
-        <p>Pod が 10 個あれば、バケットの時系列も 10 組ある。全体の p99 は、まずインスタンスごとに <code>rate()</code> を取り、<code>le</code> ラベルを残したまま足し合わせてから <code>histogram_quantile()</code> に渡す。</p>
-        <pre class="code">histogram_quantile(0.99,
-  sum by (le) (rate(http_request_duration_seconds_bucket[5m])))</pre>
-        <p>順番を逆にして先に <code>sum</code> すると壊れる。1 つの Pod が再起動してそのカウンタが 0 に戻ると、合計値ががくんと下がる。<code>rate()</code> はこれを合計全体のリセットと誤認するため、存在しない急増がグラフに現れる。公式ドキュメントが「必ず先に <code>rate()</code>、それから集計」と書いているのはこのためだ。<code>by (le)</code> を付け忘れて <code>le</code> を消してしまうと、どのバケットの値か分からなくなり分位数は計算できない。</p>
-        <p>似た型に <strong>summary</strong> があり、こちらはアプリ側で p99 などの分位数そのものを計算して公開する。精度は高いが、分位数は平均できない。Pod A の p99 が 0.1 秒、Pod B が 0.9 秒でも、全体の p99 は 0.5 秒とは限らず、リクエスト数の偏り次第で大きく変わる。公式の解説も summary の分位数の <code>avg()</code> を「統計的に無意味」として誤りの例に挙げている。複数インスタンスで動く Web アプリでは、足し算で合算できる histogram を選ぶのが基本になる。なお最近の Prometheus には、境界を事前に決めなくてよく誤差も小さい native histogram があり、公式はクライアントが対応していればこちらを推奨している。</p>
+        <h3>コンフリクトが出なかった ＝ 正しい、ではない</h3>
+        <p>3-way マージの判定は行のテキストだけを見ている。そのため、ours が関数 <code>fetch_user</code> を <code>find_user</code> に改名し、theirs が別ファイルに <code>fetch_user</code> の新しい呼び出しを足すと、行としては一切重ならないのでマージは綺麗に成功し、結果のコードは壊れる。こうした意味上の衝突は git には検出できず、マージ後のコードでテストやビルドを走らせて初めて見つかる。</p>
+        <p>2 つのブランチが互いのマージを何度も取り込み合うと、マージベースの候補が 2 つ以上になることがある（criss-cross マージ）。現在のデフォルト戦略 <code>ort</code> は、この場合に複数の共通祖先をいったん合成した仮想的な base を作り、それを基準に 3-way マージを行う。<code>ort</code> は Git 2.34 からデフォルトで（それ以前の <code>recursive</code> は v2.33.0 までのデフォルト）、v2.50.0 以降は <code>-s recursive</code> を指定しても <code>ort</code> が使われる。</p>
       </section>
 
       <div class="practical">
         <div class="box-title">💼 実務でどう出会うか</div>
-        <p>よくあるのは 3 つの場面だ。1 つ目は「p99 がいつ見てもぴったり 0.5 や 1 に張り付いている」で、ほとんどの場合、分位数が最上位バケットに入っており境界の上限が返っているだけである。境界を足すか、<code>le="+Inf"</code> と 1 つ下のバケットの件数差を見れば、範囲外の遅いリクエストが何件あるか分かる。2 つ目はデプロイのたびにリクエスト数のグラフにスパイクが立つケースで、<code>rate(sum(...))</code> のように集計の順番が逆になっていないかを疑う。3 つ目は短い窓（<code>[1m]</code> など）のグラフが途切れ途切れになるケースで、窓にサンプルが 2 点入っていない。Grafana では窓を <code>$__rate_interval</code> にしておくのが無難だ。</p>
+        <p>最もよく出会うのは、長く生きたブランチを main に追従させるたびに同じ箇所でコンフリクトが繰り返す場面だ。<code>git config --global rerere.enabled true</code> を入れておくと、git は一度解消したコンフリクトとその解消結果を記録し、同じ衝突が再び現れたときに作業ツリーへ自動で適用する（インデックスには載せないので、<code>git diff</code> で確認してから <code>git add</code> する）。CHANGELOG のように末尾へ 1 行ずつ足すファイルは隣接行ルールで毎回衝突しやすく、<code>.gitattributes</code> に <code>CHANGELOG.md merge=union</code> と書けば両側の行を全部残すようになる。ただし公式ドキュメントが警告するとおり行の順序は保証されないので、コードには使わない。</p>
+        <p>rebase 中のコンフリクトでは ours と theirs の意味が逆転する点にも注意したい。rebase は取り込み先の上に自分のコミットを 1 つずつ積み直すので、ours は「積み直し中の取り込み先側」、theirs は「自分の作業ブランチ側」になる。<code>git checkout --ours</code> で自分の変更を残したつもりが、相手の変更を採っていたという事故はこれが原因だ。</p>
       </div>
 
       <div class="hands-on">
         <div class="box-title">⌨️ 手を動かす（5 分）</div>
-        <p>Prometheus は自分自身のメトリクスをスクレイプする設定で起動するので、それを使って生のカウンタとバケット、<code>rate()</code> と <code>histogram_quantile()</code> の結果を見比べる。</p>
-        <pre class="code">docker run -d --name prom -p 9090:9090 prom/prometheus
-
-# (1) 生データ: 累計カウンタと累積バケット
-curl -s localhost:9090/metrics | grep '^prometheus_http_request_duration_seconds_bucket{handler="/metrics"'
-
-# 1〜2 分待って何度か curl し、リクエストを発生させてから:
-# (2) 秒間リクエスト数（Prometheus 側で計算）
-curl -s localhost:9090/api/v1/query \
-  --data-urlencode 'query=sum by (handler) (rate(prometheus_http_requests_total[2m]))'
-
-# (3) p99 の推定値
-curl -s localhost:9090/api/v1/query \
-  --data-urlencode 'query=histogram_quantile(0.99, sum by (le) (rate(prometheus_http_request_duration_seconds_bucket[2m])))'
-
-docker rm -f prom</pre>
-        <p>(1) では <code>le</code> が大きくなるほど値が増えていき、<code>le="+Inf"</code> が最大になる累積の形が見える。(2) の <code>value</code> は小数の秒間値で、生データには無かった数字だ。(3) を何度か叩くと、p99 が境界値の間を補間した半端な値、あるいはどこかのバケットの境界値ちょうどになることがある。後者は分位数が最上位付近のバケットに落ちたときの挙動である。ブラウザで <code>http://localhost:9090</code> を開いて同じクエリを Graph タブで描いてもよい。</p>
+        <p>片側だけが変えた行は自動で混ざり、両側が変えた行だけが衝突することを確かめる。base・ours・theirs の 3 版をインデックスから取り出すところまで見る。</p>
+        <pre class="code">mkdir -p /tmp/merge3-demo &amp;&amp; cd /tmp/merge3-demo
+git init -q -b main
+printf 'timeout = 30\nretries = 3\nlog = info\nport = 8080\nhost = localhost\n' &gt; app.conf
+git add app.conf &amp;&amp; git commit -q -m base
+git switch -q -c feature
+printf 'timeout = 60\nretries = 3\nlog = info\nport = 8080\nhost = 0.0.0.0\n' &gt; app.conf
+git commit -q -am "feature: timeout 60, host 0.0.0.0"
+git switch -q main
+printf 'timeout = 10\nretries = 3\nlog = debug\nport = 8080\nhost = localhost\n' &gt; app.conf
+git commit -q -am "main: timeout 10, log debug"
+git merge-base main feature
+git merge feature
+cat app.conf
+git checkout --conflict=diff3 app.conf &amp;&amp; cat app.conf
+git ls-files -u
+git show :1:app.conf | head -1
+git merge --abort</pre>
+        <p>最初の <code>cat</code> では <code>timeout</code> の 1 行だけがマーカーに囲まれ、<code>log = debug</code>（main だけが変更）と <code>host = 0.0.0.0</code>（feature だけが変更）は自動で採用されているはずだ。diff3 で書き直した後は <code>|||||||</code> の下に base の <code>timeout = 30</code> が現れ、<code>git ls-files -u</code> は同じ <code>app.conf</code> をステージ 1・2・3 の 3 行で表示する。<code>git merge-base</code> が出力するハッシュは、最初の base コミットのものと一致する。</p>
       </div>
 
       <div class="misconceptions">
         <div class="box-title">🙅 よくある誤解</div>
         <ul>
-          <li><span class="wrong"><code>increase(x[5m])</code> は 5 分間の正確な件数を返す</span> — 窓の両端まで外挿した推定値なので小数になり、実際の件数と少しずれる。課金のような厳密な件数が要る用途には使わない。</li>
-          <li><span class="wrong">histogram の p99 は実測値である</span> — バケット内を一様分布とみなした補間による推定値で、誤差はバケットの幅で決まる。最上位バケットに入れば境界の上限しか返らない。</li>
-          <li><span class="wrong">各 Pod の p99 を平均すれば全体の p99 になる</span> — 分位数は平均できない。histogram のバケットを <code>sum by (le)</code> で足してから <code>histogram_quantile()</code> に渡す。</li>
+          <li><span class="wrong">違う行を編集していれば衝突しない</span> — git は隣接する行への変更も同じ領域として扱うため、間に無変更の行が無ければ別々の行の編集でもコンフリクトになる。</li>
+          <li><span class="wrong">コンフリクトが出なければマージ結果は正しい</span> — git が見ているのは行テキストの重なりだけで、改名と呼び出し追加のような意味上の衝突は素通りする。マージ後のコードでテストを走らせて初めて分かる。</li>
+          <li><span class="wrong">ours はいつも自分の変更を指す</span> — merge では ours が今いるブランチだが、rebase では取り込み先の側が ours、自分の作業が theirs になる。</li>
         </ul>
       </div>
 
       <div class="glossary">
         <div class="box-title">📖 用語ミニ辞典</div>
         <dl>
-          <dt>カウンタ</dt><dd>増えることしかなく、再起動時にだけ 0 に戻る累計値のメトリクス。</dd>
-          <dt>rate()</dt><dd>時間窓内のカウンタの増加を、リセット補正と外挿を加えて 1 秒あたりの値にする PromQL 関数。</dd>
-          <dt>histogram</dt><dd>境界 <code>le</code> 以下の観測件数をバケットごとの累積カウンタで持ち、<code>_sum</code> と <code>_count</code> も公開するメトリクス型。</dd>
-          <dt>バケット</dt><dd>histogram の境界値ごとの数え箱。境界の置き方が分位数の精度を決める。</dd>
-          <dt>histogram_quantile()</dt><dd>バケット内を一様分布と仮定した線形補間で、histogram から分位数を推定する PromQL 関数。</dd>
-          <dt>summary</dt><dd>アプリ側で分位数を計算して公開するメトリクス型。精度は高いがインスタンス間で集計できない。</dd>
+          <dt>マージベース</dt><dd>2 つのコミットの共通祖先のうち最も新しいもの。3-way マージの比較基準になる。</dd>
+          <dt>3-way マージ</dt><dd>base・ours・theirs の 3 版を比べ、片側だけの変更は採用し、両側の変更が重なる領域だけをコンフリクトにする方式。</dd>
+          <dt>コンフリクトマーカー</dt><dd>衝突した領域を囲む <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code>・<code>=======</code>・<code>&gt;&gt;&gt;&gt;&gt;&gt;&gt;</code> の印。diff3 系では base を示す <code>|||||||</code> が加わる。</dd>
+          <dt>インデックスのステージ</dt><dd>衝突中のファイルについて、base を 1、ours を 2、theirs を 3 の番号で保持する仕組み。</dd>
+          <dt>ort</dt><dd>Git 2.34 以降のデフォルトのマージ戦略。複数のマージベースを合成した仮想 base を作り、リネームも検出する。</dd>
+          <dt>rerere</dt><dd>一度解消したコンフリクトの解き方を記録し、同じ衝突の再発時に自動で適用する機能。</dd>
         </dl>
       </div>
 
       <div class="further-reading">
         <div class="box-title">🔗 もっと深く</div>
         <ul>
-          <li><a href="https://prometheus.io/docs/practices/histograms/">Histograms and summaries | Prometheus</a> — histogram と summary の比較表と、バケット幅のせいで p95 が大きくずれる具体例</li>
-          <li><a href="https://prometheus.io/docs/prometheus/latest/querying/functions/">Query functions | Prometheus</a> — <code>rate()</code> のリセット補正・外挿と <code>histogram_quantile()</code> の補間規則の一次情報</li>
-          <li><a href="https://prometheus.io/docs/concepts/metric_types/">Metric types | Prometheus</a> — counter / gauge / histogram / summary の定義と native histogram の位置づけ</li>
-          <li><a href="https://grafana.com/blog/new-in-grafana-7-2-rate-interval-for-prometheus-rate-queries-that-just-work/">New in Grafana 7.2: $__rate_interval | Grafana Labs</a> — rate の窓が短すぎると何が起きるか、スクレイプ間隔 4 倍の目安の理由</li>
+          <li><a href="https://git-scm.com/docs/git-merge">git-merge Documentation</a> — コンフリクトの表示形式（merge / diff3 / zdiff3 の実例）、インデックスのステージ、ort と recursive の関係を定義する一次資料。</li>
+          <li><a href="https://git-scm.com/docs/git-merge-base">git-merge-base Documentation</a> — 「最良の共通祖先」の定義と、criss-cross マージでマージベースが複数になる図解。</li>
+          <li><a href="https://git-scm.com/book/en/v2/Git-Tools-Advanced-Merging">Git Tools - Advanced Merging | Pro Git</a> — <code>git show :1:</code> での版の取り出し、<code>checkout --conflict=diff3</code>、<code>git merge-file</code> による手動再マージの実例。</li>
+          <li><a href="https://git-scm.com/docs/git-rerere">git-rerere Documentation</a> — 解消結果を記録して再利用する仕組みと、長命ブランチでの使いどころ。</li>
         </ul>
       </div>
     </article>
@@ -162,6 +145,11 @@ docker rm -f prom</pre>
     <!-- recent:start -->
     <section class="section recent-articles">
       <div class="section-title">最近の記事</div>
+      <div class="card">
+        <h3><a href="archive/2026-10-19.html">Prometheus の p99 はどこから出てくるのか？ 生の数字は増え続けるカウンタだけなのに</a></h3>
+        <div class="summary">アプリが公開するのは起動からの累計カウンタだけで、秒間の値は rate() がリセット補正と外挿を加えて計算する。histogram は「何秒以下が何件」の累積バケットで、p99 は histogram_quantile() がバケット内を一様とみなした補間で推定する。集計順と summary との違いも扱う。</div>
+        <div class="meta"><span class="tag tag-obs">Obs</span><span>🌿 基礎</span><span>⏱ 約 8 分</span><span>2026-10-19</span></div>
+      </div>
       <div class="card">
         <h3><a href="archive/2026-10-18.html">同じイメージからコンテナを 10 個起動したのに、なぜディスクは 10 倍にならないのか？</a></h3>
         <div class="summary">コンテナは共有の読み取り専用イメージレイヤーに薄い書き込み層を OverlayFS で重ねるだけなのでディスクが増えない。初回書き込みはファイル丸ごとの copy-up、削除は whiteout になるため、別レイヤーで消してもイメージは縮まない。ボリュームと ephemeral-storage も扱う。</div>
@@ -176,11 +164,6 @@ docker rm -f prom</pre>
         <h3><a href="archive/2026-10-16.html">同じ「DB に書く」なのに、なぜ Cassandra や RocksDB は書き込みがあれほど速いのか？</a></h3>
         <div class="summary">B+Tree がページをその場で書き換えるのに対し、LSM-tree は書き込みを memtable に溜めて不変の SSTable として追記する。読み取り時の複数ファイル探索、tombstone による削除、compaction 戦略と書き込み増幅のトレードオフも解説する。</div>
         <div class="meta"><span class="tag tag-db">DB</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-16</span></div>
-      </div>
-      <div class="card">
-        <h3><a href="archive/2026-10-15.html">メモリ確保は成功したのに、なぜプロセスは後から OOM killer に殺されるのか？</a></h3>
-        <div class="summary">malloc が成功しても物理メモリは書き込み時まで割り当てられない。Linux のオーバーコミット下では不足が後から表面化し、OOM killer がスコア最大のプロセスを SIGKILL する。oom_score_adj と Kubernetes の QoS との関係も解説する。</div>
-        <div class="meta"><span class="tag tag-infra">Infra</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-15</span></div>
       </div>
       <div class="recent-more"><a href="archive/">アーカイブですべて見る →</a></div>
     </section>

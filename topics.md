@@ -6,6 +6,7 @@
 
 ## 消化済み
 
+- 2026-10-20 git の 3-way マージとコンフリクト（2版比較では判定できない理由とマージベース、片側だけの変更を採用する判定規則と隣接行が衝突する理由、コンフリクトマーカーとmerge.conflictStyleのdiff3/zdiff3、インデックスのステージ1/2/3、ortとcriss-crossマージ、rerere・merge=union、rebaseでのours/theirs逆転、意味上の衝突）（自動選定）
 - 2026-10-19 Prometheus のカウンタと rate()・histogram_quantile()（累計カウンタから秒間値を出す仕組みとカウンタリセット補正・外挿、窓幅をスクレイプ間隔の4倍以上にする目安とirate、histogram の累積バケット le/_sum/_count と DefBuckets、バケット内一様分布の線形補間による p99 推定の誤差と +Inf バケットの挙動、SLO 閾値にバケット境界を置く設計、sum by (le) (rate()) の順序と summary が集計できない理由、native histogram）（自動選定）
 - 2026-10-18 Docker イメージのレイヤーと OverlayFS（同じイメージのコンテナがレイヤーを共有し書き込み層だけを持つ仕組み、lowerdir/upperdir/merged、ファイル単位のcopy-upとwhiteout・opaqueディレクトリ、別RUNでのrmがイメージを縮めない理由と同一RUN/マルチステージ、docker ps -sのsize/virtual、Docker 29のcontainerdイメージストア、ボリュームとKubernetesのephemeral-storage limitによるeviction）（自動選定）
 - 2026-10-17 TCP の輻輳制御とスロースタート（接続直後に輻輳ウィンドウを初期10セグメント=約14.6KBから往復ごとに倍へ増やす仕組みと短い転送がRTT×往復回数で決まる理由、BDP、ロスベースのReno/CUBIC(0.7倍減)と帯域・RTTを測るBBRの違い、tcp_congestion_control/tcp_slow_start_after_idle/initcwndの設定と効く方向、keep-alive・CDNとの関係）（自動選定）
