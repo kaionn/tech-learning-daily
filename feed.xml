@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-10-20T09:28:52+09:00</updated>
+  <updated>2026-10-21T09:00:33+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>たった 1 行の正規表現なのに、なぜ CPU が 100% に張り付くのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-10-21.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-10-21.html</id>
+    <updated>2026-10-21T09:00:33+09:00</updated>
+    <summary>多くの正規表現エンジンは失敗したら戻って別の道を試すため、(a+)+ のような曖昧なパターンは失敗する入力で区切り方を全通り試し 1 文字ごとに時間が倍になる。Go/RE2 は後方参照を捨てて線形時間を保証する。</summary>
+  </entry>
   <entry>
     <title>同じファイルを 2 人で編集したのに、なぜ git はほとんど自動でマージできるのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-10-20.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-10-08.html</id>
     <updated>2026-10-08T10:05:45+09:00</updated>
     <summary>PostgreSQLはCOMMIT時にテーブル本体ではなくWALだけをfsyncして成功を返し、クラッシュ後はチェックポイント以降のWALを再生して復元する。synchronous_commit=offとfsync=offの違いも解説。</summary>
-  </entry>
-  <entry>
-    <title>空きメモリはほぼゼロなのに、なぜ Linux サーバーは平気で動き続けるのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-10-07.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-10-07.html</id>
-    <updated>2026-10-07T09:50:31+09:00</updated>
-    <summary>Linuxは空きメモリをページキャッシュに使うためfree列は小さくなるのが普通で、使えるメモリはavailable列で見る。コンテナではcgroupがキャッシュも使用量に数えるが、上限到達時はまず回収され、回収しきれない時だけOOMになる仕組みを解説。</summary>
   </entry>
 </feed>

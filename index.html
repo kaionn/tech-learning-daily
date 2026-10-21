@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tech Learning Daily — 同じファイルを 2 人で編集したのに、なぜ git はほとんど自動でマージできるのか？</title>
+  <title>Tech Learning Daily — たった 1 行の正規表現なのに、なぜ CPU が 100% に張り付くのか？</title>
   <link rel="stylesheet" href="style.css">
   <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="feed.xml">
   <link rel="icon" href="/favicon.ico" sizes="48x48">
@@ -14,130 +14,138 @@
   <div class="container">
     <header>
       <h1>Tech Learning Daily</h1>
-      <div class="date">2026-10-20 (Tue) — 第 95 号</div>
+      <div class="date">2026-10-21 (Wed) — 第 96 号</div>
       <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
     </header>
 
     <article class="article">
       <div class="meta-bar">
-        <span class="tag tag-dev">Dev</span>
+        <span class="tag tag-lang">Lang</span>
         <span class="difficulty">🌿 基礎</span>
         <span class="read-time">⏱ 約 7 分</span>
       </div>
-      <h2 class="article-title">同じファイルを 2 人で編集したのに、なぜ git はほとんど自動でマージできるのか？</h2>
-      <p class="lead">あなたも昨日、同僚と同じ設定ファイルを触った PR を main に取り込んだはずだ。数十行の変更が衝突せずに混ざり、ある 1 行だけが <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code> に囲まれて止まった。git はどうやって「この行は混ぜてよく、この行は人間に聞くべき」と判断したのだろうか。</p>
+      <h2 class="article-title">たった 1 行の正規表現なのに、なぜ CPU が 100% に張り付くのか？</h2>
+      <p class="lead">あなたも昨日、メールアドレスや URL のバリデーションに正規表現を 1 行書いたはずだ。テストでは一瞬で通ったその 1 行が、本番で 30 文字ほどの入力を受け取った途端にリクエストを数秒止め、CPU を使い切ることがある。入力はたった 30 文字なのに、エンジンはいったい何に時間を使っているのだろうか。</p>
 
       <div class="tldr">
         <div class="box-title">🎯 3 行まとめ</div>
         <ul>
-          <li>git は 2 つのブランチを比べているのではなく、両者の共通祖先（マージベース）を加えた 3 つの版を比べる「3-way マージ」で、どちらが変えたのかを判定している</li>
-          <li>片側だけが変えた箇所はその変更を採用し、両側が同じ領域を別々に変えた箇所だけをコンフリクトにする。隣接する行の変更も「同じ領域」とみなされる</li>
-          <li>コンフリクトが出なかったことは、行単位で衝突しなかったという意味でしかない。関数名の変更と呼び出しの追加のような意味上の衝突は、テストでしか見つからない</li>
+          <li>JavaScript・Ruby・Python などの正規表現エンジンは「1 つの道を試し、失敗したら分岐点まで戻って別の道を試す」バックトラッキング方式で動く</li>
+          <li><code>(a+)+</code> のように同じ文字列を何通りにも区切れるパターンは、マッチに失敗する入力で区切り方を全通り試すため、1 文字増えるごとに処理時間が倍になる</li>
+          <li>Go や RE2 は入力長に比例する時間を保証する代わりに後方参照を捨てている。バックトラッキング型の言語ではパターンの書き換え・入力長の制限・タイムアウトで守る</li>
         </ul>
       </div>
 
       <section class="body-section">
-        <h3>2 つの版を見比べるだけでは決められない</h3>
-        <p>マージは「2 つのファイルの差分を取って混ぜる」作業のように思える。しかし 2 つだけでは判定できない場面がすぐに出てくる。main では <code>timeout = 10</code>、feature では <code>timeout = 30</code> になっているとき、どちらが新しい値なのかは 2 つの版を眺めても分からない。main が 30 から 10 に変えたのかもしれないし、feature が 10 から 30 に変えたのかもしれない。</p>
-        <p>この曖昧さは、元の値が分かれば消える。元が 30 なら「main だけが変えた」ので 10 を採ればよい。そこで git は、2 つのブランチが分岐した地点のコミットをもう 1 つの比較対象として持ち出す。これがマージベース（2 つのコミットに共通する祖先のうち、最も新しいもの）だ。</p>
-        <p>以前の記事で見たとおり、git のコミットは差分ではなくスナップショット全体を指している。だからマージのたびに、git はマージベースのスナップショットを起点として「ours（今いるブランチ）がどう変えたか」「theirs（取り込むブランチ）がどう変えたか」という 2 本の差分をその場で計算する。マージベースは <code>git merge-base main feature</code> で確認できる。</p>
-<pre class="diagram">     マージベース (base)
-     timeout=30, log=info
-       ┌──────┴──────┐
-       ▼             ▼
-  main (ours)    feature (theirs)
-  timeout=10     timeout=60
-  log=debug      log=info
-       └──────┬──────┘
-              ▼
-     マージ結果: log=debug
-     timeout は衝突 → 人間へ</pre>
+        <h3>正規表現エンジンは「試して、だめなら戻る」</h3>
+        <p>多くの言語の正規表現エンジンは、パターンを先頭から順に入力へ当てはめ、選択肢があるたびにひとまず 1 つを選んで先へ進む。途中で行き詰まると、直前の選択肢まで戻って別の選択を試す。この「戻ってやり直す」動作を<strong>バックトラッキング</strong>と呼ぶ。V8（Node.js と Chrome）の Irregexp、Ruby の Onigmo、Python の <code>re</code> はいずれもこの方式だ。</p>
+        <p>選択肢を生むのは主に<strong>量指定子</strong>（<code>*</code>・<code>+</code>・<code>{m,n}</code> のように「何回繰り返すか」を指定する記号）と選択 <code>|</code> である。<code>a+</code> は「a を 1 回以上」なので、入力に a が 4 つ並んでいれば「4 つ全部取る」「3 つで止める」「2 つで止める」…という選択肢がある。エンジンは貪欲に一番長い取り方から試し、後続が失敗したら 1 つずつ短くしていく。</p>
+        <p>マッチが成功する入力なら、たいてい最初の数回の試行で終わる。問題はマッチが<em>失敗する</em>入力だ。失敗と言い切るには「どの選択肢の組み合わせでもだめだった」ことを確かめる必要があり、エンジンは組み合わせを全部試し終えるまで答えを返せない。</p>
       </section>
 
       <section class="body-section">
-        <h3>3-way マージの判定ルール</h3>
-        <p>3-way マージ（base・ours・theirs の 3 つを突き合わせて結果を決める方式）の規則は、ファイルの領域ごとに次の 4 通りしかない。base と ours が同じなら theirs を採る。base と theirs が同じなら ours を採る。ours と theirs が同じ内容に変わっていれば、それを採る。3 つとも違うときだけ、git は機械的に選べないのでコンフリクトとして人間に返す。</p>
-        <p>git の公式ドキュメントもこの動作を「共通祖先からの変更のうち、重ならないもの（片側がある領域を変え、もう片側はその領域に触れていない）はそのまま結果に取り込まれる」と説明している。数十行の変更がほぼ自動で混ざるのは、2 人の変更がたいていファイルの別々の場所に散らばっていて、上の最初の 2 規則で片付くからだ。</p>
-        <p>ここで素朴な予想が 1 つ外れる。「違う行を編集していれば衝突しない」と考えがちだが、git は隣り合う行への変更も同じ領域への変更とみなしてコンフリクトにする。9 行目を ours が、10 行目を theirs が書き換えると、間に無変更の行が 1 行も挟まらないため 2 つの差分が 1 つの塊になる。git のメーリングリストでは、隣接する行はコードでは 1 つの振る舞いを構成していることが多く、人間に確認させる方が安全だという設計判断として説明されている。</p>
+        <h3>区切り方が 2 倍ずつ増えるパターン</h3>
+        <p><code>^(a+)+$</code> は「a が 1 個以上の塊が、1 個以上続いて行末」という意味で、結果だけ見れば <code>^a+$</code> と同じ文字列にマッチする。しかしエンジンにとっては別物だ。外側の <code>+</code> と内側の <code>+</code> が入れ子になっているため、同じ a の並びを「いくつの塊に分けるか」の選択肢が生まれる。</p>
+        <pre class="diagram">パターン ^(a+)+$  入力 "aaaa!"
+
+ 区切り方        末尾との照合
+ ────────────────────────────
+ (aaaa)        ─▶ ! ≠ $  戻る
+ (aaa)(a)      ─▶ ! ≠ $  戻る
+ (aa)(aa)      ─▶ ! ≠ $  戻る
+ (aa)(a)(a)    ─▶ ! ≠ $  戻る
+ (a)(aaa)      ─▶ ! ≠ $  戻る
+ (a)(aa)(a)    ─▶ ! ≠ $  戻る
+ (a)(a)(aa)    ─▶ ! ≠ $  戻る
+ (a)(a)(a)(a)  ─▶ ! ≠ $  失敗
+ ────────────────────────────
+        ▼
+ 8 通り全部試して「マッチしない」
+ a が n 個なら 2^(n-1) 通り</pre>
+        <p>末尾の <code>!</code> が <code>$</code> に合わないので、どの区切り方でも必ず失敗する。人間には「区切り方を変えても末尾の <code>!</code> は変わらない」と分かるが、エンジンはそれを推論しない。a が n 個なら区切り方は 2<sup>n-1</sup> 通りあり、a が 1 個増えるたびに試行回数が倍になる。実際、筆者の環境（Node.js 22）で <code>/^(a+)+$/.test("a".repeat(n) + "!")</code> を n ごとに別プロセスで 1 回ずつ測ると、n=20 で約 40 ミリ秒、n=26 で約 2.4 秒だった。あと 10 文字足せば 40 分を超える計算になる。</p>
+        <p>このように入力長に対して指数的に試行が増える現象を<strong>破滅的バックトラッキング</strong>と呼び、攻撃者がこれを狙ってサーバーの CPU を食い潰すことを <strong>ReDoS</strong>（Regular expression Denial of Service）と呼ぶ。入れ子の量指定子のほか、<code>(a|a)*</code> や <code>(\w|\d)+</code> のように選択肢同士が同じ文字を取り合う形、<code>.*.*</code> のように何でも取る部分が隣り合う形も同じ構造を持つ。</p>
       </section>
 
       <div class="analogy">
         <div class="box-title">🍱 たとえるなら</div>
-        <p>共有のレシピ原本を 2 人がそれぞれコピーして書き込んだ場面に似ている。2 枚のコピーだけを並べると「砂糖 10g」と「砂糖 30g」のどちらが書き換えたほうか分からない。手元に原本があれば、原本と同じほうが「触っていない側」だと分かり、もう一方を採用できる。原本から 2 人とも別の数字に書き換えていたときだけ、作った本人たちに相談する。</p>
+        <p>一列に並んだ生徒を「班」に区切り、班分けが決まるたびに列の最後尾を確認して「名札をつけているか」を調べる先生だ。最後尾の生徒が名札を忘れていれば、どう班を分けても不合格になる。それでもこの先生は班分けのパターンを 1 つずつ作り直しては最後尾を見に行く。生徒が 1 人増えるたびに班分けのパターンは倍になり、最後尾を見に行く回数も倍になる。</p>
       </div>
 
       <section class="body-section">
-        <h3>コンフリクトマーカーの読み方と diff3 / zdiff3</h3>
-        <p>コンフリクトした領域は、作業ツリーのファイルにコンフリクトマーカー（<code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code>・<code>=======</code>・<code>&gt;&gt;&gt;&gt;&gt;&gt;&gt;</code> で両側の内容を囲んだ印）付きで書き出される。<code>=======</code> より上が ours、下が theirs だ。ただしデフォルトのスタイル <code>merge</code> は base の内容を表示しないので、2 人がそれぞれ何を変えたのかは推測するしかない。</p>
-        <p>設定 <code>merge.conflictStyle</code> を <code>diff3</code> にすると、<code>|||||||</code> の行に続けて base の内容も表示される。<code>zdiff3</code> は diff3 と同じ情報に加え、領域の先頭と末尾で両側が一致している行をマーカーの外へ出して、衝突範囲を狭く表示する。</p>
-<pre class="code">git config --global merge.conflictStyle zdiff3</pre>
-        <p>この設定を入れていないと、例えば ours が値を 10 に、theirs が 60 に変えた衝突で「元は 30 だった」ことが画面に出ず、ours が「下げた」のか theirs が「上げた」のかを判断できない。base が見えれば、両者の意図（片方は短くしたい、片方は長くしたい）を読んで第 3 の値に落とす判断ができる。</p>
-        <p>マージが止まっている間、3 つの版はインデックス（次のコミットの中身を組み立てる領域）にステージ番号付きで保存されている。ステージ 1 が base、2 が ours（HEAD）、3 が theirs（MERGE_HEAD）で、<code>git show :1:app.conf</code> のように取り出せる。設定を後から変えた場合でも、<code>git checkout --conflict=diff3 app.conf</code> でマーカーを base 付きに書き直せる。</p>
+        <h3>実際に世界規模の障害を起こしている</h3>
+        <p>机上の話に聞こえるかもしれないが、2019 年 7 月 2 日に Cloudflare は WAF（Web Application Firewall）のルールに含まれた 1 本の正規表現で HTTP/HTTPS を処理する全 CPU コアを使い切り、27 分間サービスが停止した。原因の正規表現には <code>.*(?:.*=.*)</code> という「何でも取る部分が並ぶ」形が含まれていた。</p>
+        <p>同社の事後報告は、簡略化した <code>.*.*=.*</code> で試行回数を数えている。<code>x=x</code> に対しては 23 ステップだが、<code>x=</code> の後に x を 20 個並べると 555 ステップになり、パターン末尾に <code>;</code> を足した <code>.*.*=.*;</code> では 5,353 ステップに増える。末尾に必須の文字を足すとマッチが失敗しやすくなり、失敗を確定するための全通り探索が走るからだ。</p>
+        <p>ここで多くの人は「<code>.*</code> を遅延量指定子 <code>.*?</code>（短い取り方から試す版）に変えればよい」と考える。しかし同じ報告によると、<code>.*?</code> にしても <code>;</code> 付きの版は 555 と 5,353 ステップのまま変わらない。試す<em>順番</em>を変えても、失敗する入力では結局全通りを試すことに変わりがないからである。</p>
       </section>
 
       <section class="body-section">
-        <h3>コンフリクトが出なかった ＝ 正しい、ではない</h3>
-        <p>3-way マージの判定は行のテキストだけを見ている。そのため、ours が関数 <code>fetch_user</code> を <code>find_user</code> に改名し、theirs が別ファイルに <code>fetch_user</code> の新しい呼び出しを足すと、行としては一切重ならないのでマージは綺麗に成功し、結果のコードは壊れる。こうした意味上の衝突は git には検出できず、マージ後のコードでテストやビルドを走らせて初めて見つかる。</p>
-        <p>2 つのブランチが互いのマージを何度も取り込み合うと、マージベースの候補が 2 つ以上になることがある（criss-cross マージ）。現在のデフォルト戦略 <code>ort</code> は、この場合に複数の共通祖先をいったん合成した仮想的な base を作り、それを基準に 3-way マージを行う。<code>ort</code> は Git 2.34 からデフォルトで（それ以前の <code>recursive</code> は v2.33.0 までのデフォルト）、v2.50.0 以降は <code>-s recursive</code> を指定しても <code>ort</code> が使われる。</p>
+        <h3>戻らないエンジンは何を捨てたのか</h3>
+        <p>正規表現は理論上、状態機械（入力を 1 文字ずつ読んで状態を遷移させる仕組み）に変換でき、その方式なら入力を 1 回なめるだけで判定できる。Go の <code>regexp</code> パッケージはドキュメントで「入力サイズに対して線形時間で動くことを保証する」と明記しており、Google の RE2 も同じ保証を掲げる。Cloudflare も障害後、実行時間の保証がある RE2 か Rust の regex エンジンへの移行を対策に挙げた。</p>
+        <p>ならば全言語がこの方式にすればよいように思える。しかし実際は、この方式では<strong>後方参照</strong>（<code>(\w)\1</code> のように「前に取った文字列と同じもの」を指す記法）と先読み・後読みを扱えない。RE2 の README は「バックトラッキングでしか実装方法が知られていない構文は、原則としてサポートしない」と述べている。Perl 由来の正規表現を引き継いだ JavaScript・Ruby・Python は、この表現力を手放せないためにバックトラッキングを使い続けている。</p>
+        <p>その中間を狙う改良も進んでいる。Ruby 3.2 はメモ化（一度失敗した「入力位置 × パターン上の位置」の組を覚えて再試行しない手法）を導入し、リリースノートによれば実験した正規表現の約 90% が線形時間で終わるようになった。ただし後方参照や先読み・後読みを含むパターン、繰り返し回数の大きい固定回数指定には適用されない。V8 も v8.8 で実験的なバックトラッキングしないエンジンを追加している。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>守り方: 書き換え・長さ制限・タイムアウト</h3>
+        <p>第一の手段は、パターンから曖昧さを除くことだ。<code>^(a+)+$</code> は <code>^a+$</code> に、<code>(\w|\d)+</code> は <code>\w+</code> に書き換えれば区切り方が 1 通りに決まる。Python 3.11 以降と Ruby（Onigmo）は<strong>アトミックグループ</strong> <code>(?&gt;...)</code> と所有量指定子 <code>a++</code> を使える。これらは「一度取った分は手放さない」指定で、内側に戻る分岐点を作らないため、区切り方の全探索が起きない。JavaScript はどちらも未サポートなので書き換えで対処する。</p>
+        <p>次に、正規表現にかける前に入力の長さを制限する。指数的な増加は n に効くので、フォームの文字数上限をサーバー側で先に検査するだけで最悪ケースの時間を大きく縮められる。</p>
+        <p>最後の防壁がタイムアウトだ。Ruby 3.2 以降は全体設定とパターン単位の両方を持つ。設定しないとタイムアウトは無く、マッチが終わるまでそのスレッドは返ってこない。</p>
+        <pre class="code"># 全正規表現に 1 秒の上限（超えると Regexp::TimeoutError）
+Regexp.timeout = 1.0
+
+# 特定のパターンだけ上限を付ける
+EMAIL = Regexp.new(pattern, timeout: 0.1)</pre>
+        <p>Node.js には標準のタイムアウトが無いが、V8 のフラグで「バックトラッキングが多すぎたら線形エンジンに切り替える」挙動を有効にできる。V8 ブログによると切り替えの閾値 <code>--regexp-backtracks-before-fallback</code> のデフォルトは 50,000 回だ。ただし実験的機能で、後方参照・先読み・<code>u</code> や <code>i</code> フラグを含むパターンには効かない。本番投入前に自分のパターンで挙動を確かめる必要がある。</p>
+        <pre class="code">node --enable-experimental-regexp-engine-on-excessive-backtracks app.js</pre>
       </section>
 
       <div class="practical">
         <div class="box-title">💼 実務でどう出会うか</div>
-        <p>最もよく出会うのは、長く生きたブランチを main に追従させるたびに同じ箇所でコンフリクトが繰り返す場面だ。<code>git config --global rerere.enabled true</code> を入れておくと、git は一度解消したコンフリクトとその解消結果を記録し、同じ衝突が再び現れたときに作業ツリーへ自動で適用する（インデックスには載せないので、<code>git diff</code> で確認してから <code>git add</code> する）。CHANGELOG のように末尾へ 1 行ずつ足すファイルは隣接行ルールで毎回衝突しやすく、<code>.gitattributes</code> に <code>CHANGELOG.md merge=union</code> と書けば両側の行を全部残すようになる。ただし公式ドキュメントが警告するとおり行の順序は保証されないので、コードには使わない。</p>
-        <p>rebase 中のコンフリクトでは ours と theirs の意味が逆転する点にも注意したい。rebase は取り込み先の上に自分のコミットを 1 つずつ積み直すので、ours は「積み直し中の取り込み先側」、theirs は「自分の作業ブランチ側」になる。<code>git checkout --ours</code> で自分の変更を残したつもりが、相手の変更を採っていたという事故はこれが原因だ。</p>
+        <p>典型的なのは、ユーザー入力を検証するバリデーション（メールアドレス・URL・電話番号）と、ログやリクエストを解析する正規表現だ。症状は「特定のリクエストだけが極端に遅い」「CPU 使用率が 1 コアだけ 100% に張り付く」として現れる。Node.js はメインスレッドが 1 本なので、1 件の破滅的マッチでサーバー全体の応答が止まる。ライブラリ由来の脆弱性として依存パッケージのセキュリティアラートに「ReDoS」と書かれて届くことも多い。コードレビューでは、入れ子の量指定子・同じ文字を取り合う選択肢・隣り合う <code>.*</code> を見かけたら、マッチに失敗する長い入力で試すとよい。</p>
       </div>
 
       <div class="hands-on">
         <div class="box-title">⌨️ 手を動かす（5 分）</div>
-        <p>片側だけが変えた行は自動で混ざり、両側が変えた行だけが衝突することを確かめる。base・ours・theirs の 3 版をインデックスから取り出すところまで見る。</p>
-        <pre class="code">mkdir -p /tmp/merge3-demo &amp;&amp; cd /tmp/merge3-demo
-git init -q -b main
-printf 'timeout = 30\nretries = 3\nlog = info\nport = 8080\nhost = localhost\n' &gt; app.conf
-git add app.conf &amp;&amp; git commit -q -m base
-git switch -q -c feature
-printf 'timeout = 60\nretries = 3\nlog = info\nport = 8080\nhost = 0.0.0.0\n' &gt; app.conf
-git commit -q -am "feature: timeout 60, host 0.0.0.0"
-git switch -q main
-printf 'timeout = 10\nretries = 3\nlog = debug\nport = 8080\nhost = localhost\n' &gt; app.conf
-git commit -q -am "main: timeout 10, log debug"
-git merge-base main feature
-git merge feature
-cat app.conf
-git checkout --conflict=diff3 app.conf &amp;&amp; cat app.conf
-git ls-files -u
-git show :1:app.conf | head -1
-git merge --abort</pre>
-        <p>最初の <code>cat</code> では <code>timeout</code> の 1 行だけがマーカーに囲まれ、<code>log = debug</code>（main だけが変更）と <code>host = 0.0.0.0</code>（feature だけが変更）は自動で採用されているはずだ。diff3 で書き直した後は <code>|||||||</code> の下に base の <code>timeout = 30</code> が現れ、<code>git ls-files -u</code> は同じ <code>app.conf</code> をステージ 1・2・3 の 3 行で表示する。<code>git merge-base</code> が出力するハッシュは、最初の base コミットのものと一致する。</p>
+        <p>入れ子の量指定子で、入力が 2 文字増えるごとに処理時間が約 4 倍になることを Node.js で確かめる。最後に書き換えたパターンと比べる。</p>
+        <pre class="code">node -e '
+for (const n of [22, 24, 26, 28, 30]) {
+  const s = "a".repeat(n) + "!";
+  let t = Date.now(); /^(a+)+$/.test(s);
+  const bad = Date.now() - t;
+  t = Date.now(); /^a+$/.test(s);
+  console.log(n, "入れ子:", bad, "ms", "書換:", Date.now() - t, "ms");
+}'</pre>
+        <p>全体で数秒かかる。「入れ子」の列は n が 2 増えるたびに約 4 倍に伸び（最初の行はエンジンの最適化が効く前なので外れることがある）、「書換」の列はずっと 0〜1 ms のままのはずだ。末尾の <code>!</code> を消してマッチが成功する入力にすると、入れ子版も一瞬で終わる。遅いのはパターンそのものではなく「失敗する入力 × 曖昧なパターン」の組み合わせであることが観察できる。</p>
       </div>
 
       <div class="misconceptions">
         <div class="box-title">🙅 よくある誤解</div>
         <ul>
-          <li><span class="wrong">違う行を編集していれば衝突しない</span> — git は隣接する行への変更も同じ領域として扱うため、間に無変更の行が無ければ別々の行の編集でもコンフリクトになる。</li>
-          <li><span class="wrong">コンフリクトが出なければマージ結果は正しい</span> — git が見ているのは行テキストの重なりだけで、改名と呼び出し追加のような意味上の衝突は素通りする。マージ後のコードでテストを走らせて初めて分かる。</li>
-          <li><span class="wrong">ours はいつも自分の変更を指す</span> — merge では ours が今いるブランチだが、rebase では取り込み先の側が ours、自分の作業が theirs になる。</li>
+          <li><span class="wrong">正規表現が遅くなるのは入力が長いときだけだ</span> — 破滅的バックトラッキングは 30 文字程度の入力でも数十秒〜数分の時間を食う。時間を決めるのは入力長よりもパターンの曖昧さで、増え方が指数的なので短い入力でも危険になる。</li>
+          <li><span class="wrong"><code>.*</code> を <code>.*?</code> にすれば回避できる</span> — 遅延量指定子は試す順番を変えるだけで、マッチに失敗する入力では結局全通りを試す。Cloudflare の検証でも失敗ケースのステップ数は変わらなかった。</li>
+          <li><span class="wrong">Go に移植すれば同じ正規表現がそのまま速く動く</span> — Go の <code>regexp</code> は RE2 構文で、後方参照や先読み・後読みを受け付けない。こうしたパターンは <code>regexp.Compile</code> がエラーを返すので、書き換えが必要になる。</li>
         </ul>
       </div>
 
       <div class="glossary">
         <div class="box-title">📖 用語ミニ辞典</div>
         <dl>
-          <dt>マージベース</dt><dd>2 つのコミットの共通祖先のうち最も新しいもの。3-way マージの比較基準になる。</dd>
-          <dt>3-way マージ</dt><dd>base・ours・theirs の 3 版を比べ、片側だけの変更は採用し、両側の変更が重なる領域だけをコンフリクトにする方式。</dd>
-          <dt>コンフリクトマーカー</dt><dd>衝突した領域を囲む <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code>・<code>=======</code>・<code>&gt;&gt;&gt;&gt;&gt;&gt;&gt;</code> の印。diff3 系では base を示す <code>|||||||</code> が加わる。</dd>
-          <dt>インデックスのステージ</dt><dd>衝突中のファイルについて、base を 1、ours を 2、theirs を 3 の番号で保持する仕組み。</dd>
-          <dt>ort</dt><dd>Git 2.34 以降のデフォルトのマージ戦略。複数のマージベースを合成した仮想 base を作り、リネームも検出する。</dd>
-          <dt>rerere</dt><dd>一度解消したコンフリクトの解き方を記録し、同じ衝突の再発時に自動で適用する機能。</dd>
+          <dt>バックトラッキング</dt><dd>選択肢を 1 つ選んで進み、行き詰まったら分岐点に戻って別の選択を試すマッチング方式。</dd>
+          <dt>量指定子</dt><dd><code>*</code>・<code>+</code>・<code>{m,n}</code> など、直前の要素を何回繰り返すかを指定する記号。</dd>
+          <dt>破滅的バックトラッキング</dt><dd>曖昧なパターンと失敗する入力の組み合わせで、試行回数が入力長に対し指数的に増える現象。</dd>
+          <dt>ReDoS</dt><dd>破滅的バックトラッキングを意図的に起こさせて CPU を占有させるサービス妨害攻撃。</dd>
+          <dt>RE2</dt><dd>入力長に比例する実行時間を保証する Google の正規表現ライブラリ。後方参照と先読み・後読みは非対応。</dd>
+          <dt>アトミックグループ</dt><dd><code>(?&gt;...)</code>。一度マッチした内容を手放さず、内側への後戻りを禁止するグループ。</dd>
         </dl>
       </div>
 
       <div class="further-reading">
         <div class="box-title">🔗 もっと深く</div>
         <ul>
-          <li><a href="https://git-scm.com/docs/git-merge">git-merge Documentation</a> — コンフリクトの表示形式（merge / diff3 / zdiff3 の実例）、インデックスのステージ、ort と recursive の関係を定義する一次資料。</li>
-          <li><a href="https://git-scm.com/docs/git-merge-base">git-merge-base Documentation</a> — 「最良の共通祖先」の定義と、criss-cross マージでマージベースが複数になる図解。</li>
-          <li><a href="https://git-scm.com/book/en/v2/Git-Tools-Advanced-Merging">Git Tools - Advanced Merging | Pro Git</a> — <code>git show :1:</code> での版の取り出し、<code>checkout --conflict=diff3</code>、<code>git merge-file</code> による手動再マージの実例。</li>
-          <li><a href="https://git-scm.com/docs/git-rerere">git-rerere Documentation</a> — 解消結果を記録して再利用する仕組みと、長命ブランチでの使いどころ。</li>
+          <li><a href="https://blog.cloudflare.com/details-of-the-cloudflare-outage-on-july-2-2019/">Details of the Cloudflare outage on July 2, 2019</a> — 実際の障害の正規表現と、ステップ数を数えながらバックトラッキングを説明する事後報告。</li>
+          <li><a href="https://github.com/google/re2/blob/main/README.md">RE2 README</a> — 線形時間保証と、そのために後方参照・先読みを捨てた設計判断。</li>
+          <li><a href="https://v8.dev/blog/non-backtracking-regexp">An additional non-backtracking RegExp engine (V8 blog)</a> — V8 の線形エンジンへのフォールバックの仕組みと、使えないパターンの条件。</li>
+          <li><a href="https://www.ruby-lang.org/en/news/2022/12/25/ruby-3-2-0-released/">Ruby 3.2.0 Released</a> — メモ化による ReDoS 対策と <code>Regexp.timeout</code> の導入、適用されないパターンの説明。</li>
         </ul>
       </div>
     </article>
@@ -145,6 +153,11 @@ git merge --abort</pre>
     <!-- recent:start -->
     <section class="section recent-articles">
       <div class="section-title">最近の記事</div>
+      <div class="card">
+        <h3><a href="archive/2026-10-20.html">同じファイルを 2 人で編集したのに、なぜ git はほとんど自動でマージできるのか？</a></h3>
+        <div class="summary">git のマージは 2 つのブランチを比べるのではなく、共通祖先（マージベース）を加えた 3 版を比べて「どちらが変えたか」を判定する。片側だけの変更は自動で採用し、両側が同じ領域（隣接行を含む）を変えた所だけがコンフリクトになる。diff3/zdiff3 の読み方、インデックスのステージ、rerere、意味上の衝突も扱う。</div>
+        <div class="meta"><span class="tag tag-dev">Dev</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-20</span></div>
+      </div>
       <div class="card">
         <h3><a href="archive/2026-10-19.html">Prometheus の p99 はどこから出てくるのか？ 生の数字は増え続けるカウンタだけなのに</a></h3>
         <div class="summary">アプリが公開するのは起動からの累計カウンタだけで、秒間の値は rate() がリセット補正と外挿を加えて計算する。histogram は「何秒以下が何件」の累積バケットで、p99 は histogram_quantile() がバケット内を一様とみなした補間で推定する。集計順と summary との違いも扱う。</div>
@@ -159,11 +172,6 @@ git merge --abort</pre>
         <h3><a href="archive/2026-10-17.html">回線は 1Gbps あるのに、なぜ新しい接続の最初のダウンロードは遅いのか？</a></h3>
         <div class="summary">TCP は輻輳ウィンドウを約 14.6KB から往復ごとに倍へ増やすスロースタートを行うため、短い転送の所要時間は回線の太さではなく RTT × 往復回数で決まる。CUBIC と BBR の違い、アイドル後のリセットと initcwnd も扱う。</div>
         <div class="meta"><span class="tag tag-network">Network</span><span>🌿 基礎</span><span>⏱ 約 8 分</span><span>2026-10-17</span></div>
-      </div>
-      <div class="card">
-        <h3><a href="archive/2026-10-16.html">同じ「DB に書く」なのに、なぜ Cassandra や RocksDB は書き込みがあれほど速いのか？</a></h3>
-        <div class="summary">B+Tree がページをその場で書き換えるのに対し、LSM-tree は書き込みを memtable に溜めて不変の SSTable として追記する。読み取り時の複数ファイル探索、tombstone による削除、compaction 戦略と書き込み増幅のトレードオフも解説する。</div>
-        <div class="meta"><span class="tag tag-db">DB</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-16</span></div>
       </div>
       <div class="recent-more"><a href="archive/">アーカイブですべて見る →</a></div>
     </section>
