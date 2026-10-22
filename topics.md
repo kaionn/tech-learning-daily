@@ -6,6 +6,7 @@
 
 ## 消化済み
 
+- 2026-10-22 CPU キャッシュとキャッシュライン（メモリ階層とキャッシュミスの待ち時間、64バイト単位で運ぶキャッシュラインと空間的局所性、行優先配列を列ごとに回すと遅くなる理由、ハードウェアプリフェッチによる順次アクセスの遅延隠蔽、MESIとフォールスシェアリング・perf c2c、Go の cpu.CacheLinePad、Apple Silicon の hw.cachelinesize=128 と crossbeam の 128 バイト仮定）（自動選定）
 - 2026-10-21 正規表現のバックトラッキングと ReDoS（失敗したら分岐点に戻るバックトラッキング方式とV8 Irregexp/Onigmo/Python re、入れ子の量指定子 (a+)+ が区切り方 2^(n-1) 通りを試す破滅的バックトラッキング、Cloudflare 2019年7月の WAF 障害と .*? が効かない理由、Go regexp/RE2 の線形時間保証と後方参照・先読みの放棄、Ruby 3.2 のメモ化と Regexp.timeout、アトミックグループ・所有量指定子、V8 の線形エンジンフォールバック）（自動選定）
 - 2026-10-20 git の 3-way マージとコンフリクト（2版比較では判定できない理由とマージベース、片側だけの変更を採用する判定規則と隣接行が衝突する理由、コンフリクトマーカーとmerge.conflictStyleのdiff3/zdiff3、インデックスのステージ1/2/3、ortとcriss-crossマージ、rerere・merge=union、rebaseでのours/theirs逆転、意味上の衝突）（自動選定）
 - 2026-10-19 Prometheus のカウンタと rate()・histogram_quantile()（累計カウンタから秒間値を出す仕組みとカウンタリセット補正・外挿、窓幅をスクレイプ間隔の4倍以上にする目安とirate、histogram の累積バケット le/_sum/_count と DefBuckets、バケット内一様分布の線形補間による p99 推定の誤差と +Inf バケットの挙動、SLO 閾値にバケット境界を置く設計、sum by (le) (rate()) の順序と summary が集計できない理由、native histogram）（自動選定）

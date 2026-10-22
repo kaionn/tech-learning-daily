@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-10-21T09:00:33+09:00</updated>
+  <updated>2026-10-22T09:06:00+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>同じ二重ループなのに、なぜ i と j を入れ替えるだけで何倍も遅くなるのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-10-22.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-10-22.html</id>
+    <updated>2026-10-22T09:06:00+09:00</updated>
+    <summary>CPU はメモリを 64 バイト前後のキャッシュライン単位で運ぶため、連続アクセスは塊を使い切れ先読みも効くが、飛び飛びのアクセスや同じラインへの別コアの書き込み（フォールスシェアリング）は何倍も遅くなる。</summary>
+  </entry>
   <entry>
     <title>たった 1 行の正規表現なのに、なぜ CPU が 100% に張り付くのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-10-21.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-10-09.html</id>
     <updated>2026-10-09T10:18:07+09:00</updated>
     <summary>docker stopのSIGTERMはPID 1がハンドラを持たないとカーネルに捨てられ、10秒後のSIGKILLで止まる。shell形式のCMDが原因になる理由と、exec形式・tiniによる対策を解説。</summary>
-  </entry>
-  <entry>
-    <title>COMMIT が返った瞬間、データはまだメモリにしかないのに、なぜ停電しても消えないのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-10-08.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-10-08.html</id>
-    <updated>2026-10-08T10:05:45+09:00</updated>
-    <summary>PostgreSQLはCOMMIT時にテーブル本体ではなくWALだけをfsyncして成功を返し、クラッシュ後はチェックポイント以降のWALを再生して復元する。synchronous_commit=offとfsync=offの違いも解説。</summary>
   </entry>
 </feed>

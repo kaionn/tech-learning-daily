@@ -39,9 +39,9 @@
         <button class="chip" data-cat="infra">Infra <span class="chip-count">7</span></button>
         <button class="chip" data-cat="lang">Lang <span class="chip-count">7</span></button>
         <button class="chip" data-cat="dev" data-overflow="1" hidden>Dev <span class="chip-count">5</span></button>
+        <button class="chip" data-cat="perf" data-overflow="1" hidden>Perf <span class="chip-count">5</span></button>
         <button class="chip" data-cat="frontend" data-overflow="1" hidden>Frontend <span class="chip-count">4</span></button>
         <button class="chip" data-cat="obs" data-overflow="1" hidden>Obs <span class="chip-count">4</span></button>
-        <button class="chip" data-cat="perf" data-overflow="1" hidden>Perf <span class="chip-count">4</span></button>
         <button class="chip chip-more" id="chip-more">+ 4 件</button>
       </div>
       <div class="chip-row" id="diff-chips">
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-10">
       <div class="section-title">2026 年 10 月 <span class="count"></span></div>
+      <div class="card" data-cat="perf" data-diff="基礎"
+           data-search="同じ二重ループなのに、なぜ i と j を入れ替えるだけで何倍も遅くなるのか？ cpu はメモリを 1 バイトずつではなく 64 バイト前後のキャッシュライン単位で運ぶ。行優先の配列を列ごとに回すと運んだ塊の大半を捨てるうえプリフェッチも効かず、別コアが同じラインの別変数に書くとフォールスシェアリングで遅くなる。drepper の測定値、mesi、go の cachelinepad、apple silicon の 128 バイトも扱う。" data-terms="CPU キャッシュ / キャッシュライン / 空間的局所性 / ハードウェアプリフェッチ / キャッシュコヒーレンシ / フォールスシェアリング">
+        <h3><a href="2026-10-22.html">同じ二重ループなのに、なぜ i と j を入れ替えるだけで何倍も遅くなるのか？</a></h3>
+        <div class="summary">CPU はメモリを 1 バイトずつではなく 64 バイト前後のキャッシュライン単位で運ぶ。行優先の配列を列ごとに回すと運んだ塊の大半を捨てるうえプリフェッチも効かず、別コアが同じラインの別変数に書くとフォールスシェアリングで遅くなる。Drepper の測定値、MESI、Go の CacheLinePad、Apple Silicon の 128 バイトも扱う。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-perf">Perf</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-22</span></div>
+      </div>
       <div class="card" data-cat="lang" data-diff="基礎"
            data-search="たった 1 行の正規表現なのに、なぜ cpu が 100% に張り付くのか？ javascript・ruby・python の正規表現エンジンは失敗すると分岐点に戻って別の道を試すバックトラッキング方式で、(a+)+ のような曖昧なパターンはマッチしない入力に対して区切り方を全通り試すため 1 文字ごとに時間が倍になる。cloudflare の障害事例、go/re2 の線形時間保証と後方参照の放棄、書き換え・アトミックグループ・regexp.timeout による対策も扱う。" data-terms="バックトラッキング / 量指定子 / 破滅的バックトラッキング / ReDoS / RE2 / アトミックグループ">
         <h3><a href="2026-10-21.html">たった 1 行の正規表現なのに、なぜ CPU が 100% に張り付くのか？</a></h3>

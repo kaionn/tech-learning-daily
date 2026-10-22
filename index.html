@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tech Learning Daily — たった 1 行の正規表現なのに、なぜ CPU が 100% に張り付くのか？</title>
+  <title>Tech Learning Daily — 同じ二重ループなのに、なぜ i と j を入れ替えるだけで何倍も遅くなるのか？</title>
   <link rel="stylesheet" href="style.css">
   <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="feed.xml">
   <link rel="icon" href="/favicon.ico" sizes="48x48">
@@ -14,138 +14,141 @@
   <div class="container">
     <header>
       <h1>Tech Learning Daily</h1>
-      <div class="date">2026-10-21 (Wed) — 第 96 号</div>
+      <div class="date">2026-10-22 (Thu) — 第 97 号</div>
       <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
     </header>
 
     <article class="article">
       <div class="meta-bar">
-        <span class="tag tag-lang">Lang</span>
+        <span class="tag tag-perf">Perf</span>
         <span class="difficulty">🌿 基礎</span>
         <span class="read-time">⏱ 約 7 分</span>
       </div>
-      <h2 class="article-title">たった 1 行の正規表現なのに、なぜ CPU が 100% に張り付くのか？</h2>
-      <p class="lead">あなたも昨日、メールアドレスや URL のバリデーションに正規表現を 1 行書いたはずだ。テストでは一瞬で通ったその 1 行が、本番で 30 文字ほどの入力を受け取った途端にリクエストを数秒止め、CPU を使い切ることがある。入力はたった 30 文字なのに、エンジンはいったい何に時間を使っているのだろうか。</p>
+      <h2 class="article-title">同じ二重ループなのに、なぜ i と j を入れ替えるだけで何倍も遅くなるのか？</h2>
+      <p class="lead">計算量の授業では、<code>for i</code> の中に <code>for j</code> を書けば O(n²)、ループの順序を入れ替えても O(n²) のままだと習った。ところが同じ配列の全要素を足すだけのコードでも、行ごとに回すか列ごとに回すかで実行時間が数倍変わる。足し算の回数はまったく同じなのに、時間はどこへ消えているのだろうか。</p>
 
       <div class="tldr">
         <div class="box-title">🎯 3 行まとめ</div>
         <ul>
-          <li>JavaScript・Ruby・Python などの正規表現エンジンは「1 つの道を試し、失敗したら分岐点まで戻って別の道を試す」バックトラッキング方式で動く</li>
-          <li><code>(a+)+</code> のように同じ文字列を何通りにも区切れるパターンは、マッチに失敗する入力で区切り方を全通り試すため、1 文字増えるごとに処理時間が倍になる</li>
-          <li>Go や RE2 は入力長に比例する時間を保証する代わりに後方参照を捨てている。バックトラッキング型の言語ではパターンの書き換え・入力長の制限・タイムアウトで守る</li>
+          <li>CPU はメモリを 1 バイトずつではなく、キャッシュラインと呼ぶ 64 バイト前後の塊単位でキャッシュに運ぶ。</li>
+          <li>メモリ上で隣り合うデータを順に読むコードは、運ばれた塊を使い切れて先読みも効くが、飛び飛びに読むコードは塊のほとんどを捨ててメモリを待ち続ける。</li>
+          <li>書き込みも塊単位で管理されるため、別々の変数でも同じキャッシュラインに乗っていると、別コアからの書き込みが互いの足を引っ張る（フォールスシェアリング）。</li>
         </ul>
       </div>
 
       <section class="body-section">
-        <h3>正規表現エンジンは「試して、だめなら戻る」</h3>
-        <p>多くの言語の正規表現エンジンは、パターンを先頭から順に入力へ当てはめ、選択肢があるたびにひとまず 1 つを選んで先へ進む。途中で行き詰まると、直前の選択肢まで戻って別の選択を試す。この「戻ってやり直す」動作を<strong>バックトラッキング</strong>と呼ぶ。V8（Node.js と Chrome）の Irregexp、Ruby の Onigmo、Python の <code>re</code> はいずれもこの方式だ。</p>
-        <p>選択肢を生むのは主に<strong>量指定子</strong>（<code>*</code>・<code>+</code>・<code>{m,n}</code> のように「何回繰り返すか」を指定する記号）と選択 <code>|</code> である。<code>a+</code> は「a を 1 回以上」なので、入力に a が 4 つ並んでいれば「4 つ全部取る」「3 つで止める」「2 つで止める」…という選択肢がある。エンジンは貪欲に一番長い取り方から試し、後続が失敗したら 1 つずつ短くしていく。</p>
-        <p>マッチが成功する入力なら、たいてい最初の数回の試行で終わる。問題はマッチが<em>失敗する</em>入力だ。失敗と言い切るには「どの選択肢の組み合わせでもだめだった」ことを確かめる必要があり、エンジンは組み合わせを全部試し終えるまで答えを返せない。</p>
+        <h3>CPU はメモリを直接読んでいない</h3>
+        <p>CPU とメインメモリ（DRAM）の間には速度差がある。Ulrich Drepper の解説「What Every Programmer Should Know About Memory」が Intel の資料から引いている Pentium M の数字では、レジスタへのアクセスが 1 サイクル以下、L1 データキャッシュが約 3 サイクル、L2 が約 14 サイクルなのに対し、メインメモリは約 240 サイクルかかる。世代によって数字は変わるが、メインメモリだけが桁違いに遠いという構図は変わっていない。</p>
+        <p>この差を埋めるのが <strong>CPU キャッシュ</strong>（CPU の近くに置かれた、小さいが高速なメモリ）だ。CPU がデータを要求すると、まず L1、なければ L2、さらに L3 と近い順に探し、どこにも無いとき（キャッシュミス）に初めてメインメモリまで取りに行く。ミスした読み込みは数百サイクル待たされ、その間 CPU は計算を進められないことが多い。プログラムの速さは、命令の数だけでなく「何回メモリまで取りに行かせたか」でも決まる。</p>
       </section>
 
       <section class="body-section">
-        <h3>区切り方が 2 倍ずつ増えるパターン</h3>
-        <p><code>^(a+)+$</code> は「a が 1 個以上の塊が、1 個以上続いて行末」という意味で、結果だけ見れば <code>^a+$</code> と同じ文字列にマッチする。しかしエンジンにとっては別物だ。外側の <code>+</code> と内側の <code>+</code> が入れ子になっているため、同じ a の並びを「いくつの塊に分けるか」の選択肢が生まれる。</p>
-        <pre class="diagram">パターン ^(a+)+$  入力 "aaaa!"
+        <h3>1 バイト頼むと、64 バイトまとめて届く</h3>
+        <p>キャッシュはデータを 1 バイト単位ではなく、<strong>キャッシュライン</strong>（キャッシュとメモリの間でやり取りする固定長の塊）単位で管理する。Drepper によれば、初期のキャッシュは 32 バイトだったが現在は 64 バイトが標準だ。8 バイトの <code>double</code> を 1 つ読むと、その前後を含む 64 バイト、つまり <code>double</code> 8 個分がまとめてキャッシュに載る。</p>
+        <p>まとめて運ぶのは、プログラムが直前に触ったデータの近くを次に触ることが多いからだ。この性質を<strong>空間的局所性</strong>と呼ぶ。配列を先頭から順に読むコードなら、1 回のミスで運ばれた 8 個を続けてすべて使えるので、ミスは 8 要素に 1 回で済む。</p>
+        <p>ここで冒頭の二重ループに戻る。C・Go・JS の型付き配列などでは、2 次元配列は行を端から順に並べた 1 本の連続領域として置かれることが多い（行優先）。4096×4096 の <code>double</code> 配列なら、1 行は 4096×8＝32KB だ。</p>
+<pre class="diagram">メモリ上の並び（行優先。00 は a[0][0]、1 マス 8B）
+┌──┬──┬──┬──┬──┬──┬──┬──┐
+│00│01│02│03│04│05│06│07│ ← 1 ライン
+└──┴──┴──┴──┴──┴──┴──┴──┘
+  行 0 の続き … 32KB 先から行 1 が始まる
 
- 区切り方        末尾との照合
- ────────────────────────────
- (aaaa)        ─▶ ! ≠ $  戻る
- (aaa)(a)      ─▶ ! ≠ $  戻る
- (aa)(aa)      ─▶ ! ≠ $  戻る
- (aa)(a)(a)    ─▶ ! ≠ $  戻る
- (a)(aaa)      ─▶ ! ≠ $  戻る
- (a)(aa)(a)    ─▶ ! ≠ $  戻る
- (a)(a)(aa)    ─▶ ! ≠ $  戻る
- (a)(a)(a)(a)  ─▶ ! ≠ $  失敗
- ────────────────────────────
-        ▼
- 8 通り全部試して「マッチしない」
- a が n 個なら 2^(n-1) 通り</pre>
-        <p>末尾の <code>!</code> が <code>$</code> に合わないので、どの区切り方でも必ず失敗する。人間には「区切り方を変えても末尾の <code>!</code> は変わらない」と分かるが、エンジンはそれを推論しない。a が n 個なら区切り方は 2<sup>n-1</sup> 通りあり、a が 1 個増えるたびに試行回数が倍になる。実際、筆者の環境（Node.js 22）で <code>/^(a+)+$/.test("a".repeat(n) + "!")</code> を n ごとに別プロセスで 1 回ずつ測ると、n=20 で約 40 ミリ秒、n=26 で約 2.4 秒だった。あと 10 文字足せば 40 分を超える計算になる。</p>
-        <p>このように入力長に対して指数的に試行が増える現象を<strong>破滅的バックトラッキング</strong>と呼び、攻撃者がこれを狙ってサーバーの CPU を食い潰すことを <strong>ReDoS</strong>（Regular expression Denial of Service）と呼ぶ。入れ子の量指定子のほか、<code>(a|a)*</code> や <code>(\w|\d)+</code> のように選択肢同士が同じ文字を取り合う形、<code>.*.*</code> のように何でも取る部分が隣り合う形も同じ構造を持つ。</p>
+行ごと (a[i][j], j が内側):
+ 00▶01▶02▶…▶07  1 回のミスで 8 個使う
+
+列ごと (a[i][j], i が内側):
+ 00 ──32KB──▶ 10 ──32KB──▶ 20
+ 毎回別のラインを運び、1 個だけ使って
+ 残り 7 個は捨てる</pre>
+        <p>列ごとに回すと、内側のループが 1 歩進むたびに 32KB 先へ飛ぶ。毎回別のキャッシュラインを運び込み、そのうち 8 バイトしか使わない。しかも 4096 行ぶんのラインを保持しきれないので、次の列で同じラインに戻ってきた頃には追い出されていることが多い。足し算の回数は同じでも、メモリまで取りに行く回数がおよそ 8 倍に膨らむ。</p>
       </section>
 
       <div class="analogy">
         <div class="box-title">🍱 たとえるなら</div>
-        <p>一列に並んだ生徒を「班」に区切り、班分けが決まるたびに列の最後尾を確認して「名札をつけているか」を調べる先生だ。最後尾の生徒が名札を忘れていれば、どう班を分けても不合格になる。それでもこの先生は班分けのパターンを 1 つずつ作り直しては最後尾を見に行く。生徒が 1 人増えるたびに班分けのパターンは倍になり、最後尾を見に行く回数も倍になる。</p>
+        <p>閉架式の図書館で本を頼むと、司書は書庫まで往復して、頼んだ 1 冊だけでなく同じ棚の 8 冊をまとめて机に運んでくる。棚に並んだ順に読み進める人は、8 冊読み終わるまで司書を待たない。一方、各棚の 1 冊目だけを順に読みたい人は、毎回往復を待ったうえで、運ばれた残り 7 冊を読まずに返すことになる。読む冊数は同じでも、待ち時間の合計は往復の回数で決まる。</p>
       </div>
 
       <section class="body-section">
-        <h3>実際に世界規模の障害を起こしている</h3>
-        <p>机上の話に聞こえるかもしれないが、2019 年 7 月 2 日に Cloudflare は WAF（Web Application Firewall）のルールに含まれた 1 本の正規表現で HTTP/HTTPS を処理する全 CPU コアを使い切り、27 分間サービスが停止した。原因の正規表現には <code>.*(?:.*=.*)</code> という「何でも取る部分が並ぶ」形が含まれていた。</p>
-        <p>同社の事後報告は、簡略化した <code>.*.*=.*</code> で試行回数を数えている。<code>x=x</code> に対しては 23 ステップだが、<code>x=</code> の後に x を 20 個並べると 555 ステップになり、パターン末尾に <code>;</code> を足した <code>.*.*=.*;</code> では 5,353 ステップに増える。末尾に必須の文字を足すとマッチが失敗しやすくなり、失敗を確定するための全通り探索が走るからだ。</p>
-        <p>ここで多くの人は「<code>.*</code> を遅延量指定子 <code>.*?</code>（短い取り方から試す版）に変えればよい」と考える。しかし同じ報告によると、<code>.*?</code> にしても <code>;</code> 付きの版は 555 と 5,353 ステップのまま変わらない。試す<em>順番</em>を変えても、失敗する入力では結局全通りを試すことに変わりがないからである。</p>
+        <h3>順番どおりに読むと、往復そのものが隠れる</h3>
+        <p>差を広げるもう一つの仕組みが<strong>ハードウェアプリフェッチ</strong>（アクセスの規則性から、次に要るキャッシュラインを CPU が先回りして読み込む機能）だ。先頭から順番に読むパターンは予測しやすいので、データが要る時点にはすでにキャッシュに届いている状態を作れる。</p>
+        <p>Drepper の Pentium 4 での測定では、作業データが L2 に収まらない大きさでも、順次アクセスなら 1 要素あたりのコストを 9 サイクル程度まで抑えられた。メインメモリ自体の遅延が 200 サイクルを超えるにもかかわらずだ。対してランダムなアクセスではプリフェッチが働かず、450 サイクル以上に達した。</p>
+        <p>直感的には「メモリが遅いのだから、どのアクセスも同じくらい遅い」と思える。しかし実際には、メモリの遅さが表に出るかどうかはアクセスの並び順で決まる。順番どおりのアクセスでは遅延がプリフェッチの裏に隠れ、予測できないアクセスでは毎回むき出しになる。O 記法はこの差を定数倍として捨ててしまうので、O 記法だけを見ても気づけない。</p>
       </section>
 
       <section class="body-section">
-        <h3>戻らないエンジンは何を捨てたのか</h3>
-        <p>正規表現は理論上、状態機械（入力を 1 文字ずつ読んで状態を遷移させる仕組み）に変換でき、その方式なら入力を 1 回なめるだけで判定できる。Go の <code>regexp</code> パッケージはドキュメントで「入力サイズに対して線形時間で動くことを保証する」と明記しており、Google の RE2 も同じ保証を掲げる。Cloudflare も障害後、実行時間の保証がある RE2 か Rust の regex エンジンへの移行を対策に挙げた。</p>
-        <p>ならば全言語がこの方式にすればよいように思える。しかし実際は、この方式では<strong>後方参照</strong>（<code>(\w)\1</code> のように「前に取った文字列と同じもの」を指す記法）と先読み・後読みを扱えない。RE2 の README は「バックトラッキングでしか実装方法が知られていない構文は、原則としてサポートしない」と述べている。Perl 由来の正規表現を引き継いだ JavaScript・Ruby・Python は、この表現力を手放せないためにバックトラッキングを使い続けている。</p>
-        <p>その中間を狙う改良も進んでいる。Ruby 3.2 はメモ化（一度失敗した「入力位置 × パターン上の位置」の組を覚えて再試行しない手法）を導入し、リリースノートによれば実験した正規表現の約 90% が線形時間で終わるようになった。ただし後方参照や先読み・後読みを含むパターン、繰り返し回数の大きい固定回数指定には適用されない。V8 も v8.8 で実験的なバックトラッキングしないエンジンを追加している。</p>
-      </section>
+        <h3>書き込むと、同じラインの「隣人」まで巻き込む</h3>
+        <p>マルチコア CPU では、コアごとに L1・L2 キャッシュを持つ。同じアドレスのコピーが複数のコアに載りうるので、矛盾しないように調停する仕組みが要る。これを<strong>キャッシュコヒーレンシ</strong>と呼び、代表的なプロトコルが MESI だ。各キャッシュラインを Modified・Exclusive・Shared・Invalid の 4 状態で管理し、あるコアが書き込むときは、他のコアが持つ同じラインのコピーを無効化する。Drepper はこの所有権要求（Request For Ownership）を高価な操作として挙げている。</p>
+        <p>問題は、この調停がキャッシュライン単位で行われることだ。コア A がカウンタ <code>x</code> を、コア B が別のカウンタ <code>y</code> を更新しているだけでも、<code>x</code> と <code>y</code> が同じラインに乗っていれば、書き込みのたびに互いのコピーが無効化され、ラインがコア間を行き来する。論理的には何も共有していないのに共有しているかのように遅くなるので、<strong>フォールスシェアリング</strong>と呼ばれる。Linux カーネルのドキュメントは、検出に <code>perf c2c</code> を使う手順と、頻繁に書く変数を専用のラインに隔離する対策を挙げている。</p>
+        <p>対策は、別スレッドが書き込む値の間に詰め物を挟んでラインを分けることだ。Go では <code>golang.org/x/sys/cpu</code> パッケージが、偽共有を避けるための詰め物として <code>CacheLinePad</code> 型を提供している。</p>
+<pre class="code">import "golang.org/x/sys/cpu"
 
-      <section class="body-section">
-        <h3>守り方: 書き換え・長さ制限・タイムアウト</h3>
-        <p>第一の手段は、パターンから曖昧さを除くことだ。<code>^(a+)+$</code> は <code>^a+$</code> に、<code>(\w|\d)+</code> は <code>\w+</code> に書き換えれば区切り方が 1 通りに決まる。Python 3.11 以降と Ruby（Onigmo）は<strong>アトミックグループ</strong> <code>(?&gt;...)</code> と所有量指定子 <code>a++</code> を使える。これらは「一度取った分は手放さない」指定で、内側に戻る分岐点を作らないため、区切り方の全探索が起きない。JavaScript はどちらも未サポートなので書き換えで対処する。</p>
-        <p>次に、正規表現にかける前に入力の長さを制限する。指数的な増加は n に効くので、フォームの文字数上限をサーバー側で先に検査するだけで最悪ケースの時間を大きく縮められる。</p>
-        <p>最後の防壁がタイムアウトだ。Ruby 3.2 以降は全体設定とパターン単位の両方を持つ。設定しないとタイムアウトは無く、マッチが終わるまでそのスレッドは返ってこない。</p>
-        <pre class="code"># 全正規表現に 1 秒の上限（超えると Regexp::TimeoutError）
-Regexp.timeout = 1.0
+// goroutine ごとに 1 つずつ持たせるカウンタ
+type shard struct {
+    n int64
+    _ cpu.CacheLinePad // 次の shard と別ラインに分ける
+}
 
-# 特定のパターンだけ上限を付ける
-EMAIL = Regexp.new(pattern, timeout: 0.1)</pre>
-        <p>Node.js には標準のタイムアウトが無いが、V8 のフラグで「バックトラッキングが多すぎたら線形エンジンに切り替える」挙動を有効にできる。V8 ブログによると切り替えの閾値 <code>--regexp-backtracks-before-fallback</code> のデフォルトは 50,000 回だ。ただし実験的機能で、後方参照・先読み・<code>u</code> や <code>i</code> フラグを含むパターンには効かない。本番投入前に自分のパターンで挙動を確かめる必要がある。</p>
-        <pre class="code">node --enable-experimental-regexp-engine-on-excessive-backtracks app.js</pre>
+var shards [8]shard</pre>
+        <p>詰め物を入れなければ 8 バイトの <code>int64</code> が 1 つのラインに並び、各 goroutine が自分の要素だけを書いていても互いのラインを奪い合う。入れると 1 要素ごとにメモリは増えるが、書き込みが他コアのキャッシュを無効化しなくなる。ただしラインの大きさは「どこでも 64 バイト」とは限らない。Go の <code>x/sys</code> は Apple M1 向けの値を 64 から 128 に修正しており、Rust の crossbeam は x86-64 でも、Intel の空間プリフェッチャが 64 バイトのラインを 2 本組で読み込むことを理由に 128 バイトを仮定している。詰め物の幅は自分で数字を書かず、こうしたライブラリの定義に任せるほうが安全だ。</p>
       </section>
 
       <div class="practical">
         <div class="box-title">💼 実務でどう出会うか</div>
-        <p>典型的なのは、ユーザー入力を検証するバリデーション（メールアドレス・URL・電話番号）と、ログやリクエストを解析する正規表現だ。症状は「特定のリクエストだけが極端に遅い」「CPU 使用率が 1 コアだけ 100% に張り付く」として現れる。Node.js はメインスレッドが 1 本なので、1 件の破滅的マッチでサーバー全体の応答が止まる。ライブラリ由来の脆弱性として依存パッケージのセキュリティアラートに「ReDoS」と書かれて届くことも多い。コードレビューでは、入れ子の量指定子・同じ文字を取り合う選択肢・隣り合う <code>.*</code> を見かけたら、マッチに失敗する長い入力で試すとよい。</p>
+        <p>Web アプリで二重ループの順序に悩む場面は多くないが、同じ原理は形を変えて現れる。画像処理や行列計算でループの内外を入れ替えるだけで速くなるのは、ここで見た行優先の話そのものだ。Go でゴルーチンごとの統計カウンタを配列で持ったのにコアを増やしても伸びないときは、フォールスシェアリングを疑う理由になる。BigQuery や ClickHouse のような列指向 DB が集計に強い理由の一つも、集計に使う列の値だけがディスクやメモリ上で連続しており、運び込んだデータを無駄なく使えることにある。Ruby や JS の「オブジェクトの配列」は各要素がヒープ上に散らばった参照になりやすいため、数値を大量に処理するなら <code>Float64Array</code> のような連続配列に変えると効くことがある。</p>
       </div>
 
       <div class="hands-on">
         <div class="box-title">⌨️ 手を動かす（5 分）</div>
-        <p>入れ子の量指定子で、入力が 2 文字増えるごとに処理時間が約 4 倍になることを Node.js で確かめる。最後に書き換えたパターンと比べる。</p>
-        <pre class="code">node -e '
-for (const n of [22, 24, 26, 28, 30]) {
-  const s = "a".repeat(n) + "!";
-  let t = Date.now(); /^(a+)+$/.test(s);
-  const bad = Date.now() - t;
-  t = Date.now(); /^a+$/.test(s);
-  console.log(n, "入れ子:", bad, "ms", "書換:", Date.now() - t, "ms");
-}'</pre>
-        <p>全体で数秒かかる。「入れ子」の列は n が 2 増えるたびに約 4 倍に伸び（最初の行はエンジンの最適化が効く前なので外れることがある）、「書換」の列はずっと 0〜1 ms のままのはずだ。末尾の <code>!</code> を消してマッチが成功する入力にすると、入れ子版も一瞬で終わる。遅いのはパターンそのものではなく「失敗する入力 × 曖昧なパターン」の組み合わせであることが観察できる。</p>
+        <p>まず自分の Mac が報告するキャッシュラインの大きさを確かめ、次に Node.js で同じ配列を行ごと・列ごとに合計して時間を比べる。配列は 4096×4096 の <code>Float64Array</code>（約 128MB）で、どちらのループも足し算の回数は同じだ。</p>
+<pre class="code">sysctl hw.cachelinesize
+
+cat &gt; /tmp/cache.js &lt;&lt;'EOF'
+const N = 4096;
+const a = new Float64Array(N * N).fill(1);
+function rows() { let s = 0;
+  for (let i = 0; i &lt; N; i++)
+    for (let j = 0; j &lt; N; j++) s += a[i * N + j];
+  return s; }
+function cols() { let s = 0;
+  for (let j = 0; j &lt; N; j++)
+    for (let i = 0; i &lt; N; i++) s += a[i * N + j];
+  return s; }
+for (const f of [rows, cols, rows, cols]) {
+  const t = performance.now(); f();
+  console.log(f.name, (performance.now() - t).toFixed(0), 'ms');
+}
+EOF
+node /tmp/cache.js</pre>
+        <p><code>sysctl</code> は Apple Silicon の Mac なら 128 が返るはずだ（Intel の Mac なら x86 標準の 64 になる）。Node のほうは、<code>cols</code> が <code>rows</code> の数倍の時間を示すはずだ（筆者が Linux 環境で試したときは約 20ms 対約 100ms だった。倍率は CPU によって変わる）。<code>N</code> を 512 程度まで小さくすると配列全体がキャッシュに収まりやすくなり、差が縮まることも確かめてみるとよい。</p>
       </div>
 
       <div class="misconceptions">
         <div class="box-title">🙅 よくある誤解</div>
         <ul>
-          <li><span class="wrong">正規表現が遅くなるのは入力が長いときだけだ</span> — 破滅的バックトラッキングは 30 文字程度の入力でも数十秒〜数分の時間を食う。時間を決めるのは入力長よりもパターンの曖昧さで、増え方が指数的なので短い入力でも危険になる。</li>
-          <li><span class="wrong"><code>.*</code> を <code>.*?</code> にすれば回避できる</span> — 遅延量指定子は試す順番を変えるだけで、マッチに失敗する入力では結局全通りを試す。Cloudflare の検証でも失敗ケースのステップ数は変わらなかった。</li>
-          <li><span class="wrong">Go に移植すれば同じ正規表現がそのまま速く動く</span> — Go の <code>regexp</code> は RE2 構文で、後方参照や先読み・後読みを受け付けない。こうしたパターンは <code>regexp.Compile</code> がエラーを返すので、書き換えが必要になる。</li>
+          <li><span class="wrong">計算量が同じなら、実行時間もほぼ同じになる</span> — O 記法はキャッシュミスの回数の差を定数倍として捨てる。同じ O(n²) でも、メモリを読む順序次第で数倍の差が出る。</li>
+          <li><span class="wrong">スレッドごとに別の変数を書いていれば、互いに干渉しない</span> — キャッシュの調停はライン単位なので、別の変数でも同じキャッシュラインに載っていれば、書き込みのたびに相手のコピーが無効化される。</li>
+          <li><span class="wrong">キャッシュラインはどの CPU でも 64 バイトだ</span> — x86 では 64 バイトが標準だが、macOS は Apple Silicon で 128 を報告し、隣接ラインの先読みを考えて 128 バイトを仮定するライブラリもある。</li>
         </ul>
       </div>
 
       <div class="glossary">
         <div class="box-title">📖 用語ミニ辞典</div>
         <dl>
-          <dt>バックトラッキング</dt><dd>選択肢を 1 つ選んで進み、行き詰まったら分岐点に戻って別の選択を試すマッチング方式。</dd>
-          <dt>量指定子</dt><dd><code>*</code>・<code>+</code>・<code>{m,n}</code> など、直前の要素を何回繰り返すかを指定する記号。</dd>
-          <dt>破滅的バックトラッキング</dt><dd>曖昧なパターンと失敗する入力の組み合わせで、試行回数が入力長に対し指数的に増える現象。</dd>
-          <dt>ReDoS</dt><dd>破滅的バックトラッキングを意図的に起こさせて CPU を占有させるサービス妨害攻撃。</dd>
-          <dt>RE2</dt><dd>入力長に比例する実行時間を保証する Google の正規表現ライブラリ。後方参照と先読み・後読みは非対応。</dd>
-          <dt>アトミックグループ</dt><dd><code>(?&gt;...)</code>。一度マッチした内容を手放さず、内側への後戻りを禁止するグループ。</dd>
+          <dt>CPU キャッシュ</dt><dd>CPU の近くに置かれた小容量・高速のメモリ。L1・L2・L3 と階層になっている。</dd>
+          <dt>キャッシュライン</dt><dd>キャッシュとメモリの間でやり取りするデータの固定長の塊。x86 では 64 バイトが標準。</dd>
+          <dt>空間的局所性</dt><dd>直前に触ったデータの近くを次に触りやすいというプログラムの性質。</dd>
+          <dt>ハードウェアプリフェッチ</dt><dd>アクセスの規則性から、次に要るラインを CPU が先回りして読み込む機能。</dd>
+          <dt>キャッシュコヒーレンシ</dt><dd>複数コアのキャッシュに載った同じデータのコピーを矛盾させない仕組み。MESI が代表例。</dd>
+          <dt>フォールスシェアリング</dt><dd>無関係な変数が同じキャッシュラインに載っているせいで、別コアの書き込みが互いを遅くする現象。</dd>
         </dl>
       </div>
 
       <div class="further-reading">
         <div class="box-title">🔗 もっと深く</div>
         <ul>
-          <li><a href="https://blog.cloudflare.com/details-of-the-cloudflare-outage-on-july-2-2019/">Details of the Cloudflare outage on July 2, 2019</a> — 実際の障害の正規表現と、ステップ数を数えながらバックトラッキングを説明する事後報告。</li>
-          <li><a href="https://github.com/google/re2/blob/main/README.md">RE2 README</a> — 線形時間保証と、そのために後方参照・先読みを捨てた設計判断。</li>
-          <li><a href="https://v8.dev/blog/non-backtracking-regexp">An additional non-backtracking RegExp engine (V8 blog)</a> — V8 の線形エンジンへのフォールバックの仕組みと、使えないパターンの条件。</li>
-          <li><a href="https://www.ruby-lang.org/en/news/2022/12/25/ruby-3-2-0-released/">Ruby 3.2.0 Released</a> — メモ化による ReDoS 対策と <code>Regexp.timeout</code> の導入、適用されないパターンの説明。</li>
+          <li><a href="https://lwn.net/Articles/252125/">Memory part 2: CPU caches - LWN.net</a> — Drepper の古典的解説のキャッシュ編。キャッシュライン、順次・ランダムアクセスの測定、MESI まで本記事の数字の出典。</li>
+          <li><a href="https://docs.kernel.org/kernel-hacking/false-sharing.html">False Sharing - The Linux Kernel documentation</a> — フォールスシェアリングの発生条件と、<code>perf c2c</code> による検出、構造体の並べ替えなどの対策がまとまっている。</li>
+          <li><a href="https://docs.rs/crossbeam-utils/latest/crossbeam_utils/struct.CachePadded.html">CachePadded - crossbeam_utils</a> — アーキテクチャごとに仮定するライン長と、x86-64 で 128 バイトを選んだ理由が書かれている。</li>
         </ul>
       </div>
     </article>
@@ -153,6 +156,11 @@ for (const n of [22, 24, 26, 28, 30]) {
     <!-- recent:start -->
     <section class="section recent-articles">
       <div class="section-title">最近の記事</div>
+      <div class="card">
+        <h3><a href="archive/2026-10-21.html">たった 1 行の正規表現なのに、なぜ CPU が 100% に張り付くのか？</a></h3>
+        <div class="summary">JavaScript・Ruby・Python の正規表現エンジンは失敗すると分岐点に戻って別の道を試すバックトラッキング方式で、(a+)+ のような曖昧なパターンはマッチしない入力に対して区切り方を全通り試すため 1 文字ごとに時間が倍になる。Cloudflare の障害事例、Go/RE2 の線形時間保証と後方参照の放棄、書き換え・アトミックグループ・Regexp.timeout による対策も扱う。</div>
+        <div class="meta"><span class="tag tag-lang">Lang</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-21</span></div>
+      </div>
       <div class="card">
         <h3><a href="archive/2026-10-20.html">同じファイルを 2 人で編集したのに、なぜ git はほとんど自動でマージできるのか？</a></h3>
         <div class="summary">git のマージは 2 つのブランチを比べるのではなく、共通祖先（マージベース）を加えた 3 版を比べて「どちらが変えたか」を判定する。片側だけの変更は自動で採用し、両側が同じ領域（隣接行を含む）を変えた所だけがコンフリクトになる。diff3/zdiff3 の読み方、インデックスのステージ、rerere、意味上の衝突も扱う。</div>
@@ -167,11 +175,6 @@ for (const n of [22, 24, 26, 28, 30]) {
         <h3><a href="archive/2026-10-18.html">同じイメージからコンテナを 10 個起動したのに、なぜディスクは 10 倍にならないのか？</a></h3>
         <div class="summary">コンテナは共有の読み取り専用イメージレイヤーに薄い書き込み層を OverlayFS で重ねるだけなのでディスクが増えない。初回書き込みはファイル丸ごとの copy-up、削除は whiteout になるため、別レイヤーで消してもイメージは縮まない。ボリュームと ephemeral-storage も扱う。</div>
         <div class="meta"><span class="tag tag-container">Container</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-18</span></div>
-      </div>
-      <div class="card">
-        <h3><a href="archive/2026-10-17.html">回線は 1Gbps あるのに、なぜ新しい接続の最初のダウンロードは遅いのか？</a></h3>
-        <div class="summary">TCP は輻輳ウィンドウを約 14.6KB から往復ごとに倍へ増やすスロースタートを行うため、短い転送の所要時間は回線の太さではなく RTT × 往復回数で決まる。CUBIC と BBR の違い、アイドル後のリセットと initcwnd も扱う。</div>
-        <div class="meta"><span class="tag tag-network">Network</span><span>🌿 基礎</span><span>⏱ 約 8 分</span><span>2026-10-17</span></div>
       </div>
       <div class="recent-more"><a href="archive/">アーカイブですべて見る →</a></div>
     </section>

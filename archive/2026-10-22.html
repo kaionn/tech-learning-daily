@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tech Learning Daily — 同じ二重ループなのに、なぜ i と j を入れ替えるだけで何倍も遅くなるのか？</title>
+  <link rel="stylesheet" href="../style.css">
+  <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="../feed.xml">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Tech Learning Daily</h1>
+      <div class="date">2026-10-22 (Thu) — 第 97 号</div>
+      <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
+    </header>
+
+    <article class="article">
+      <div class="meta-bar">
+        <span class="tag tag-perf">Perf</span>
+        <span class="difficulty">🌿 基礎</span>
+        <span class="read-time">⏱ 約 7 分</span>
+      </div>
+      <h2 class="article-title">同じ二重ループなのに、なぜ i と j を入れ替えるだけで何倍も遅くなるのか？</h2>
+      <p class="lead">計算量の授業では、<code>for i</code> の中に <code>for j</code> を書けば O(n²)、ループの順序を入れ替えても O(n²) のままだと習った。ところが同じ配列の全要素を足すだけのコードでも、行ごとに回すか列ごとに回すかで実行時間が数倍変わる。足し算の回数はまったく同じなのに、時間はどこへ消えているのだろうか。</p>
+
+      <div class="tldr">
+        <div class="box-title">🎯 3 行まとめ</div>
+        <ul>
+          <li>CPU はメモリを 1 バイトずつではなく、キャッシュラインと呼ぶ 64 バイト前後の塊単位でキャッシュに運ぶ。</li>
+          <li>メモリ上で隣り合うデータを順に読むコードは、運ばれた塊を使い切れて先読みも効くが、飛び飛びに読むコードは塊のほとんどを捨ててメモリを待ち続ける。</li>
+          <li>書き込みも塊単位で管理されるため、別々の変数でも同じキャッシュラインに乗っていると、別コアからの書き込みが互いの足を引っ張る（フォールスシェアリング）。</li>
+        </ul>
+      </div>
+
+      <section class="body-section">
+        <h3>CPU はメモリを直接読んでいない</h3>
+        <p>CPU とメインメモリ（DRAM）の間には速度差がある。Ulrich Drepper の解説「What Every Programmer Should Know About Memory」が Intel の資料から引いている Pentium M の数字では、レジスタへのアクセスが 1 サイクル以下、L1 データキャッシュが約 3 サイクル、L2 が約 14 サイクルなのに対し、メインメモリは約 240 サイクルかかる。世代によって数字は変わるが、メインメモリだけが桁違いに遠いという構図は変わっていない。</p>
+        <p>この差を埋めるのが <strong>CPU キャッシュ</strong>（CPU の近くに置かれた、小さいが高速なメモリ）だ。CPU がデータを要求すると、まず L1、なければ L2、さらに L3 と近い順に探し、どこにも無いとき（キャッシュミス）に初めてメインメモリまで取りに行く。ミスした読み込みは数百サイクル待たされ、その間 CPU は計算を進められないことが多い。プログラムの速さは、命令の数だけでなく「何回メモリまで取りに行かせたか」でも決まる。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>1 バイト頼むと、64 バイトまとめて届く</h3>
+        <p>キャッシュはデータを 1 バイト単位ではなく、<strong>キャッシュライン</strong>（キャッシュとメモリの間でやり取りする固定長の塊）単位で管理する。Drepper によれば、初期のキャッシュは 32 バイトだったが現在は 64 バイトが標準だ。8 バイトの <code>double</code> を 1 つ読むと、その前後を含む 64 バイト、つまり <code>double</code> 8 個分がまとめてキャッシュに載る。</p>
+        <p>まとめて運ぶのは、プログラムが直前に触ったデータの近くを次に触ることが多いからだ。この性質を<strong>空間的局所性</strong>と呼ぶ。配列を先頭から順に読むコードなら、1 回のミスで運ばれた 8 個を続けてすべて使えるので、ミスは 8 要素に 1 回で済む。</p>
+        <p>ここで冒頭の二重ループに戻る。C・Go・JS の型付き配列などでは、2 次元配列は行を端から順に並べた 1 本の連続領域として置かれることが多い（行優先）。4096×4096 の <code>double</code> 配列なら、1 行は 4096×8＝32KB だ。</p>
+<pre class="diagram">メモリ上の並び（行優先。00 は a[0][0]、1 マス 8B）
+┌──┬──┬──┬──┬──┬──┬──┬──┐
+│00│01│02│03│04│05│06│07│ ← 1 ライン
+└──┴──┴──┴──┴──┴──┴──┴──┘
+  行 0 の続き … 32KB 先から行 1 が始まる
+
+行ごと (a[i][j], j が内側):
+ 00▶01▶02▶…▶07  1 回のミスで 8 個使う
+
+列ごと (a[i][j], i が内側):
+ 00 ──32KB──▶ 10 ──32KB──▶ 20
+ 毎回別のラインを運び、1 個だけ使って
+ 残り 7 個は捨てる</pre>
+        <p>列ごとに回すと、内側のループが 1 歩進むたびに 32KB 先へ飛ぶ。毎回別のキャッシュラインを運び込み、そのうち 8 バイトしか使わない。しかも 4096 行ぶんのラインを保持しきれないので、次の列で同じラインに戻ってきた頃には追い出されていることが多い。足し算の回数は同じでも、メモリまで取りに行く回数がおよそ 8 倍に膨らむ。</p>
+      </section>
+
+      <div class="analogy">
+        <div class="box-title">🍱 たとえるなら</div>
+        <p>閉架式の図書館で本を頼むと、司書は書庫まで往復して、頼んだ 1 冊だけでなく同じ棚の 8 冊をまとめて机に運んでくる。棚に並んだ順に読み進める人は、8 冊読み終わるまで司書を待たない。一方、各棚の 1 冊目だけを順に読みたい人は、毎回往復を待ったうえで、運ばれた残り 7 冊を読まずに返すことになる。読む冊数は同じでも、待ち時間の合計は往復の回数で決まる。</p>
+      </div>
+
+      <section class="body-section">
+        <h3>順番どおりに読むと、往復そのものが隠れる</h3>
+        <p>差を広げるもう一つの仕組みが<strong>ハードウェアプリフェッチ</strong>（アクセスの規則性から、次に要るキャッシュラインを CPU が先回りして読み込む機能）だ。先頭から順番に読むパターンは予測しやすいので、データが要る時点にはすでにキャッシュに届いている状態を作れる。</p>
+        <p>Drepper の Pentium 4 での測定では、作業データが L2 に収まらない大きさでも、順次アクセスなら 1 要素あたりのコストを 9 サイクル程度まで抑えられた。メインメモリ自体の遅延が 200 サイクルを超えるにもかかわらずだ。対してランダムなアクセスではプリフェッチが働かず、450 サイクル以上に達した。</p>
+        <p>直感的には「メモリが遅いのだから、どのアクセスも同じくらい遅い」と思える。しかし実際には、メモリの遅さが表に出るかどうかはアクセスの並び順で決まる。順番どおりのアクセスでは遅延がプリフェッチの裏に隠れ、予測できないアクセスでは毎回むき出しになる。O 記法はこの差を定数倍として捨ててしまうので、O 記法だけを見ても気づけない。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>書き込むと、同じラインの「隣人」まで巻き込む</h3>
+        <p>マルチコア CPU では、コアごとに L1・L2 キャッシュを持つ。同じアドレスのコピーが複数のコアに載りうるので、矛盾しないように調停する仕組みが要る。これを<strong>キャッシュコヒーレンシ</strong>と呼び、代表的なプロトコルが MESI だ。各キャッシュラインを Modified・Exclusive・Shared・Invalid の 4 状態で管理し、あるコアが書き込むときは、他のコアが持つ同じラインのコピーを無効化する。Drepper はこの所有権要求（Request For Ownership）を高価な操作として挙げている。</p>
+        <p>問題は、この調停がキャッシュライン単位で行われることだ。コア A がカウンタ <code>x</code> を、コア B が別のカウンタ <code>y</code> を更新しているだけでも、<code>x</code> と <code>y</code> が同じラインに乗っていれば、書き込みのたびに互いのコピーが無効化され、ラインがコア間を行き来する。論理的には何も共有していないのに共有しているかのように遅くなるので、<strong>フォールスシェアリング</strong>と呼ばれる。Linux カーネルのドキュメントは、検出に <code>perf c2c</code> を使う手順と、頻繁に書く変数を専用のラインに隔離する対策を挙げている。</p>
+        <p>対策は、別スレッドが書き込む値の間に詰め物を挟んでラインを分けることだ。Go では <code>golang.org/x/sys/cpu</code> パッケージが、偽共有を避けるための詰め物として <code>CacheLinePad</code> 型を提供している。</p>
+<pre class="code">import "golang.org/x/sys/cpu"
+
+// goroutine ごとに 1 つずつ持たせるカウンタ
+type shard struct {
+    n int64
+    _ cpu.CacheLinePad // 次の shard と別ラインに分ける
+}
+
+var shards [8]shard</pre>
+        <p>詰め物を入れなければ 8 バイトの <code>int64</code> が 1 つのラインに並び、各 goroutine が自分の要素だけを書いていても互いのラインを奪い合う。入れると 1 要素ごとにメモリは増えるが、書き込みが他コアのキャッシュを無効化しなくなる。ただしラインの大きさは「どこでも 64 バイト」とは限らない。Go の <code>x/sys</code> は Apple M1 向けの値を 64 から 128 に修正しており、Rust の crossbeam は x86-64 でも、Intel の空間プリフェッチャが 64 バイトのラインを 2 本組で読み込むことを理由に 128 バイトを仮定している。詰め物の幅は自分で数字を書かず、こうしたライブラリの定義に任せるほうが安全だ。</p>
+      </section>
+
+      <div class="practical">
+        <div class="box-title">💼 実務でどう出会うか</div>
+        <p>Web アプリで二重ループの順序に悩む場面は多くないが、同じ原理は形を変えて現れる。画像処理や行列計算でループの内外を入れ替えるだけで速くなるのは、ここで見た行優先の話そのものだ。Go でゴルーチンごとの統計カウンタを配列で持ったのにコアを増やしても伸びないときは、フォールスシェアリングを疑う理由になる。BigQuery や ClickHouse のような列指向 DB が集計に強い理由の一つも、集計に使う列の値だけがディスクやメモリ上で連続しており、運び込んだデータを無駄なく使えることにある。Ruby や JS の「オブジェクトの配列」は各要素がヒープ上に散らばった参照になりやすいため、数値を大量に処理するなら <code>Float64Array</code> のような連続配列に変えると効くことがある。</p>
+      </div>
+
+      <div class="hands-on">
+        <div class="box-title">⌨️ 手を動かす（5 分）</div>
+        <p>まず自分の Mac が報告するキャッシュラインの大きさを確かめ、次に Node.js で同じ配列を行ごと・列ごとに合計して時間を比べる。配列は 4096×4096 の <code>Float64Array</code>（約 128MB）で、どちらのループも足し算の回数は同じだ。</p>
+<pre class="code">sysctl hw.cachelinesize
+
+cat &gt; /tmp/cache.js &lt;&lt;'EOF'
+const N = 4096;
+const a = new Float64Array(N * N).fill(1);
+function rows() { let s = 0;
+  for (let i = 0; i &lt; N; i++)
+    for (let j = 0; j &lt; N; j++) s += a[i * N + j];
+  return s; }
+function cols() { let s = 0;
+  for (let j = 0; j &lt; N; j++)
+    for (let i = 0; i &lt; N; i++) s += a[i * N + j];
+  return s; }
+for (const f of [rows, cols, rows, cols]) {
+  const t = performance.now(); f();
+  console.log(f.name, (performance.now() - t).toFixed(0), 'ms');
+}
+EOF
+node /tmp/cache.js</pre>
+        <p><code>sysctl</code> は Apple Silicon の Mac なら 128 が返るはずだ（Intel の Mac なら x86 標準の 64 になる）。Node のほうは、<code>cols</code> が <code>rows</code> の数倍の時間を示すはずだ（筆者が Linux 環境で試したときは約 20ms 対約 100ms だった。倍率は CPU によって変わる）。<code>N</code> を 512 程度まで小さくすると配列全体がキャッシュに収まりやすくなり、差が縮まることも確かめてみるとよい。</p>
+      </div>
+
+      <div class="misconceptions">
+        <div class="box-title">🙅 よくある誤解</div>
+        <ul>
+          <li><span class="wrong">計算量が同じなら、実行時間もほぼ同じになる</span> — O 記法はキャッシュミスの回数の差を定数倍として捨てる。同じ O(n²) でも、メモリを読む順序次第で数倍の差が出る。</li>
+          <li><span class="wrong">スレッドごとに別の変数を書いていれば、互いに干渉しない</span> — キャッシュの調停はライン単位なので、別の変数でも同じキャッシュラインに載っていれば、書き込みのたびに相手のコピーが無効化される。</li>
+          <li><span class="wrong">キャッシュラインはどの CPU でも 64 バイトだ</span> — x86 では 64 バイトが標準だが、macOS は Apple Silicon で 128 を報告し、隣接ラインの先読みを考えて 128 バイトを仮定するライブラリもある。</li>
+        </ul>
+      </div>
+
+      <div class="glossary">
+        <div class="box-title">📖 用語ミニ辞典</div>
+        <dl>
+          <dt>CPU キャッシュ</dt><dd>CPU の近くに置かれた小容量・高速のメモリ。L1・L2・L3 と階層になっている。</dd>
+          <dt>キャッシュライン</dt><dd>キャッシュとメモリの間でやり取りするデータの固定長の塊。x86 では 64 バイトが標準。</dd>
+          <dt>空間的局所性</dt><dd>直前に触ったデータの近くを次に触りやすいというプログラムの性質。</dd>
+          <dt>ハードウェアプリフェッチ</dt><dd>アクセスの規則性から、次に要るラインを CPU が先回りして読み込む機能。</dd>
+          <dt>キャッシュコヒーレンシ</dt><dd>複数コアのキャッシュに載った同じデータのコピーを矛盾させない仕組み。MESI が代表例。</dd>
+          <dt>フォールスシェアリング</dt><dd>無関係な変数が同じキャッシュラインに載っているせいで、別コアの書き込みが互いを遅くする現象。</dd>
+        </dl>
+      </div>
+
+      <div class="further-reading">
+        <div class="box-title">🔗 もっと深く</div>
+        <ul>
+          <li><a href="https://lwn.net/Articles/252125/">Memory part 2: CPU caches - LWN.net</a> — Drepper の古典的解説のキャッシュ編。キャッシュライン、順次・ランダムアクセスの測定、MESI まで本記事の数字の出典。</li>
+          <li><a href="https://docs.kernel.org/kernel-hacking/false-sharing.html">False Sharing - The Linux Kernel documentation</a> — フォールスシェアリングの発生条件と、<code>perf c2c</code> による検出、構造体の並べ替えなどの対策がまとまっている。</li>
+          <li><a href="https://docs.rs/crossbeam-utils/latest/crossbeam_utils/struct.CachePadded.html">CachePadded - crossbeam_utils</a> — アーキテクチャごとに仮定するライン長と、x86-64 で 128 バイトを選んだ理由が書かれている。</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- recent:start -->
+    <!-- recent:end -->
+
+    <footer>
+      <p>Generated by Claude Code (GitHub Actions)</p>
+      <a href="./" class="archive-link">過去の記事</a>
+    </footer>
+  </div>
+</body>
+</html>
