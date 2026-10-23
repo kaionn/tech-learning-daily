@@ -34,9 +34,9 @@
         <button class="chip" data-cat="network">Network <span class="chip-count">14</span></button>
         <button class="chip" data-cat="db">DB <span class="chip-count">12</span></button>
         <button class="chip" data-cat="arch">Arch <span class="chip-count">9</span></button>
+        <button class="chip" data-cat="infra">Infra <span class="chip-count">8</span></button>
         <button class="chip" data-cat="security">Security <span class="chip-count">8</span></button>
         <button class="chip" data-cat="ai">AI <span class="chip-count">7</span></button>
-        <button class="chip" data-cat="infra">Infra <span class="chip-count">7</span></button>
         <button class="chip" data-cat="lang">Lang <span class="chip-count">7</span></button>
         <button class="chip" data-cat="dev" data-overflow="1" hidden>Dev <span class="chip-count">5</span></button>
         <button class="chip" data-cat="perf" data-overflow="1" hidden>Perf <span class="chip-count">5</span></button>
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-10">
       <div class="section-title">2026 年 10 月 <span class="count"></span></div>
+      <div class="card" data-cat="infra" data-diff="基礎"
+           data-search="スレッドは数本しかないのに、なぜ nginx は何千もの接続を同時に捌けるのか？ 1 接続 1 スレッドの方式は何もしていない接続のためにもスレッドを抱え続けて頭打ちになる。epoll（macos では kqueue）は監視する fd をカーネルに一度登録し、準備完了の fd だけを返すので、1 本のイベントループが大量の接続を順に捌ける。select の fd_setsize 制限、レベル/エッジトリガ、go の netpoller、nginx の worker_connections と worker_rlimit_nofile も扱う。" data-terms="ブロッキング I/O / ノンブロッキング I/O / I/O 多重化 / epoll / エッジトリガ / レベルトリガ / イベントループ">
+        <h3><a href="2026-10-24.html">スレッドは数本しかないのに、なぜ nginx は何千もの接続を同時に捌けるのか？</a></h3>
+        <div class="summary">1 接続 1 スレッドの方式は何もしていない接続のためにもスレッドを抱え続けて頭打ちになる。epoll（macOS では kqueue）は監視する fd をカーネルに一度登録し、準備完了の fd だけを返すので、1 本のイベントループが大量の接続を順に捌ける。select の FD_SETSIZE 制限、レベル/エッジトリガ、Go の netpoller、nginx の worker_connections と worker_rlimit_nofile も扱う。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-infra">Infra</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-24</span></div>
+      </div>
       <div class="card" data-cat="container" data-diff="基礎"
            data-search="api.example.com を 1 回引いただけなのに、なぜ pod は dns に 4 回も問い合わせるのか？ kubernetes の kubelet は pod の resolv.conf に search ドメイン 3 つと ndots:5 を書くため、点が 5 個未満の外部ドメインは search リストを順に試して nxdomain を受けてから本来の名前で引かれる。a/aaaa の並行問い合わせ、udp 落ち時の 5 秒タイムアウト、末尾ドット fqdn、dnsconfig での ndots 調整とその副作用、nodelocal dnscache を扱う。" data-terms="スタブリゾルバ / search リスト / ndots / FQDN / NXDOMAIN / NodeLocal DNSCache">
         <h3><a href="2026-10-23.html">api.example.com を 1 回引いただけなのに、なぜ Pod は DNS に 4 回も問い合わせるのか？</a></h3>

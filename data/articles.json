@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-10-24.html",
+    "date": "2026-10-24",
+    "title": "スレッドは数本しかないのに、なぜ nginx は何千もの接続を同時に捌けるのか？",
+    "summary": "1 接続 1 スレッドの方式は何もしていない接続のためにもスレッドを抱え続けて頭打ちになる。epoll（macOS では kqueue）は監視する fd をカーネルに一度登録し、準備完了の fd だけを返すので、1 本のイベントループが大量の接続を順に捌ける。select の FD_SETSIZE 制限、レベル/エッジトリガ、Go の netpoller、nginx の worker_connections と worker_rlimit_nofile も扱う。",
+    "category": "infra",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": ["ブロッキング I/O", "ノンブロッキング I/O", "I/O 多重化", "epoll", "エッジトリガ / レベルトリガ", "イベントループ"]
+  },
+  {
     "file": "2026-10-23.html",
     "date": "2026-10-23",
     "title": "api.example.com を 1 回引いただけなのに、なぜ Pod は DNS に 4 回も問い合わせるのか？",

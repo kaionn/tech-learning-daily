@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tech Learning Daily — スレッドは数本しかないのに、なぜ nginx は何千もの接続を同時に捌けるのか？</title>
+  <link rel="stylesheet" href="../style.css">
+  <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="../feed.xml">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Tech Learning Daily</h1>
+      <div class="date">2026-10-24 (Sat) — 第 99 号</div>
+      <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
+    </header>
+
+    <article class="article">
+      <div class="meta-bar">
+        <span class="tag tag-infra">Infra</span>
+        <span class="difficulty">🌿 基礎</span>
+        <span class="read-time">⏱ 約 7 分</span>
+      </div>
+      <h2 class="article-title">スレッドは数本しかないのに、なぜ nginx は何千もの接続を同時に捌けるのか？</h2>
+      <p class="lead">Go で書いた API サーバーの <code>conn.Read()</code> は、データが届くまでその場で待つ「ブロックする」呼び出しに見える。それなら接続の数だけスレッドが要りそうだが、nginx は多くの構成で CPU コア数ぶんのワーカープロセスだけで何千もの接続を抱え、Node.js に至ってはメインスレッドが 1 本だ。待っている接続が何千あっても、なぜ少数のスレッドで足りるのだろうか。</p>
+
+      <div class="tldr">
+        <div class="box-title">🎯 3 行まとめ</div>
+        <ul>
+          <li>1 接続に 1 スレッドを貼り付ける方式は、何もしていない接続のためにもスレッドを抱え続けるので、接続数が増えるとメモリとコンテキストスイッチで頭打ちになる。</li>
+          <li><code>epoll</code>（macOS では <code>kqueue</code>）は監視したい fd をカーネルに一度登録しておき、「いま読み書きできる fd」だけをまとめて返すので、1 スレッドが大量の接続を順番に捌ける。</li>
+          <li>nginx・Node.js・Go の netpoller はどれもこの仕組みの上にあり、同じ理由で「1 本のループの中で重い処理をすると全接続が止まる」という弱点も共有する。</li>
+        </ul>
+      </div>
+
+      <section class="body-section">
+        <h3>1 接続 1 スレッドという素朴なモデル</h3>
+        <p>ソケットの <code>read()</code> は、デフォルトでは<strong>ブロッキング I/O</strong>（データが届くまで呼び出したスレッドを眠らせて待たせる I/O）だ。この前提で素直にサーバーを書くと、接続を 1 本受け付けるたびにスレッドを 1 本作り、そのスレッドに読み書きを任せる形になる。コードは上から下へ読めて書きやすい。</p>
+        <p>問題は、HTTP の keep-alive やスマホの遅い回線のせいで、接続の大半は「つながっているが何も送ってこない」時間が長いことだ。待っている間もスレッドはスタックなどのメモリを握ったまま消えない。nginx のエンジニアリングブログは、この方式を「アクティブな HTTP 接続 1 本ごとに専用のプロセスかスレッドが必要」で重いと書き、I/O が多い状況ではコンテキストスイッチ（CPU が実行するスレッドを切り替える処理）が増えて性能が大きく落ちると説明している。1 台で 1 万接続を捌く難しさは、「C10K 問題」と呼ばれてきた。</p>
+        <p>解決の方向ははっきりしている。「待つ」ことをスレッドに任せるのをやめ、待っている接続の一覧をどこか 1 か所で監視して、準備ができた接続にだけスレッドを向けることだ。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>ノンブロッキングにするだけでは足りない</h3>
+        <p>ソケットを<strong>ノンブロッキング</strong>モードにすると、データが無いときの <code>read()</code> は眠らずに即座に <code>EAGAIN</code>（今は無い、あとで試せ）というエラーで返る。これで 1 スレッドが複数の接続を扱えそうに見える。しかし全接続に順番に <code>read()</code> を試すループを回すと、何も届いていない間も CPU を空回しし続けることになる。</p>
+        <p>欲しいのは「この fd の中で、読み書きできる状態になったものを教えて、それまでは眠らせて」とカーネルに頼む仕組みで、これを <strong>I/O 多重化</strong>と呼ぶ。fd（ファイルディスクリプタ）はプロセスが開いたファイルやソケットを指す整数の番号だ。最古の API である <code>select()</code> は、監視したい fd をビットの並び（fd_set）にして渡し、カーネルがその中から準備完了のものを探して返す。</p>
+        <p><code>select()</code> には 2 つの癖がある。1 つは、man ページが明言するとおり <code>FD_SETSIZE</code>（1024）未満の番号の fd しか監視できないこと。もう 1 つは、渡した fd_set が「準備完了の fd だけ」に上書きされて返るので、ループのたびに監視対象を全部詰め直して渡し直す必要があることだ。監視する接続が増えるほど、毎回の受け渡しと走査が重くなる。man ページ自身が「現代のアプリケーションは代わりに <code>poll(2)</code> か <code>epoll(7)</code> を使うべき」と書いている。<code>poll()</code> は 1024 の制限を取り除いたが、毎回全リストを渡す構造は変わらない。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>epoll: 登録は一度、返すのは準備できた分だけ</h3>
+        <p>Linux の <code>epoll</code> は、監視の一覧をカーネル側に持たせることでこの往復をやめた。<code>epoll_create1()</code> で epoll インスタンスを作り、<code>epoll_ctl()</code> で監視したい fd を一度だけ<strong>インタレストリスト</strong>（監視対象の登録簿）に加える。以後、パケットが届くなどの I/O が起きるたびに、カーネル自身がその fd を<strong>レディリスト</strong>（準備完了の fd の一覧）に載せていく。</p>
+<pre class="diagram">1 接続 1 スレッド
+ conn1 ── thread1 (read で寝ている)
+ conn2 ── thread2 (read で寝ている)
+ connN ── threadN (read で寝ている)
+
+epoll（1 スレッド）
+┌─ kernel ─────────────────────┐
+│ interest list (epoll_ctl)    │
+│  conn1  conn2  ...  connN    │
+│          │ data arrives      │
+│          ▼                   │
+│ ready list: conn2            │
+└──────────┬───────────────────┘
+           │ epoll_wait() が返す
+           ▼
+ イベントループ: conn2 だけ read</pre>
+        <p>アプリ側のスレッドは <code>epoll_wait()</code> を呼んで眠り、レディリストに何か載ると起こされて、載っていた fd だけを受け取る。1 万接続を監視していても、届いたのが 3 本なら返ってくるのは 3 本だ。監視対象を毎回渡し直す必要がないので、待っているだけの接続はほとんど費用をかけずに置いておける。この「眠って、起こされて、準備できた fd を順に処理して、また眠る」繰り返しが<strong>イベントループ</strong>の正体だ。BSD 系と macOS では <code>kqueue</code> が同じ役割を担う。</p>
+      </section>
+
+      <div class="analogy">
+        <div class="box-title">🍱 たとえるなら</div>
+        <p>病棟の看護師だ。<code>select()</code> は、夜勤の看護師が毎回全病室を一部屋ずつ回って「何かありますか」と聞く巡回に近い。患者が増えるほど一周が長くなる。<code>epoll</code> はナースコールで、入院時に各ベッドへボタンを付けておけば（<code>epoll_ctl</code>）、看護師はナースステーションで待ち（<code>epoll_wait</code>）、ランプが点いた部屋（レディリスト）にだけ向かう。病床が倍になっても、呼ばれない部屋に足を運ぶ手間は増えない。</p>
+      </div>
+
+      <section class="body-section">
+        <h3>レベルトリガとエッジトリガ</h3>
+        <p><code>epoll</code> の通知には 2 つのモードがある。デフォルトの<strong>レベルトリガ</strong>は「読めるデータが残っている間は毎回通知する」方式で、man ページは「単に速い <code>poll</code>」と説明している。データを半分だけ読んで次の <code>epoll_wait()</code> を呼んでも、残りがあればまた通知されるので取りこぼしは起きにくい。</p>
+        <p><code>EPOLLET</code> フラグを付けると<strong>エッジトリガ</strong>になり、通知は「状態が変わったとき」だけになる。届いたデータの一部しか読まずに次の <code>epoll_wait()</code> を呼ぶと、新しいデータが来ない限り二度と起こされず、残ったデータが宙に浮く。そのため man ページは、fd をノンブロッキングにし、<code>read()</code> が <code>EAGAIN</code> を返すまで読み切ってから次を待つ使い方を推奨している。</p>
+<pre class="code">struct epoll_event ev;
+ev.events = EPOLLIN | EPOLLET; /* EPOLLET を外せばレベルトリガ */
+ev.data.fd = conn_fd;
+epoll_ctl(epfd, EPOLL_CTL_ADD, conn_fd, &amp;ev);</pre>
+        <p>ここで lead の疑問に戻る。Go の <code>conn.Read()</code> はブロックしているように見えるが、ランタイム内部では fd はノンブロッキングで、エッジトリガで <code>epoll</code>（macOS では <code>kqueue</code>）に登録されている。<code>read()</code> が <code>EAGAIN</code> を返すと、ランタイムはスレッドではなく goroutine だけを止めて脇に置き、その OS スレッドで別の goroutine を走らせる。<strong>netpoller</strong> と呼ばれるこの部品が準備完了の通知を受けると、止めていた goroutine を再開させる。「ブロックする」のは goroutine であって OS スレッドではない、というのが Go の書きやすさと接続数を両立させている仕掛けだ。Node.js の libuv も同じ API を使っている。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>nginx の設定で効くところ</h3>
+        <p>nginx はこの設計を設定にそのまま映している。<code>worker_processes</code> はイベントループを回すワーカープロセスの数で、デフォルトは 1。<code>auto</code> にすると CPU コア数を検出してその数だけ起動する。ワーカーが CPU コアに対応して並ぶので、コンテキストスイッチは仕事が無いときくらいしか起きない。</p>
+<pre class="code">worker_processes auto;
+worker_rlimit_nofile 16384;
+
+events {
+    worker_connections 4096;
+}</pre>
+        <p><code>worker_connections</code> は 1 ワーカーが同時に開ける接続数の上限で、デフォルトは 512 だ。公式ドキュメントは 2 つ注意している。この数にはクライアントだけでなくプロキシ先（upstream）との接続も含まれるので、リバースプロキシでは 1 リクエストあたり 2 本消費しうる。また実際の同時接続数はオープンファイル数の上限（<code>RLIMIT_NOFILE</code>）を超えられない。<code>worker_connections</code> だけを上げても fd の上限で頭打ちになるので、<code>worker_rlimit_nofile</code> で上限も一緒に上げる。上の数値は組み合わせ方の例であって推奨値ではない。</p>
+      </section>
+
+      <div class="practical">
+        <div class="box-title">💼 実務でどう出会うか</div>
+        <p>最も出会いやすいのは「1 本のイベントループの中で CPU を食う処理を書いてしまう」事故だ。Node.js のリクエストハンドラで巨大な JSON を同期的にパースしたり重い正規表現を回したりすると、その間ループは次の <code>epoll_wait()</code> に戻れず、準備完了の通知が溜まったまま全接続のレイテンシが一斉に悪化する。もう 1 つは nginx の <code>worker_connections</code> の見積もりで、プロキシ先との接続も数に入ることを忘れていると、捌けるクライアント数を倍に見積もってしまう。<code>strace</code> で nginx や Node.js のプロセスを覗くと、<code>epoll_wait</code> の呼び出しが繰り返し現れるのがわかる。</p>
+      </div>
+
+      <div class="hands-on">
+        <div class="box-title">⌨️ 手を動かす（5 分）</div>
+        <p>Python 標準の <code>selectors</code> モジュールで、1 スレッドのエコーサーバーを動かし、複数の接続を同時に捌けることを確かめる。<code>DefaultSelector</code> はプラットフォームで最も効率的な実装を選ぶので、Mac では <code>kqueue</code>、Linux では <code>epoll</code> が使われる。</p>
+<pre class="code">cat &gt; /tmp/echo.py &lt;&lt;'EOF'
+import selectors, socket
+sel = selectors.DefaultSelector()
+print("selector:", type(sel).__name__)
+
+def accept(sock):
+    conn, addr = sock.accept()
+    print("accepted", addr)
+    conn.setblocking(False)
+    sel.register(conn, selectors.EVENT_READ, read)
+
+def read(conn):
+    data = conn.recv(1000)
+    if data:
+        conn.send(data)
+    else:
+        sel.unregister(conn)
+        conn.close()
+
+sock = socket.socket()
+sock.bind(("localhost", 1234))
+sock.listen(100)
+sock.setblocking(False)
+sel.register(sock, selectors.EVENT_READ, accept)
+while True:
+    for key, mask in sel.select():
+        key.data(key.fileobj)
+EOF
+python3 /tmp/echo.py</pre>
+        <p>別のターミナルを 2〜3 個開き、それぞれで <code>nc localhost 1234</code> を実行して文字を打つ。最初に <code>selector: KqueueSelector</code> と表示され、どの <code>nc</code> に打った文字も即座にエコーされるはずだ。さらに別ターミナルで <code>ps -M -p $(pgrep -f /tmp/echo.py)</code> を実行すると、接続が複数あってもスレッドの行は 1 行だけのはずだ。<code>read()</code> の中に <code>import time; time.sleep(5)</code> を足して再実行すると、1 つの接続に文字を打った瞬間、他の接続のエコーも 5 秒止まる。イベントループの弱点がそのまま見える。</p>
+      </div>
+
+      <div class="misconceptions">
+        <div class="box-title">🙅 よくある誤解</div>
+        <ul>
+          <li><span class="wrong">イベントループは 1 スレッドだから CPU 負荷の高い処理にも強い</span> — 強いのは「待ち」が多い処理だけだ。ループは準備完了の fd を 1 つずつ順に処理するので、1 つの処理が CPU を握っている間は他の接続が全部待たされる。CPU の重い処理はワーカースレッドや別プロセスに逃がす必要がある。</li>
+          <li><span class="wrong">Go の <code>conn.Read()</code> は OS スレッドをブロックする</span> — ネットワーク I/O の場合、止まるのは goroutine で、OS スレッドは netpoller のおかげで別の goroutine の実行に回される。だから接続ごとに goroutine を作るコードでも、OS スレッドの数は接続数に比例して増えない。</li>
+          <li><span class="wrong"><code>worker_connections</code> を上げれば同時接続数はいくらでも増やせる</span> — 実際の上限はプロセスのオープンファイル数の制限で決まり、プロキシ先への接続も同じ枠を消費する。<code>worker_rlimit_nofile</code> や OS 側の上限と揃えて上げないと効かない。</li>
+        </ul>
+      </div>
+
+      <div class="glossary">
+        <div class="box-title">📖 用語ミニ辞典</div>
+        <dl>
+          <dt>ブロッキング I/O</dt><dd>データが揃うまで呼び出したスレッドを眠らせて待たせる I/O。</dd>
+          <dt>ノンブロッキング I/O</dt><dd>データが無ければ待たずに <code>EAGAIN</code> で即座に返る I/O。</dd>
+          <dt>I/O 多重化</dt><dd>多数の fd のうち準備完了のものをカーネルに教えてもらい、1 スレッドで捌く手法。<code>select</code>/<code>poll</code>/<code>epoll</code>/<code>kqueue</code> がこれにあたる。</dd>
+          <dt>epoll</dt><dd>監視対象をカーネル側に登録しておき、準備完了の fd だけを返す Linux の I/O 多重化 API。</dd>
+          <dt>エッジトリガ / レベルトリガ</dt><dd>状態が変わったときだけ通知するか、準備完了の間は毎回通知するかの違い。<code>epoll</code> のデフォルトはレベルトリガ。</dd>
+          <dt>イベントループ</dt><dd>準備完了の通知を待ち、届いた fd を順に処理し、また待つことを繰り返す処理の骨格。</dd>
+        </dl>
+      </div>
+
+      <div class="further-reading">
+        <div class="box-title">🔗 もっと深く</div>
+        <ul>
+          <li><a href="https://man7.org/linux/man-pages/man7/epoll.7.html">epoll(7) - Linux manual page</a> — インタレストリストとレディリスト、エッジトリガで読み切らないと止まる例が一次情報で書かれている。</li>
+          <li><a href="https://man7.org/linux/man-pages/man2/select.2.html">select(2) - Linux manual page</a> — <code>FD_SETSIZE</code> の制限と、fd_set が上書きされる仕様の原典。</li>
+          <li><a href="https://blog.nginx.org/blog/inside-nginx-how-we-designed-for-performance-scale">Inside NGINX: How We Designed for Performance &amp; Scale</a> — スレッド・パー・コネクションと比べた nginx のワーカー設計を、作り手自身が説明している。</li>
+          <li><a href="https://nginx.org/en/docs/ngx_core_module.html">nginx Core functionality</a> — <code>worker_processes</code>・<code>worker_connections</code>・<code>worker_rlimit_nofile</code> のデフォルト値と注意書き。</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- recent:start -->
+    <!-- recent:end -->
+
+    <footer>
+      <p>Generated by Claude Code (GitHub Actions)</p>
+      <a href="./" class="archive-link">過去の記事</a>
+    </footer>
+  </div>
+</body>
+</html>

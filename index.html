@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tech Learning Daily — api.example.com を 1 回引いただけなのに、なぜ Pod は DNS に 4 回も問い合わせるのか？</title>
+  <title>Tech Learning Daily — スレッドは数本しかないのに、なぜ nginx は何千もの接続を同時に捌けるのか？</title>
   <link rel="stylesheet" href="style.css">
   <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="feed.xml">
   <link rel="icon" href="/favicon.ico" sizes="48x48">
@@ -14,136 +14,160 @@
   <div class="container">
     <header>
       <h1>Tech Learning Daily</h1>
-      <div class="date">2026-10-23 (Fri) — 第 98 号</div>
+      <div class="date">2026-10-24 (Sat) — 第 99 号</div>
       <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
     </header>
 
     <article class="article">
       <div class="meta-bar">
-        <span class="tag tag-container">Container</span>
+        <span class="tag tag-infra">Infra</span>
         <span class="difficulty">🌿 基礎</span>
         <span class="read-time">⏱ 約 7 分</span>
       </div>
-      <h2 class="article-title">api.example.com を 1 回引いただけなのに、なぜ Pod は DNS に 4 回も問い合わせるのか？</h2>
-      <p class="lead">Kubernetes 上のアプリから外部の決済 API を呼ぶとき、コードに書くのは <code>https://api.example.com/...</code> の 1 行だけだ。ところが CoreDNS のログを開くと、<code>api.example.com.default.svc.cluster.local</code> のような存在しない名前への問い合わせと NXDOMAIN（該当なし）の応答が何行も並んでいる。誰がこんな名前を作り、なぜ失敗するとわかっている問い合わせを繰り返しているのだろうか。</p>
+      <h2 class="article-title">スレッドは数本しかないのに、なぜ nginx は何千もの接続を同時に捌けるのか？</h2>
+      <p class="lead">Go で書いた API サーバーの <code>conn.Read()</code> は、データが届くまでその場で待つ「ブロックする」呼び出しに見える。それなら接続の数だけスレッドが要りそうだが、nginx は多くの構成で CPU コア数ぶんのワーカープロセスだけで何千もの接続を抱え、Node.js に至ってはメインスレッドが 1 本だ。待っている接続が何千あっても、なぜ少数のスレッドで足りるのだろうか。</p>
 
       <div class="tldr">
         <div class="box-title">🎯 3 行まとめ</div>
         <ul>
-          <li>名前解決はアプリ内のリゾルバが <code>/etc/resolv.conf</code> を読んで行い、点の数が <code>ndots</code> 未満の名前には <code>search</code> リストのドメインを順に付けて先に試す。</li>
-          <li>kubelet は Pod の <code>resolv.conf</code> に search ドメイン 3 つと <code>ndots:5</code> を書くため、点が 2 つの <code>api.example.com</code> も「短い名前」扱いになり、3 回の空振りの後でやっと本来の名前が引かれる。</li>
-          <li>末尾ドット付きの FQDN、<code>dnsConfig</code> での <code>ndots</code> 調整、NodeLocal DNSCache で空振りのコストを減らせるが、<code>ndots</code> を下げるとクラスタ内の短縮名の引き方も変わる。</li>
+          <li>1 接続に 1 スレッドを貼り付ける方式は、何もしていない接続のためにもスレッドを抱え続けるので、接続数が増えるとメモリとコンテキストスイッチで頭打ちになる。</li>
+          <li><code>epoll</code>（macOS では <code>kqueue</code>）は監視したい fd をカーネルに一度登録しておき、「いま読み書きできる fd」だけをまとめて返すので、1 スレッドが大量の接続を順番に捌ける。</li>
+          <li>nginx・Node.js・Go の netpoller はどれもこの仕組みの上にあり、同じ理由で「1 本のループの中で重い処理をすると全接続が止まる」という弱点も共有する。</li>
         </ul>
       </div>
 
       <section class="body-section">
-        <h3>名前解決は「どの名前を試すか」から始まる</h3>
-        <p>アプリが <code>getaddrinfo()</code> などで名前を引くとき、実際に DNS サーバーへ問い合わせるのはアプリのプロセス内にある<strong>スタブリゾルバ</strong>（libc などに組み込まれた、問い合わせを組み立てて DNS サーバーに投げる部品）だ。スタブリゾルバは問い合わせの前に <code>/etc/resolv.conf</code> を読み、どの DNS サーバーに、どの名前を、どの順で聞くかを決める。</p>
-        <p>順序を決めるのが 2 つの設定だ。<code>search</code> は、短い名前に補って試すドメインの一覧（search リスト）。<code>options ndots:N</code> は、名前に含まれる点が N 個未満なら search リストを先に試し、N 個以上なら最初から名前そのものを試す、という切り替えの閾値だ。glibc の resolv.conf(5) によれば <code>ndots</code> のデフォルトは 1 で、上限 15 に丸められる。</p>
-        <p>デフォルトの <code>ndots:1</code> なら、点を 1 つでも含む名前はまず「そのまま」引かれる。社内ネットワークで <code>search corp.example</code> を設定しておけば、<code>ssh build01</code> と打つだけで <code>build01.corp.example</code> を探してくれる。search リストはもともと、このような人間向けの省略入力のための仕組みだ。</p>
+        <h3>1 接続 1 スレッドという素朴なモデル</h3>
+        <p>ソケットの <code>read()</code> は、デフォルトでは<strong>ブロッキング I/O</strong>（データが届くまで呼び出したスレッドを眠らせて待たせる I/O）だ。この前提で素直にサーバーを書くと、接続を 1 本受け付けるたびにスレッドを 1 本作り、そのスレッドに読み書きを任せる形になる。コードは上から下へ読めて書きやすい。</p>
+        <p>問題は、HTTP の keep-alive やスマホの遅い回線のせいで、接続の大半は「つながっているが何も送ってこない」時間が長いことだ。待っている間もスレッドはスタックなどのメモリを握ったまま消えない。nginx のエンジニアリングブログは、この方式を「アクティブな HTTP 接続 1 本ごとに専用のプロセスかスレッドが必要」で重いと書き、I/O が多い状況ではコンテキストスイッチ（CPU が実行するスレッドを切り替える処理）が増えて性能が大きく落ちると説明している。1 台で 1 万接続を捌く難しさは、「C10K 問題」と呼ばれてきた。</p>
+        <p>解決の方向ははっきりしている。「待つ」ことをスレッドに任せるのをやめ、待っている接続の一覧をどこか 1 か所で監視して、準備ができた接続にだけスレッドを向けることだ。</p>
       </section>
 
       <section class="body-section">
-        <h3>kubelet が Pod に書く resolv.conf</h3>
-        <p>Kubernetes では、kubelet が Pod ごとに <code>/etc/resolv.conf</code> を生成する。<code>dnsPolicy</code> を指定しない Pod には <code>ClusterFirst</code> が適用され（名前は紛らわしいが、<code>Default</code> はデフォルトではない）、公式ドキュメントの例では次の内容になる。</p>
-<pre class="code">nameserver 10.32.0.10
-search &lt;namespace&gt;.svc.cluster.local svc.cluster.local cluster.local
-options ndots:5</pre>
-        <p><code>nameserver</code> はクラスタ DNS（多くの場合 CoreDNS）の Service の IP だ。search リストが 3 段あるおかげで、同じ Namespace の Service は <code>data</code>、別 Namespace なら <code>data.prod</code> と書くだけで <code>data.prod.svc.cluster.local</code> に補完される。コードや設定ファイルに長い FQDN（ルートまで省略せずに書いた完全な名前）を書かなくて済むのは、この search リストのおかげだ。</p>
-        <p><code>ndots:5</code> という大きな値を選んだ理由は公式ドキュメントに明記されていない。ただ、Service の SRV レコード名は <code>_port._proto.my-svc.my-ns.svc</code> の形まで省略でき、この時点で点が 4 つある。点 4 つまでの名前をすべて「クラスタ内の短縮名かもしれない」と扱うには閾値を 5 にする必要がある、と考えると数字の辻褄は合う。</p>
+        <h3>ノンブロッキングにするだけでは足りない</h3>
+        <p>ソケットを<strong>ノンブロッキング</strong>モードにすると、データが無いときの <code>read()</code> は眠らずに即座に <code>EAGAIN</code>（今は無い、あとで試せ）というエラーで返る。これで 1 スレッドが複数の接続を扱えそうに見える。しかし全接続に順番に <code>read()</code> を試すループを回すと、何も届いていない間も CPU を空回しし続けることになる。</p>
+        <p>欲しいのは「この fd の中で、読み書きできる状態になったものを教えて、それまでは眠らせて」とカーネルに頼む仕組みで、これを <strong>I/O 多重化</strong>と呼ぶ。fd（ファイルディスクリプタ）はプロセスが開いたファイルやソケットを指す整数の番号だ。最古の API である <code>select()</code> は、監視したい fd をビットの並び（fd_set）にして渡し、カーネルがその中から準備完了のものを探して返す。</p>
+        <p><code>select()</code> には 2 つの癖がある。1 つは、man ページが明言するとおり <code>FD_SETSIZE</code>（1024）未満の番号の fd しか監視できないこと。もう 1 つは、渡した fd_set が「準備完了の fd だけ」に上書きされて返るので、ループのたびに監視対象を全部詰め直して渡し直す必要があることだ。監視する接続が増えるほど、毎回の受け渡しと走査が重くなる。man ページ自身が「現代のアプリケーションは代わりに <code>poll(2)</code> か <code>epoll(7)</code> を使うべき」と書いている。<code>poll()</code> は 1024 の制限を取り除いたが、毎回全リストを渡す構造は変わらない。</p>
       </section>
 
       <section class="body-section">
-        <h3>外部ドメインも「短い名前」扱いになる</h3>
-        <p>search リストはクラスタ内の名前のためにあるのだから、外部ドメインには関係ないように思える。しかしリゾルバが見ているのは点の数だけだ。<code>api.example.com</code> の点は 2 つで 5 未満なので、<code>default</code> Namespace の Pod では次の順に問い合わせが進む。</p>
-<pre class="diagram">Pod (ns: default)          CoreDNS
- │ api.example.com +        │
- │.default.svc.cluster.local│
- ├─────────────────────────▶│
- │◀──────────── NXDOMAIN ───┤
- │.svc.cluster.local        │
- ├─────────────────────────▶│
- │◀──────────── NXDOMAIN ───┤
- │.cluster.local            │
- ├─────────────────────────▶│
- │◀──────────── NXDOMAIN ───┤
- │ api.example.com          │
- ├─────────────────────────▶│──▶ 上流 DNS
- │◀──────────── IP ─────────┤
- ▼                          ▼</pre>
-        <p>1 回の名前解決が 4 往復になる。しかも glibc はデフォルトで IPv4 用の A レコードと IPv6 用の AAAA レコードを並行して問い合わせる（resolv.conf(5) の <code>single-request</code> の説明より）ため、パケット数はその 2 倍になる。クラウドによっては kubelet がノード側の search ドメインも後ろに足すので、公式のデバッグ手順に載っている GKE の例のように search リストが 5 段になり、空振りがさらに増える。</p>
-        <p>1 回あたりの空振りは CoreDNS がクラスタ内の情報だけで即答するため、通常は速い。問題になるのは量と、まれな失敗だ。外部 API を毎リクエスト呼ぶサービスでは CoreDNS への問い合わせが数倍に膨らむ。さらに DNS は通常 UDP で運ばれるので、パケットが 1 つ落ちるとリゾルバは <code>timeout</code>（resolv.conf(5) によるデフォルト 5 秒）を待ってから再送する。往復が 4 倍あれば、この「たまに 5 秒遅い」に当たる機会も 4 倍になる。</p>
+        <h3>epoll: 登録は一度、返すのは準備できた分だけ</h3>
+        <p>Linux の <code>epoll</code> は、監視の一覧をカーネル側に持たせることでこの往復をやめた。<code>epoll_create1()</code> で epoll インスタンスを作り、<code>epoll_ctl()</code> で監視したい fd を一度だけ<strong>インタレストリスト</strong>（監視対象の登録簿）に加える。以後、パケットが届くなどの I/O が起きるたびに、カーネル自身がその fd を<strong>レディリスト</strong>（準備完了の fd の一覧）に載せていく。</p>
+<pre class="diagram">1 接続 1 スレッド
+ conn1 ── thread1 (read で寝ている)
+ conn2 ── thread2 (read で寝ている)
+ connN ── threadN (read で寝ている)
+
+epoll（1 スレッド）
+┌─ kernel ─────────────────────┐
+│ interest list (epoll_ctl)    │
+│  conn1  conn2  ...  connN    │
+│          │ data arrives      │
+│          ▼                   │
+│ ready list: conn2            │
+└──────────┬───────────────────┘
+           │ epoll_wait() が返す
+           ▼
+ イベントループ: conn2 だけ read</pre>
+        <p>アプリ側のスレッドは <code>epoll_wait()</code> を呼んで眠り、レディリストに何か載ると起こされて、載っていた fd だけを受け取る。1 万接続を監視していても、届いたのが 3 本なら返ってくるのは 3 本だ。監視対象を毎回渡し直す必要がないので、待っているだけの接続はほとんど費用をかけずに置いておける。この「眠って、起こされて、準備できた fd を順に処理して、また眠る」繰り返しが<strong>イベントループ</strong>の正体だ。BSD 系と macOS では <code>kqueue</code> が同じ役割を担う。</p>
       </section>
 
       <div class="analogy">
         <div class="box-title">🍱 たとえるなら</div>
-        <p>大企業の社内郵便係が「宛名の区切りが 5 つ未満なら、まず社内の住所録を自部署 → 本社 → グループ全体の順に引く」という規則で働いている状況だ。「田中」宛の手紙なら規則どおり自部署の田中さんに一発で届く。しかし「東京都千代田区丸の内」宛の社外向け手紙も区切りが少ないので、係は 3 冊の社内住所録を順にめくって「該当なし」を確かめてから、ようやく郵便局に回す。住所の末尾に「（社外）」と書き添えれば住所録は飛ばされる。これが末尾ドットの役割にあたる。</p>
+        <p>病棟の看護師だ。<code>select()</code> は、夜勤の看護師が毎回全病室を一部屋ずつ回って「何かありますか」と聞く巡回に近い。患者が増えるほど一周が長くなる。<code>epoll</code> はナースコールで、入院時に各ベッドへボタンを付けておけば（<code>epoll_ctl</code>）、看護師はナースステーションで待ち（<code>epoll_wait</code>）、ランプが点いた部屋（レディリスト）にだけ向かう。病床が倍になっても、呼ばれない部屋に足を運ぶ手間は増えない。</p>
       </div>
 
       <section class="body-section">
-        <h3>空振りを減らす 3 つの手と、その副作用</h3>
-        <p>最初に試すべきは、外部ドメインを<strong>末尾ドット付きの FQDN</strong> で書くことだ。<code>api.example.com.</code> のように最後に点を付けた名前は「これで完結している」という意味になり、リゾルバは search リストを使わずに 1 回だけ問い合わせる。アプリ側の変更だけで済むが、HTTP クライアントやライブラリによっては Host ヘッダや証明書の名前照合で末尾ドットの扱いが揺れることがあるため、通信先ごとに動作を確かめてから使うほうがよい。</p>
-        <p>次の手は、Pod 単位で <code>ndots</code> を下げることだ。<code>dnsConfig.options</code> に書いた値は kubelet が生成する resolv.conf にそのまま反映される。</p>
-<pre class="code">spec:
-  dnsConfig:
-    options:
-      - name: ndots
-        value: "2"</pre>
-        <p><code>ndots:2</code> にすると、点が 2 つ以上の <code>api.example.com</code> は最初から本来の名前で引かれ、空振りが消える。一方、<code>data.prod</code>（点 1 つ）は従来どおり search リストで補完されるが、<code>data.prod.svc</code>（点 2 つ）は先に外部へ問い合わせて NXDOMAIN を受けてから search リストに戻る。名前解決自体は成功するが、今度はクラスタ内の名前で空振りが起きる。<code>ndots</code> を下げるのは、その Pod が使う名前の形を把握してからにする。</p>
-        <p>3 つ目は、クラスタ側で <strong>NodeLocal DNSCache</strong>（各ノードに DaemonSet として置く DNS キャッシュ）を導入することだ。問い合わせの回数自体は変わらないが、Pod は同じノード上のキャッシュに聞くため、kube-proxy の DNAT や conntrack（Linux カーネルの接続追跡表）を経由しなくなる。公式ドキュメントは、これにより conntrack の競合で UDP パケットが落ちる問題が減り、キャッシュから CoreDNS への通信を TCP に切り替えることでタイムアウト起因のテールレイテンシも減ると説明している。</p>
+        <h3>レベルトリガとエッジトリガ</h3>
+        <p><code>epoll</code> の通知には 2 つのモードがある。デフォルトの<strong>レベルトリガ</strong>は「読めるデータが残っている間は毎回通知する」方式で、man ページは「単に速い <code>poll</code>」と説明している。データを半分だけ読んで次の <code>epoll_wait()</code> を呼んでも、残りがあればまた通知されるので取りこぼしは起きにくい。</p>
+        <p><code>EPOLLET</code> フラグを付けると<strong>エッジトリガ</strong>になり、通知は「状態が変わったとき」だけになる。届いたデータの一部しか読まずに次の <code>epoll_wait()</code> を呼ぶと、新しいデータが来ない限り二度と起こされず、残ったデータが宙に浮く。そのため man ページは、fd をノンブロッキングにし、<code>read()</code> が <code>EAGAIN</code> を返すまで読み切ってから次を待つ使い方を推奨している。</p>
+<pre class="code">struct epoll_event ev;
+ev.events = EPOLLIN | EPOLLET; /* EPOLLET を外せばレベルトリガ */
+ev.data.fd = conn_fd;
+epoll_ctl(epfd, EPOLL_CTL_ADD, conn_fd, &amp;ev);</pre>
+        <p>ここで lead の疑問に戻る。Go の <code>conn.Read()</code> はブロックしているように見えるが、ランタイム内部では fd はノンブロッキングで、エッジトリガで <code>epoll</code>（macOS では <code>kqueue</code>）に登録されている。<code>read()</code> が <code>EAGAIN</code> を返すと、ランタイムはスレッドではなく goroutine だけを止めて脇に置き、その OS スレッドで別の goroutine を走らせる。<strong>netpoller</strong> と呼ばれるこの部品が準備完了の通知を受けると、止めていた goroutine を再開させる。「ブロックする」のは goroutine であって OS スレッドではない、というのが Go の書きやすさと接続数を両立させている仕掛けだ。Node.js の libuv も同じ API を使っている。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>nginx の設定で効くところ</h3>
+        <p>nginx はこの設計を設定にそのまま映している。<code>worker_processes</code> はイベントループを回すワーカープロセスの数で、デフォルトは 1。<code>auto</code> にすると CPU コア数を検出してその数だけ起動する。ワーカーが CPU コアに対応して並ぶので、コンテキストスイッチは仕事が無いときくらいしか起きない。</p>
+<pre class="code">worker_processes auto;
+worker_rlimit_nofile 16384;
+
+events {
+    worker_connections 4096;
+}</pre>
+        <p><code>worker_connections</code> は 1 ワーカーが同時に開ける接続数の上限で、デフォルトは 512 だ。公式ドキュメントは 2 つ注意している。この数にはクライアントだけでなくプロキシ先（upstream）との接続も含まれるので、リバースプロキシでは 1 リクエストあたり 2 本消費しうる。また実際の同時接続数はオープンファイル数の上限（<code>RLIMIT_NOFILE</code>）を超えられない。<code>worker_connections</code> だけを上げても fd の上限で頭打ちになるので、<code>worker_rlimit_nofile</code> で上限も一緒に上げる。上の数値は組み合わせ方の例であって推奨値ではない。</p>
       </section>
 
       <div class="practical">
         <div class="box-title">💼 実務でどう出会うか</div>
-        <p>典型的な入口は「外部 API 呼び出しのレイテンシ p99 だけが 5 秒前後に張り付く」「CoreDNS の CPU 使用率が Pod 数のわりに高い」「CoreDNS のログが NXDOMAIN だらけ」の 3 つだ。どれも Pod 内で <code>cat /etc/resolv.conf</code> を見て、呼び出し先ドメインの点の数と <code>ndots</code> を比べるところから調べ始める。対策は影響範囲の小さい順に、①外部ドメインを末尾ドット付きで書く、②外部呼び出しの多い Pod だけ <code>dnsConfig</code> で <code>ndots</code> を下げる、③クラスタ全体で NodeLocal DNSCache を入れる、と進めるのが無難だ。アプリ側で解決結果をキャッシュする HTTP クライアントやコネクションプールを使っていれば、名前解決の回数自体も減る。</p>
+        <p>最も出会いやすいのは「1 本のイベントループの中で CPU を食う処理を書いてしまう」事故だ。Node.js のリクエストハンドラで巨大な JSON を同期的にパースしたり重い正規表現を回したりすると、その間ループは次の <code>epoll_wait()</code> に戻れず、準備完了の通知が溜まったまま全接続のレイテンシが一斉に悪化する。もう 1 つは nginx の <code>worker_connections</code> の見積もりで、プロキシ先との接続も数に入ることを忘れていると、捌けるクライアント数を倍に見積もってしまう。<code>strace</code> で nginx や Node.js のプロセスを覗くと、<code>epoll_wait</code> の呼び出しが繰り返し現れるのがわかる。</p>
       </div>
 
       <div class="hands-on">
         <div class="box-title">⌨️ 手を動かす（5 分）</div>
-        <p>kind で作ったローカルクラスタの Pod から、search リストによる空振りを目で見る。<code>dig</code> は標準では search リストを使わないので、<code>+search</code> で resolv.conf の設定に従わせ、<code>+showsearch</code> で途中の問い合わせも表示させる。</p>
-<pre class="code">kind create cluster --name dns-lab
-kubectl run dnstest --image=nicolaka/netshoot --restart=Never -- sleep 3600
-kubectl wait --for=condition=Ready pod/dnstest --timeout=120s
-kubectl exec dnstest -- cat /etc/resolv.conf
+        <p>Python 標準の <code>selectors</code> モジュールで、1 スレッドのエコーサーバーを動かし、複数の接続を同時に捌けることを確かめる。<code>DefaultSelector</code> はプラットフォームで最も効率的な実装を選ぶので、Mac では <code>kqueue</code>、Linux では <code>epoll</code> が使われる。</p>
+<pre class="code">cat &gt; /tmp/echo.py &lt;&lt;'EOF'
+import selectors, socket
+sel = selectors.DefaultSelector()
+print("selector:", type(sel).__name__)
 
-# 末尾ドットなし: search リストを順に試す
-kubectl exec dnstest -- dig +search +showsearch +noall +comments +question api.github.com | grep -E 'status:|^;api'
+def accept(sock):
+    conn, addr = sock.accept()
+    print("accepted", addr)
+    conn.setblocking(False)
+    sel.register(conn, selectors.EVENT_READ, read)
 
-# 末尾ドットあり: 1 回で済む
-kubectl exec dnstest -- dig +search +showsearch +noall +comments +question api.github.com. | grep -E 'status:|^;api'
+def read(conn):
+    data = conn.recv(1000)
+    if data:
+        conn.send(data)
+    else:
+        sel.unregister(conn)
+        conn.close()
 
-kind delete cluster --name dns-lab</pre>
-        <p>1 つ目の <code>dig</code> では、<code>api.github.com.default.svc.cluster.local.</code> などの問い合わせに <code>status: NXDOMAIN</code> が返った後、最後の <code>api.github.com.</code> で <code>status: NOERROR</code> になる様子が見えるはずだ。2 つ目は <code>NOERROR</code> の 1 組だけになる。resolv.conf の search リストの段数は、ホスト側の設定によって増えることがある。</p>
+sock = socket.socket()
+sock.bind(("localhost", 1234))
+sock.listen(100)
+sock.setblocking(False)
+sel.register(sock, selectors.EVENT_READ, accept)
+while True:
+    for key, mask in sel.select():
+        key.data(key.fileobj)
+EOF
+python3 /tmp/echo.py</pre>
+        <p>別のターミナルを 2〜3 個開き、それぞれで <code>nc localhost 1234</code> を実行して文字を打つ。最初に <code>selector: KqueueSelector</code> と表示され、どの <code>nc</code> に打った文字も即座にエコーされるはずだ。さらに別ターミナルで <code>ps -M -p $(pgrep -f /tmp/echo.py)</code> を実行すると、接続が複数あってもスレッドの行は 1 行だけのはずだ。<code>read()</code> の中に <code>import time; time.sleep(5)</code> を足して再実行すると、1 つの接続に文字を打った瞬間、他の接続のエコーも 5 秒止まる。イベントループの弱点がそのまま見える。</p>
       </div>
 
       <div class="misconceptions">
         <div class="box-title">🙅 よくある誤解</div>
         <ul>
-          <li><span class="wrong">search リストはクラスタ内の短い名前にしか使われない</span> — リゾルバは名前の意味ではなく点の数しか見ない。<code>ndots:5</code> の下では、点が 4 つ以下の外部ドメインもすべて search リストを先に試す。</li>
-          <li><span class="wrong">クラスタ全体で <code>ndots:1</code> にすれば副作用なく解決する</span> — <code>data.prod</code> のような点を含む短縮名が、まず外部 DNS へ問い合わされてから補完されるようになる。外部に同名のドメインが実在すると、意図しない宛先に解決される余地も生まれる。</li>
-          <li><span class="wrong">DNS は UDP の 1 往復なので、回数が増えても誤差の範囲だ</span> — 平常時は速いが、UDP パケットが 1 つ落ちるとリゾルバはタイムアウト（デフォルト 5 秒）まで待つ。往復の回数が増えるほど、まれな数秒の遅延に当たる確率も増える。</li>
+          <li><span class="wrong">イベントループは 1 スレッドだから CPU 負荷の高い処理にも強い</span> — 強いのは「待ち」が多い処理だけだ。ループは準備完了の fd を 1 つずつ順に処理するので、1 つの処理が CPU を握っている間は他の接続が全部待たされる。CPU の重い処理はワーカースレッドや別プロセスに逃がす必要がある。</li>
+          <li><span class="wrong">Go の <code>conn.Read()</code> は OS スレッドをブロックする</span> — ネットワーク I/O の場合、止まるのは goroutine で、OS スレッドは netpoller のおかげで別の goroutine の実行に回される。だから接続ごとに goroutine を作るコードでも、OS スレッドの数は接続数に比例して増えない。</li>
+          <li><span class="wrong"><code>worker_connections</code> を上げれば同時接続数はいくらでも増やせる</span> — 実際の上限はプロセスのオープンファイル数の制限で決まり、プロキシ先への接続も同じ枠を消費する。<code>worker_rlimit_nofile</code> や OS 側の上限と揃えて上げないと効かない。</li>
         </ul>
       </div>
 
       <div class="glossary">
         <div class="box-title">📖 用語ミニ辞典</div>
         <dl>
-          <dt>スタブリゾルバ</dt><dd>libc などに組み込まれ、<code>/etc/resolv.conf</code> に従って DNS サーバーへ問い合わせを投げる部品。</dd>
-          <dt>search リスト</dt><dd>短い名前に補って試すドメインの一覧。resolv.conf の <code>search</code> 行で指定する。</dd>
-          <dt>ndots</dt><dd>名前の点の数がこの値未満なら search リストを先に試し、以上なら名前そのものを先に試す閾値。</dd>
-          <dt>FQDN</dt><dd>ルートまで省略せずに書いた完全な名前。末尾にドットを付けると search リストの対象外になる。</dd>
-          <dt>NXDOMAIN</dt><dd>「その名前は存在しない」を表す DNS の応答コード。</dd>
-          <dt>NodeLocal DNSCache</dt><dd>各ノードに DaemonSet として DNS キャッシュを置き、Pod の問い合わせを同じノード内で受ける Kubernetes の仕組み。</dd>
+          <dt>ブロッキング I/O</dt><dd>データが揃うまで呼び出したスレッドを眠らせて待たせる I/O。</dd>
+          <dt>ノンブロッキング I/O</dt><dd>データが無ければ待たずに <code>EAGAIN</code> で即座に返る I/O。</dd>
+          <dt>I/O 多重化</dt><dd>多数の fd のうち準備完了のものをカーネルに教えてもらい、1 スレッドで捌く手法。<code>select</code>/<code>poll</code>/<code>epoll</code>/<code>kqueue</code> がこれにあたる。</dd>
+          <dt>epoll</dt><dd>監視対象をカーネル側に登録しておき、準備完了の fd だけを返す Linux の I/O 多重化 API。</dd>
+          <dt>エッジトリガ / レベルトリガ</dt><dd>状態が変わったときだけ通知するか、準備完了の間は毎回通知するかの違い。<code>epoll</code> のデフォルトはレベルトリガ。</dd>
+          <dt>イベントループ</dt><dd>準備完了の通知を待ち、届いた fd を順に処理し、また待つことを繰り返す処理の骨格。</dd>
         </dl>
       </div>
 
       <div class="further-reading">
         <div class="box-title">🔗 もっと深く</div>
         <ul>
-          <li><a href="https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/">DNS for Services and Pods (Kubernetes Docs)</a> — Pod の resolv.conf、<code>dnsPolicy</code> の 4 種類、<code>dnsConfig</code> の書き方と上限が一次情報でまとまっている。</li>
-          <li><a href="https://man7.org/linux/man-pages/man5/resolv.conf.5.html">resolv.conf(5) - Linux manual page</a> — <code>ndots</code>・<code>timeout</code>・<code>attempts</code>・<code>single-request</code> のデフォルト値と挙動の原典。</li>
-          <li><a href="https://kubernetes.io/docs/tasks/administer-cluster/nodelocaldns/">Using NodeLocal DNSCache in Kubernetes Clusters</a> — conntrack と UDP がなぜ DNS のテールレイテンシを生むのか、ノードローカルキャッシュでどう避けるのか。</li>
-          <li><a href="https://kubernetes.io/docs/tasks/administer-cluster/dns-debugging-resolution/">Debugging DNS Resolution (Kubernetes Docs)</a> — クラウドごとに search リストが伸びる例と、Pod 内での名前解決の調べ方。</li>
+          <li><a href="https://man7.org/linux/man-pages/man7/epoll.7.html">epoll(7) - Linux manual page</a> — インタレストリストとレディリスト、エッジトリガで読み切らないと止まる例が一次情報で書かれている。</li>
+          <li><a href="https://man7.org/linux/man-pages/man2/select.2.html">select(2) - Linux manual page</a> — <code>FD_SETSIZE</code> の制限と、fd_set が上書きされる仕様の原典。</li>
+          <li><a href="https://blog.nginx.org/blog/inside-nginx-how-we-designed-for-performance-scale">Inside NGINX: How We Designed for Performance &amp; Scale</a> — スレッド・パー・コネクションと比べた nginx のワーカー設計を、作り手自身が説明している。</li>
+          <li><a href="https://nginx.org/en/docs/ngx_core_module.html">nginx Core functionality</a> — <code>worker_processes</code>・<code>worker_connections</code>・<code>worker_rlimit_nofile</code> のデフォルト値と注意書き。</li>
         </ul>
       </div>
     </article>
@@ -151,6 +175,11 @@ kind delete cluster --name dns-lab</pre>
     <!-- recent:start -->
     <section class="section recent-articles">
       <div class="section-title">最近の記事</div>
+      <div class="card">
+        <h3><a href="archive/2026-10-23.html">api.example.com を 1 回引いただけなのに、なぜ Pod は DNS に 4 回も問い合わせるのか？</a></h3>
+        <div class="summary">Kubernetes の kubelet は Pod の resolv.conf に search ドメイン 3 つと ndots:5 を書くため、点が 5 個未満の外部ドメインは search リストを順に試して NXDOMAIN を受けてから本来の名前で引かれる。A/AAAA の並行問い合わせ、UDP 落ち時の 5 秒タイムアウト、末尾ドット FQDN、dnsConfig での ndots 調整とその副作用、NodeLocal DNSCache を扱う。</div>
+        <div class="meta"><span class="tag tag-container">Container</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-23</span></div>
+      </div>
       <div class="card">
         <h3><a href="archive/2026-10-22.html">同じ二重ループなのに、なぜ i と j を入れ替えるだけで何倍も遅くなるのか？</a></h3>
         <div class="summary">CPU はメモリを 1 バイトずつではなく 64 バイト前後のキャッシュライン単位で運ぶ。行優先の配列を列ごとに回すと運んだ塊の大半を捨てるうえプリフェッチも効かず、別コアが同じラインの別変数に書くとフォールスシェアリングで遅くなる。Drepper の測定値、MESI、Go の CacheLinePad、Apple Silicon の 128 バイトも扱う。</div>
@@ -165,11 +194,6 @@ kind delete cluster --name dns-lab</pre>
         <h3><a href="archive/2026-10-20.html">同じファイルを 2 人で編集したのに、なぜ git はほとんど自動でマージできるのか？</a></h3>
         <div class="summary">git のマージは 2 つのブランチを比べるのではなく、共通祖先（マージベース）を加えた 3 版を比べて「どちらが変えたか」を判定する。片側だけの変更は自動で採用し、両側が同じ領域（隣接行を含む）を変えた所だけがコンフリクトになる。diff3/zdiff3 の読み方、インデックスのステージ、rerere、意味上の衝突も扱う。</div>
         <div class="meta"><span class="tag tag-dev">Dev</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-20</span></div>
-      </div>
-      <div class="card">
-        <h3><a href="archive/2026-10-19.html">Prometheus の p99 はどこから出てくるのか？ 生の数字は増え続けるカウンタだけなのに</a></h3>
-        <div class="summary">アプリが公開するのは起動からの累計カウンタだけで、秒間の値は rate() がリセット補正と外挿を加えて計算する。histogram は「何秒以下が何件」の累積バケットで、p99 は histogram_quantile() がバケット内を一様とみなした補間で推定する。集計順と summary との違いも扱う。</div>
-        <div class="meta"><span class="tag tag-obs">Obs</span><span>🌿 基礎</span><span>⏱ 約 8 分</span><span>2026-10-19</span></div>
       </div>
       <div class="recent-more"><a href="archive/">アーカイブですべて見る →</a></div>
     </section>

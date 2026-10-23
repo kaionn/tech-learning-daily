@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-10-23T09:04:24+09:00</updated>
+  <updated>2026-10-24T08:56:02+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>スレッドは数本しかないのに、なぜ nginx は何千もの接続を同時に捌けるのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-10-24.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-10-24.html</id>
+    <updated>2026-10-24T08:56:02+09:00</updated>
+    <summary>1 接続 1 スレッドは待つだけの接続にもスレッドを抱え続けて頭打ちになる。epoll/kqueue は監視対象をカーネルに登録し準備完了の fd だけを返すので、少数のスレッドで大量の接続を捌ける。</summary>
+  </entry>
   <entry>
     <title>api.example.com を 1 回引いただけなのに、なぜ Pod は DNS に 4 回も問い合わせるのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-10-23.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-10-11.html</id>
     <updated>2026-10-11T09:18:58+09:00</updated>
     <summary>文字には符号位置・符号化(UTF-8/UTF-16)・書記素クラスタの3層があり、言語ごとに数える層が違う。UTF-8の可変長設計、JSのサロゲートペア、MySQLのutf8mb3で絵文字が入らない理由を解説。</summary>
-  </entry>
-  <entry>
-    <title>0.1 と 0.2 を足しただけなのに、なぜ 0.3 にならないのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-10-10.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-10-10.html</id>
-    <updated>2026-10-10T09:59:04+09:00</updated>
-    <summary>0.1は二進数で割り切れず近似値で保存されるため、0.1+0.2は0.3の近似とは別の値になる。IEEE 754倍精度の仕組みと、金額をnumeric/BigDecimalや整数で扱う理由、2^53を超えるIDの扱いを解説。</summary>
   </entry>
 </feed>

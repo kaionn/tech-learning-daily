@@ -6,6 +6,7 @@
 
 ## 消化済み
 
+- 2026-10-24 I/O 多重化と epoll（1接続1スレッドがメモリとコンテキストスイッチで頭打ちになる理由とC10K、ノンブロッキングI/OとEAGAIN、selectのFD_SETSIZE=1024とfd_set上書き、epollのインタレストリスト/レディリストとepoll_ctl/epoll_wait、レベルトリガ(デフォルト)とエッジトリガでEAGAINまで読み切る理由、Goのnetpollerがgoroutineだけを止める仕組み、nginxのworker_processes/worker_connections(既定512、upstream接続も含む)/worker_rlimit_nofile、イベントループ内のCPU処理が全接続を止める弱点）（自動選定）
 - 2026-10-23 Kubernetes Pod の DNS 解決と ndots:5（スタブリゾルバが resolv.conf の search と ndots で試す名前の順序を決める仕組み、kubelet が書く search 3 段と ndots:5、ClusterFirst が既定で Default は既定でないこと、点が 5 未満の外部ドメインが search リストで NXDOMAIN を 3 回受けてから引かれる流れと A/AAAA 並行問い合わせ、UDP 落ちと timeout 5 秒、末尾ドット FQDN、dnsConfig での ndots 調整とクラスタ内短縮名への副作用、NodeLocal DNSCache と conntrack）（自動選定）
 - 2026-10-22 CPU キャッシュとキャッシュライン（メモリ階層とキャッシュミスの待ち時間、64バイト単位で運ぶキャッシュラインと空間的局所性、行優先配列を列ごとに回すと遅くなる理由、ハードウェアプリフェッチによる順次アクセスの遅延隠蔽、MESIとフォールスシェアリング・perf c2c、Go の cpu.CacheLinePad、Apple Silicon の hw.cachelinesize=128 と crossbeam の 128 バイト仮定）（自動選定）
 - 2026-10-21 正規表現のバックトラッキングと ReDoS（失敗したら分岐点に戻るバックトラッキング方式とV8 Irregexp/Onigmo/Python re、入れ子の量指定子 (a+)+ が区切り方 2^(n-1) 通りを試す破滅的バックトラッキング、Cloudflare 2019年7月の WAF 障害と .*? が効かない理由、Go regexp/RE2 の線形時間保証と後方参照・先読みの放棄、Ruby 3.2 のメモ化と Regexp.timeout、アトミックグループ・所有量指定子、V8 の線形エンジンフォールバック）（自動選定）
