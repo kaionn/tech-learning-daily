@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-10-23.html",
+    "date": "2026-10-23",
+    "title": "api.example.com を 1 回引いただけなのに、なぜ Pod は DNS に 4 回も問い合わせるのか？",
+    "summary": "Kubernetes の kubelet は Pod の resolv.conf に search ドメイン 3 つと ndots:5 を書くため、点が 5 個未満の外部ドメインは search リストを順に試して NXDOMAIN を受けてから本来の名前で引かれる。A/AAAA の並行問い合わせ、UDP 落ち時の 5 秒タイムアウト、末尾ドット FQDN、dnsConfig での ndots 調整とその副作用、NodeLocal DNSCache を扱う。",
+    "category": "container",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": ["スタブリゾルバ", "search リスト", "ndots", "FQDN", "NXDOMAIN", "NodeLocal DNSCache"]
+  },
+  {
     "file": "2026-10-22.html",
     "date": "2026-10-22",
     "title": "同じ二重ループなのに、なぜ i と j を入れ替えるだけで何倍も遅くなるのか？",

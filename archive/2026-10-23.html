@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tech Learning Daily — api.example.com を 1 回引いただけなのに、なぜ Pod は DNS に 4 回も問い合わせるのか？</title>
+  <link rel="stylesheet" href="../style.css">
+  <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="../feed.xml">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Tech Learning Daily</h1>
+      <div class="date">2026-10-23 (Fri) — 第 98 号</div>
+      <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
+    </header>
+
+    <article class="article">
+      <div class="meta-bar">
+        <span class="tag tag-container">Container</span>
+        <span class="difficulty">🌿 基礎</span>
+        <span class="read-time">⏱ 約 7 分</span>
+      </div>
+      <h2 class="article-title">api.example.com を 1 回引いただけなのに、なぜ Pod は DNS に 4 回も問い合わせるのか？</h2>
+      <p class="lead">Kubernetes 上のアプリから外部の決済 API を呼ぶとき、コードに書くのは <code>https://api.example.com/...</code> の 1 行だけだ。ところが CoreDNS のログを開くと、<code>api.example.com.default.svc.cluster.local</code> のような存在しない名前への問い合わせと NXDOMAIN（該当なし）の応答が何行も並んでいる。誰がこんな名前を作り、なぜ失敗するとわかっている問い合わせを繰り返しているのだろうか。</p>
+
+      <div class="tldr">
+        <div class="box-title">🎯 3 行まとめ</div>
+        <ul>
+          <li>名前解決はアプリ内のリゾルバが <code>/etc/resolv.conf</code> を読んで行い、点の数が <code>ndots</code> 未満の名前には <code>search</code> リストのドメインを順に付けて先に試す。</li>
+          <li>kubelet は Pod の <code>resolv.conf</code> に search ドメイン 3 つと <code>ndots:5</code> を書くため、点が 2 つの <code>api.example.com</code> も「短い名前」扱いになり、3 回の空振りの後でやっと本来の名前が引かれる。</li>
+          <li>末尾ドット付きの FQDN、<code>dnsConfig</code> での <code>ndots</code> 調整、NodeLocal DNSCache で空振りのコストを減らせるが、<code>ndots</code> を下げるとクラスタ内の短縮名の引き方も変わる。</li>
+        </ul>
+      </div>
+
+      <section class="body-section">
+        <h3>名前解決は「どの名前を試すか」から始まる</h3>
+        <p>アプリが <code>getaddrinfo()</code> などで名前を引くとき、実際に DNS サーバーへ問い合わせるのはアプリのプロセス内にある<strong>スタブリゾルバ</strong>（libc などに組み込まれた、問い合わせを組み立てて DNS サーバーに投げる部品）だ。スタブリゾルバは問い合わせの前に <code>/etc/resolv.conf</code> を読み、どの DNS サーバーに、どの名前を、どの順で聞くかを決める。</p>
+        <p>順序を決めるのが 2 つの設定だ。<code>search</code> は、短い名前に補って試すドメインの一覧（search リスト）。<code>options ndots:N</code> は、名前に含まれる点が N 個未満なら search リストを先に試し、N 個以上なら最初から名前そのものを試す、という切り替えの閾値だ。glibc の resolv.conf(5) によれば <code>ndots</code> のデフォルトは 1 で、上限 15 に丸められる。</p>
+        <p>デフォルトの <code>ndots:1</code> なら、点を 1 つでも含む名前はまず「そのまま」引かれる。社内ネットワークで <code>search corp.example</code> を設定しておけば、<code>ssh build01</code> と打つだけで <code>build01.corp.example</code> を探してくれる。search リストはもともと、このような人間向けの省略入力のための仕組みだ。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>kubelet が Pod に書く resolv.conf</h3>
+        <p>Kubernetes では、kubelet が Pod ごとに <code>/etc/resolv.conf</code> を生成する。<code>dnsPolicy</code> を指定しない Pod には <code>ClusterFirst</code> が適用され（名前は紛らわしいが、<code>Default</code> はデフォルトではない）、公式ドキュメントの例では次の内容になる。</p>
+<pre class="code">nameserver 10.32.0.10
+search &lt;namespace&gt;.svc.cluster.local svc.cluster.local cluster.local
+options ndots:5</pre>
+        <p><code>nameserver</code> はクラスタ DNS（多くの場合 CoreDNS）の Service の IP だ。search リストが 3 段あるおかげで、同じ Namespace の Service は <code>data</code>、別 Namespace なら <code>data.prod</code> と書くだけで <code>data.prod.svc.cluster.local</code> に補完される。コードや設定ファイルに長い FQDN（ルートまで省略せずに書いた完全な名前）を書かなくて済むのは、この search リストのおかげだ。</p>
+        <p><code>ndots:5</code> という大きな値を選んだ理由は公式ドキュメントに明記されていない。ただ、Service の SRV レコード名は <code>_port._proto.my-svc.my-ns.svc</code> の形まで省略でき、この時点で点が 4 つある。点 4 つまでの名前をすべて「クラスタ内の短縮名かもしれない」と扱うには閾値を 5 にする必要がある、と考えると数字の辻褄は合う。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>外部ドメインも「短い名前」扱いになる</h3>
+        <p>search リストはクラスタ内の名前のためにあるのだから、外部ドメインには関係ないように思える。しかしリゾルバが見ているのは点の数だけだ。<code>api.example.com</code> の点は 2 つで 5 未満なので、<code>default</code> Namespace の Pod では次の順に問い合わせが進む。</p>
+<pre class="diagram">Pod (ns: default)          CoreDNS
+ │ api.example.com +        │
+ │.default.svc.cluster.local│
+ ├─────────────────────────▶│
+ │◀──────────── NXDOMAIN ───┤
+ │.svc.cluster.local        │
+ ├─────────────────────────▶│
+ │◀──────────── NXDOMAIN ───┤
+ │.cluster.local            │
+ ├─────────────────────────▶│
+ │◀──────────── NXDOMAIN ───┤
+ │ api.example.com          │
+ ├─────────────────────────▶│──▶ 上流 DNS
+ │◀──────────── IP ─────────┤
+ ▼                          ▼</pre>
+        <p>1 回の名前解決が 4 往復になる。しかも glibc はデフォルトで IPv4 用の A レコードと IPv6 用の AAAA レコードを並行して問い合わせる（resolv.conf(5) の <code>single-request</code> の説明より）ため、パケット数はその 2 倍になる。クラウドによっては kubelet がノード側の search ドメインも後ろに足すので、公式のデバッグ手順に載っている GKE の例のように search リストが 5 段になり、空振りがさらに増える。</p>
+        <p>1 回あたりの空振りは CoreDNS がクラスタ内の情報だけで即答するため、通常は速い。問題になるのは量と、まれな失敗だ。外部 API を毎リクエスト呼ぶサービスでは CoreDNS への問い合わせが数倍に膨らむ。さらに DNS は通常 UDP で運ばれるので、パケットが 1 つ落ちるとリゾルバは <code>timeout</code>（resolv.conf(5) によるデフォルト 5 秒）を待ってから再送する。往復が 4 倍あれば、この「たまに 5 秒遅い」に当たる機会も 4 倍になる。</p>
+      </section>
+
+      <div class="analogy">
+        <div class="box-title">🍱 たとえるなら</div>
+        <p>大企業の社内郵便係が「宛名の区切りが 5 つ未満なら、まず社内の住所録を自部署 → 本社 → グループ全体の順に引く」という規則で働いている状況だ。「田中」宛の手紙なら規則どおり自部署の田中さんに一発で届く。しかし「東京都千代田区丸の内」宛の社外向け手紙も区切りが少ないので、係は 3 冊の社内住所録を順にめくって「該当なし」を確かめてから、ようやく郵便局に回す。住所の末尾に「（社外）」と書き添えれば住所録は飛ばされる。これが末尾ドットの役割にあたる。</p>
+      </div>
+
+      <section class="body-section">
+        <h3>空振りを減らす 3 つの手と、その副作用</h3>
+        <p>最初に試すべきは、外部ドメインを<strong>末尾ドット付きの FQDN</strong> で書くことだ。<code>api.example.com.</code> のように最後に点を付けた名前は「これで完結している」という意味になり、リゾルバは search リストを使わずに 1 回だけ問い合わせる。アプリ側の変更だけで済むが、HTTP クライアントやライブラリによっては Host ヘッダや証明書の名前照合で末尾ドットの扱いが揺れることがあるため、通信先ごとに動作を確かめてから使うほうがよい。</p>
+        <p>次の手は、Pod 単位で <code>ndots</code> を下げることだ。<code>dnsConfig.options</code> に書いた値は kubelet が生成する resolv.conf にそのまま反映される。</p>
+<pre class="code">spec:
+  dnsConfig:
+    options:
+      - name: ndots
+        value: "2"</pre>
+        <p><code>ndots:2</code> にすると、点が 2 つ以上の <code>api.example.com</code> は最初から本来の名前で引かれ、空振りが消える。一方、<code>data.prod</code>（点 1 つ）は従来どおり search リストで補完されるが、<code>data.prod.svc</code>（点 2 つ）は先に外部へ問い合わせて NXDOMAIN を受けてから search リストに戻る。名前解決自体は成功するが、今度はクラスタ内の名前で空振りが起きる。<code>ndots</code> を下げるのは、その Pod が使う名前の形を把握してからにする。</p>
+        <p>3 つ目は、クラスタ側で <strong>NodeLocal DNSCache</strong>（各ノードに DaemonSet として置く DNS キャッシュ）を導入することだ。問い合わせの回数自体は変わらないが、Pod は同じノード上のキャッシュに聞くため、kube-proxy の DNAT や conntrack（Linux カーネルの接続追跡表）を経由しなくなる。公式ドキュメントは、これにより conntrack の競合で UDP パケットが落ちる問題が減り、キャッシュから CoreDNS への通信を TCP に切り替えることでタイムアウト起因のテールレイテンシも減ると説明している。</p>
+      </section>
+
+      <div class="practical">
+        <div class="box-title">💼 実務でどう出会うか</div>
+        <p>典型的な入口は「外部 API 呼び出しのレイテンシ p99 だけが 5 秒前後に張り付く」「CoreDNS の CPU 使用率が Pod 数のわりに高い」「CoreDNS のログが NXDOMAIN だらけ」の 3 つだ。どれも Pod 内で <code>cat /etc/resolv.conf</code> を見て、呼び出し先ドメインの点の数と <code>ndots</code> を比べるところから調べ始める。対策は影響範囲の小さい順に、①外部ドメインを末尾ドット付きで書く、②外部呼び出しの多い Pod だけ <code>dnsConfig</code> で <code>ndots</code> を下げる、③クラスタ全体で NodeLocal DNSCache を入れる、と進めるのが無難だ。アプリ側で解決結果をキャッシュする HTTP クライアントやコネクションプールを使っていれば、名前解決の回数自体も減る。</p>
+      </div>
+
+      <div class="hands-on">
+        <div class="box-title">⌨️ 手を動かす（5 分）</div>
+        <p>kind で作ったローカルクラスタの Pod から、search リストによる空振りを目で見る。<code>dig</code> は標準では search リストを使わないので、<code>+search</code> で resolv.conf の設定に従わせ、<code>+showsearch</code> で途中の問い合わせも表示させる。</p>
+<pre class="code">kind create cluster --name dns-lab
+kubectl run dnstest --image=nicolaka/netshoot --restart=Never -- sleep 3600
+kubectl wait --for=condition=Ready pod/dnstest --timeout=120s
+kubectl exec dnstest -- cat /etc/resolv.conf
+
+# 末尾ドットなし: search リストを順に試す
+kubectl exec dnstest -- dig +search +showsearch +noall +comments +question api.github.com | grep -E 'status:|^;api'
+
+# 末尾ドットあり: 1 回で済む
+kubectl exec dnstest -- dig +search +showsearch +noall +comments +question api.github.com. | grep -E 'status:|^;api'
+
+kind delete cluster --name dns-lab</pre>
+        <p>1 つ目の <code>dig</code> では、<code>api.github.com.default.svc.cluster.local.</code> などの問い合わせに <code>status: NXDOMAIN</code> が返った後、最後の <code>api.github.com.</code> で <code>status: NOERROR</code> になる様子が見えるはずだ。2 つ目は <code>NOERROR</code> の 1 組だけになる。resolv.conf の search リストの段数は、ホスト側の設定によって増えることがある。</p>
+      </div>
+
+      <div class="misconceptions">
+        <div class="box-title">🙅 よくある誤解</div>
+        <ul>
+          <li><span class="wrong">search リストはクラスタ内の短い名前にしか使われない</span> — リゾルバは名前の意味ではなく点の数しか見ない。<code>ndots:5</code> の下では、点が 4 つ以下の外部ドメインもすべて search リストを先に試す。</li>
+          <li><span class="wrong">クラスタ全体で <code>ndots:1</code> にすれば副作用なく解決する</span> — <code>data.prod</code> のような点を含む短縮名が、まず外部 DNS へ問い合わされてから補完されるようになる。外部に同名のドメインが実在すると、意図しない宛先に解決される余地も生まれる。</li>
+          <li><span class="wrong">DNS は UDP の 1 往復なので、回数が増えても誤差の範囲だ</span> — 平常時は速いが、UDP パケットが 1 つ落ちるとリゾルバはタイムアウト（デフォルト 5 秒）まで待つ。往復の回数が増えるほど、まれな数秒の遅延に当たる確率も増える。</li>
+        </ul>
+      </div>
+
+      <div class="glossary">
+        <div class="box-title">📖 用語ミニ辞典</div>
+        <dl>
+          <dt>スタブリゾルバ</dt><dd>libc などに組み込まれ、<code>/etc/resolv.conf</code> に従って DNS サーバーへ問い合わせを投げる部品。</dd>
+          <dt>search リスト</dt><dd>短い名前に補って試すドメインの一覧。resolv.conf の <code>search</code> 行で指定する。</dd>
+          <dt>ndots</dt><dd>名前の点の数がこの値未満なら search リストを先に試し、以上なら名前そのものを先に試す閾値。</dd>
+          <dt>FQDN</dt><dd>ルートまで省略せずに書いた完全な名前。末尾にドットを付けると search リストの対象外になる。</dd>
+          <dt>NXDOMAIN</dt><dd>「その名前は存在しない」を表す DNS の応答コード。</dd>
+          <dt>NodeLocal DNSCache</dt><dd>各ノードに DaemonSet として DNS キャッシュを置き、Pod の問い合わせを同じノード内で受ける Kubernetes の仕組み。</dd>
+        </dl>
+      </div>
+
+      <div class="further-reading">
+        <div class="box-title">🔗 もっと深く</div>
+        <ul>
+          <li><a href="https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/">DNS for Services and Pods (Kubernetes Docs)</a> — Pod の resolv.conf、<code>dnsPolicy</code> の 4 種類、<code>dnsConfig</code> の書き方と上限が一次情報でまとまっている。</li>
+          <li><a href="https://man7.org/linux/man-pages/man5/resolv.conf.5.html">resolv.conf(5) - Linux manual page</a> — <code>ndots</code>・<code>timeout</code>・<code>attempts</code>・<code>single-request</code> のデフォルト値と挙動の原典。</li>
+          <li><a href="https://kubernetes.io/docs/tasks/administer-cluster/nodelocaldns/">Using NodeLocal DNSCache in Kubernetes Clusters</a> — conntrack と UDP がなぜ DNS のテールレイテンシを生むのか、ノードローカルキャッシュでどう避けるのか。</li>
+          <li><a href="https://kubernetes.io/docs/tasks/administer-cluster/dns-debugging-resolution/">Debugging DNS Resolution (Kubernetes Docs)</a> — クラウドごとに search リストが伸びる例と、Pod 内での名前解決の調べ方。</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- recent:start -->
+    <!-- recent:end -->
+
+    <footer>
+      <p>Generated by Claude Code (GitHub Actions)</p>
+      <a href="./" class="archive-link">過去の記事</a>
+    </footer>
+  </div>
+</body>
+</html>

@@ -30,7 +30,7 @@
       <div class="chip-row" id="cat-chips">
         <span class="row-label">カテゴリ</span>
         <button class="chip on" data-cat="">すべて</button>
-        <button class="chip" data-cat="container">Container <span class="chip-count">15</span></button>
+        <button class="chip" data-cat="container">Container <span class="chip-count">16</span></button>
         <button class="chip" data-cat="network">Network <span class="chip-count">14</span></button>
         <button class="chip" data-cat="db">DB <span class="chip-count">12</span></button>
         <button class="chip" data-cat="arch">Arch <span class="chip-count">9</span></button>
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-10">
       <div class="section-title">2026 年 10 月 <span class="count"></span></div>
+      <div class="card" data-cat="container" data-diff="基礎"
+           data-search="api.example.com を 1 回引いただけなのに、なぜ pod は dns に 4 回も問い合わせるのか？ kubernetes の kubelet は pod の resolv.conf に search ドメイン 3 つと ndots:5 を書くため、点が 5 個未満の外部ドメインは search リストを順に試して nxdomain を受けてから本来の名前で引かれる。a/aaaa の並行問い合わせ、udp 落ち時の 5 秒タイムアウト、末尾ドット fqdn、dnsconfig での ndots 調整とその副作用、nodelocal dnscache を扱う。" data-terms="スタブリゾルバ / search リスト / ndots / FQDN / NXDOMAIN / NodeLocal DNSCache">
+        <h3><a href="2026-10-23.html">api.example.com を 1 回引いただけなのに、なぜ Pod は DNS に 4 回も問い合わせるのか？</a></h3>
+        <div class="summary">Kubernetes の kubelet は Pod の resolv.conf に search ドメイン 3 つと ndots:5 を書くため、点が 5 個未満の外部ドメインは search リストを順に試して NXDOMAIN を受けてから本来の名前で引かれる。A/AAAA の並行問い合わせ、UDP 落ち時の 5 秒タイムアウト、末尾ドット FQDN、dnsConfig での ndots 調整とその副作用、NodeLocal DNSCache を扱う。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-container">Container</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-23</span></div>
+      </div>
       <div class="card" data-cat="perf" data-diff="基礎"
            data-search="同じ二重ループなのに、なぜ i と j を入れ替えるだけで何倍も遅くなるのか？ cpu はメモリを 1 バイトずつではなく 64 バイト前後のキャッシュライン単位で運ぶ。行優先の配列を列ごとに回すと運んだ塊の大半を捨てるうえプリフェッチも効かず、別コアが同じラインの別変数に書くとフォールスシェアリングで遅くなる。drepper の測定値、mesi、go の cachelinepad、apple silicon の 128 バイトも扱う。" data-terms="CPU キャッシュ / キャッシュライン / 空間的局所性 / ハードウェアプリフェッチ / キャッシュコヒーレンシ / フォールスシェアリング">
         <h3><a href="2026-10-22.html">同じ二重ループなのに、なぜ i と j を入れ替えるだけで何倍も遅くなるのか？</a></h3>

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tech Learning Daily — 同じ二重ループなのに、なぜ i と j を入れ替えるだけで何倍も遅くなるのか？</title>
+  <title>Tech Learning Daily — api.example.com を 1 回引いただけなのに、なぜ Pod は DNS に 4 回も問い合わせるのか？</title>
   <link rel="stylesheet" href="style.css">
   <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="feed.xml">
   <link rel="icon" href="/favicon.ico" sizes="48x48">
@@ -14,141 +14,136 @@
   <div class="container">
     <header>
       <h1>Tech Learning Daily</h1>
-      <div class="date">2026-10-22 (Thu) — 第 97 号</div>
+      <div class="date">2026-10-23 (Fri) — 第 98 号</div>
       <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
     </header>
 
     <article class="article">
       <div class="meta-bar">
-        <span class="tag tag-perf">Perf</span>
+        <span class="tag tag-container">Container</span>
         <span class="difficulty">🌿 基礎</span>
         <span class="read-time">⏱ 約 7 分</span>
       </div>
-      <h2 class="article-title">同じ二重ループなのに、なぜ i と j を入れ替えるだけで何倍も遅くなるのか？</h2>
-      <p class="lead">計算量の授業では、<code>for i</code> の中に <code>for j</code> を書けば O(n²)、ループの順序を入れ替えても O(n²) のままだと習った。ところが同じ配列の全要素を足すだけのコードでも、行ごとに回すか列ごとに回すかで実行時間が数倍変わる。足し算の回数はまったく同じなのに、時間はどこへ消えているのだろうか。</p>
+      <h2 class="article-title">api.example.com を 1 回引いただけなのに、なぜ Pod は DNS に 4 回も問い合わせるのか？</h2>
+      <p class="lead">Kubernetes 上のアプリから外部の決済 API を呼ぶとき、コードに書くのは <code>https://api.example.com/...</code> の 1 行だけだ。ところが CoreDNS のログを開くと、<code>api.example.com.default.svc.cluster.local</code> のような存在しない名前への問い合わせと NXDOMAIN（該当なし）の応答が何行も並んでいる。誰がこんな名前を作り、なぜ失敗するとわかっている問い合わせを繰り返しているのだろうか。</p>
 
       <div class="tldr">
         <div class="box-title">🎯 3 行まとめ</div>
         <ul>
-          <li>CPU はメモリを 1 バイトずつではなく、キャッシュラインと呼ぶ 64 バイト前後の塊単位でキャッシュに運ぶ。</li>
-          <li>メモリ上で隣り合うデータを順に読むコードは、運ばれた塊を使い切れて先読みも効くが、飛び飛びに読むコードは塊のほとんどを捨ててメモリを待ち続ける。</li>
-          <li>書き込みも塊単位で管理されるため、別々の変数でも同じキャッシュラインに乗っていると、別コアからの書き込みが互いの足を引っ張る（フォールスシェアリング）。</li>
+          <li>名前解決はアプリ内のリゾルバが <code>/etc/resolv.conf</code> を読んで行い、点の数が <code>ndots</code> 未満の名前には <code>search</code> リストのドメインを順に付けて先に試す。</li>
+          <li>kubelet は Pod の <code>resolv.conf</code> に search ドメイン 3 つと <code>ndots:5</code> を書くため、点が 2 つの <code>api.example.com</code> も「短い名前」扱いになり、3 回の空振りの後でやっと本来の名前が引かれる。</li>
+          <li>末尾ドット付きの FQDN、<code>dnsConfig</code> での <code>ndots</code> 調整、NodeLocal DNSCache で空振りのコストを減らせるが、<code>ndots</code> を下げるとクラスタ内の短縮名の引き方も変わる。</li>
         </ul>
       </div>
 
       <section class="body-section">
-        <h3>CPU はメモリを直接読んでいない</h3>
-        <p>CPU とメインメモリ（DRAM）の間には速度差がある。Ulrich Drepper の解説「What Every Programmer Should Know About Memory」が Intel の資料から引いている Pentium M の数字では、レジスタへのアクセスが 1 サイクル以下、L1 データキャッシュが約 3 サイクル、L2 が約 14 サイクルなのに対し、メインメモリは約 240 サイクルかかる。世代によって数字は変わるが、メインメモリだけが桁違いに遠いという構図は変わっていない。</p>
-        <p>この差を埋めるのが <strong>CPU キャッシュ</strong>（CPU の近くに置かれた、小さいが高速なメモリ）だ。CPU がデータを要求すると、まず L1、なければ L2、さらに L3 と近い順に探し、どこにも無いとき（キャッシュミス）に初めてメインメモリまで取りに行く。ミスした読み込みは数百サイクル待たされ、その間 CPU は計算を進められないことが多い。プログラムの速さは、命令の数だけでなく「何回メモリまで取りに行かせたか」でも決まる。</p>
+        <h3>名前解決は「どの名前を試すか」から始まる</h3>
+        <p>アプリが <code>getaddrinfo()</code> などで名前を引くとき、実際に DNS サーバーへ問い合わせるのはアプリのプロセス内にある<strong>スタブリゾルバ</strong>（libc などに組み込まれた、問い合わせを組み立てて DNS サーバーに投げる部品）だ。スタブリゾルバは問い合わせの前に <code>/etc/resolv.conf</code> を読み、どの DNS サーバーに、どの名前を、どの順で聞くかを決める。</p>
+        <p>順序を決めるのが 2 つの設定だ。<code>search</code> は、短い名前に補って試すドメインの一覧（search リスト）。<code>options ndots:N</code> は、名前に含まれる点が N 個未満なら search リストを先に試し、N 個以上なら最初から名前そのものを試す、という切り替えの閾値だ。glibc の resolv.conf(5) によれば <code>ndots</code> のデフォルトは 1 で、上限 15 に丸められる。</p>
+        <p>デフォルトの <code>ndots:1</code> なら、点を 1 つでも含む名前はまず「そのまま」引かれる。社内ネットワークで <code>search corp.example</code> を設定しておけば、<code>ssh build01</code> と打つだけで <code>build01.corp.example</code> を探してくれる。search リストはもともと、このような人間向けの省略入力のための仕組みだ。</p>
       </section>
 
       <section class="body-section">
-        <h3>1 バイト頼むと、64 バイトまとめて届く</h3>
-        <p>キャッシュはデータを 1 バイト単位ではなく、<strong>キャッシュライン</strong>（キャッシュとメモリの間でやり取りする固定長の塊）単位で管理する。Drepper によれば、初期のキャッシュは 32 バイトだったが現在は 64 バイトが標準だ。8 バイトの <code>double</code> を 1 つ読むと、その前後を含む 64 バイト、つまり <code>double</code> 8 個分がまとめてキャッシュに載る。</p>
-        <p>まとめて運ぶのは、プログラムが直前に触ったデータの近くを次に触ることが多いからだ。この性質を<strong>空間的局所性</strong>と呼ぶ。配列を先頭から順に読むコードなら、1 回のミスで運ばれた 8 個を続けてすべて使えるので、ミスは 8 要素に 1 回で済む。</p>
-        <p>ここで冒頭の二重ループに戻る。C・Go・JS の型付き配列などでは、2 次元配列は行を端から順に並べた 1 本の連続領域として置かれることが多い（行優先）。4096×4096 の <code>double</code> 配列なら、1 行は 4096×8＝32KB だ。</p>
-<pre class="diagram">メモリ上の並び（行優先。00 は a[0][0]、1 マス 8B）
-┌──┬──┬──┬──┬──┬──┬──┬──┐
-│00│01│02│03│04│05│06│07│ ← 1 ライン
-└──┴──┴──┴──┴──┴──┴──┴──┘
-  行 0 の続き … 32KB 先から行 1 が始まる
+        <h3>kubelet が Pod に書く resolv.conf</h3>
+        <p>Kubernetes では、kubelet が Pod ごとに <code>/etc/resolv.conf</code> を生成する。<code>dnsPolicy</code> を指定しない Pod には <code>ClusterFirst</code> が適用され（名前は紛らわしいが、<code>Default</code> はデフォルトではない）、公式ドキュメントの例では次の内容になる。</p>
+<pre class="code">nameserver 10.32.0.10
+search &lt;namespace&gt;.svc.cluster.local svc.cluster.local cluster.local
+options ndots:5</pre>
+        <p><code>nameserver</code> はクラスタ DNS（多くの場合 CoreDNS）の Service の IP だ。search リストが 3 段あるおかげで、同じ Namespace の Service は <code>data</code>、別 Namespace なら <code>data.prod</code> と書くだけで <code>data.prod.svc.cluster.local</code> に補完される。コードや設定ファイルに長い FQDN（ルートまで省略せずに書いた完全な名前）を書かなくて済むのは、この search リストのおかげだ。</p>
+        <p><code>ndots:5</code> という大きな値を選んだ理由は公式ドキュメントに明記されていない。ただ、Service の SRV レコード名は <code>_port._proto.my-svc.my-ns.svc</code> の形まで省略でき、この時点で点が 4 つある。点 4 つまでの名前をすべて「クラスタ内の短縮名かもしれない」と扱うには閾値を 5 にする必要がある、と考えると数字の辻褄は合う。</p>
+      </section>
 
-行ごと (a[i][j], j が内側):
- 00▶01▶02▶…▶07  1 回のミスで 8 個使う
-
-列ごと (a[i][j], i が内側):
- 00 ──32KB──▶ 10 ──32KB──▶ 20
- 毎回別のラインを運び、1 個だけ使って
- 残り 7 個は捨てる</pre>
-        <p>列ごとに回すと、内側のループが 1 歩進むたびに 32KB 先へ飛ぶ。毎回別のキャッシュラインを運び込み、そのうち 8 バイトしか使わない。しかも 4096 行ぶんのラインを保持しきれないので、次の列で同じラインに戻ってきた頃には追い出されていることが多い。足し算の回数は同じでも、メモリまで取りに行く回数がおよそ 8 倍に膨らむ。</p>
+      <section class="body-section">
+        <h3>外部ドメインも「短い名前」扱いになる</h3>
+        <p>search リストはクラスタ内の名前のためにあるのだから、外部ドメインには関係ないように思える。しかしリゾルバが見ているのは点の数だけだ。<code>api.example.com</code> の点は 2 つで 5 未満なので、<code>default</code> Namespace の Pod では次の順に問い合わせが進む。</p>
+<pre class="diagram">Pod (ns: default)          CoreDNS
+ │ api.example.com +        │
+ │.default.svc.cluster.local│
+ ├─────────────────────────▶│
+ │◀──────────── NXDOMAIN ───┤
+ │.svc.cluster.local        │
+ ├─────────────────────────▶│
+ │◀──────────── NXDOMAIN ───┤
+ │.cluster.local            │
+ ├─────────────────────────▶│
+ │◀──────────── NXDOMAIN ───┤
+ │ api.example.com          │
+ ├─────────────────────────▶│──▶ 上流 DNS
+ │◀──────────── IP ─────────┤
+ ▼                          ▼</pre>
+        <p>1 回の名前解決が 4 往復になる。しかも glibc はデフォルトで IPv4 用の A レコードと IPv6 用の AAAA レコードを並行して問い合わせる（resolv.conf(5) の <code>single-request</code> の説明より）ため、パケット数はその 2 倍になる。クラウドによっては kubelet がノード側の search ドメインも後ろに足すので、公式のデバッグ手順に載っている GKE の例のように search リストが 5 段になり、空振りがさらに増える。</p>
+        <p>1 回あたりの空振りは CoreDNS がクラスタ内の情報だけで即答するため、通常は速い。問題になるのは量と、まれな失敗だ。外部 API を毎リクエスト呼ぶサービスでは CoreDNS への問い合わせが数倍に膨らむ。さらに DNS は通常 UDP で運ばれるので、パケットが 1 つ落ちるとリゾルバは <code>timeout</code>（resolv.conf(5) によるデフォルト 5 秒）を待ってから再送する。往復が 4 倍あれば、この「たまに 5 秒遅い」に当たる機会も 4 倍になる。</p>
       </section>
 
       <div class="analogy">
         <div class="box-title">🍱 たとえるなら</div>
-        <p>閉架式の図書館で本を頼むと、司書は書庫まで往復して、頼んだ 1 冊だけでなく同じ棚の 8 冊をまとめて机に運んでくる。棚に並んだ順に読み進める人は、8 冊読み終わるまで司書を待たない。一方、各棚の 1 冊目だけを順に読みたい人は、毎回往復を待ったうえで、運ばれた残り 7 冊を読まずに返すことになる。読む冊数は同じでも、待ち時間の合計は往復の回数で決まる。</p>
+        <p>大企業の社内郵便係が「宛名の区切りが 5 つ未満なら、まず社内の住所録を自部署 → 本社 → グループ全体の順に引く」という規則で働いている状況だ。「田中」宛の手紙なら規則どおり自部署の田中さんに一発で届く。しかし「東京都千代田区丸の内」宛の社外向け手紙も区切りが少ないので、係は 3 冊の社内住所録を順にめくって「該当なし」を確かめてから、ようやく郵便局に回す。住所の末尾に「（社外）」と書き添えれば住所録は飛ばされる。これが末尾ドットの役割にあたる。</p>
       </div>
 
       <section class="body-section">
-        <h3>順番どおりに読むと、往復そのものが隠れる</h3>
-        <p>差を広げるもう一つの仕組みが<strong>ハードウェアプリフェッチ</strong>（アクセスの規則性から、次に要るキャッシュラインを CPU が先回りして読み込む機能）だ。先頭から順番に読むパターンは予測しやすいので、データが要る時点にはすでにキャッシュに届いている状態を作れる。</p>
-        <p>Drepper の Pentium 4 での測定では、作業データが L2 に収まらない大きさでも、順次アクセスなら 1 要素あたりのコストを 9 サイクル程度まで抑えられた。メインメモリ自体の遅延が 200 サイクルを超えるにもかかわらずだ。対してランダムなアクセスではプリフェッチが働かず、450 サイクル以上に達した。</p>
-        <p>直感的には「メモリが遅いのだから、どのアクセスも同じくらい遅い」と思える。しかし実際には、メモリの遅さが表に出るかどうかはアクセスの並び順で決まる。順番どおりのアクセスでは遅延がプリフェッチの裏に隠れ、予測できないアクセスでは毎回むき出しになる。O 記法はこの差を定数倍として捨ててしまうので、O 記法だけを見ても気づけない。</p>
-      </section>
-
-      <section class="body-section">
-        <h3>書き込むと、同じラインの「隣人」まで巻き込む</h3>
-        <p>マルチコア CPU では、コアごとに L1・L2 キャッシュを持つ。同じアドレスのコピーが複数のコアに載りうるので、矛盾しないように調停する仕組みが要る。これを<strong>キャッシュコヒーレンシ</strong>と呼び、代表的なプロトコルが MESI だ。各キャッシュラインを Modified・Exclusive・Shared・Invalid の 4 状態で管理し、あるコアが書き込むときは、他のコアが持つ同じラインのコピーを無効化する。Drepper はこの所有権要求（Request For Ownership）を高価な操作として挙げている。</p>
-        <p>問題は、この調停がキャッシュライン単位で行われることだ。コア A がカウンタ <code>x</code> を、コア B が別のカウンタ <code>y</code> を更新しているだけでも、<code>x</code> と <code>y</code> が同じラインに乗っていれば、書き込みのたびに互いのコピーが無効化され、ラインがコア間を行き来する。論理的には何も共有していないのに共有しているかのように遅くなるので、<strong>フォールスシェアリング</strong>と呼ばれる。Linux カーネルのドキュメントは、検出に <code>perf c2c</code> を使う手順と、頻繁に書く変数を専用のラインに隔離する対策を挙げている。</p>
-        <p>対策は、別スレッドが書き込む値の間に詰め物を挟んでラインを分けることだ。Go では <code>golang.org/x/sys/cpu</code> パッケージが、偽共有を避けるための詰め物として <code>CacheLinePad</code> 型を提供している。</p>
-<pre class="code">import "golang.org/x/sys/cpu"
-
-// goroutine ごとに 1 つずつ持たせるカウンタ
-type shard struct {
-    n int64
-    _ cpu.CacheLinePad // 次の shard と別ラインに分ける
-}
-
-var shards [8]shard</pre>
-        <p>詰め物を入れなければ 8 バイトの <code>int64</code> が 1 つのラインに並び、各 goroutine が自分の要素だけを書いていても互いのラインを奪い合う。入れると 1 要素ごとにメモリは増えるが、書き込みが他コアのキャッシュを無効化しなくなる。ただしラインの大きさは「どこでも 64 バイト」とは限らない。Go の <code>x/sys</code> は Apple M1 向けの値を 64 から 128 に修正しており、Rust の crossbeam は x86-64 でも、Intel の空間プリフェッチャが 64 バイトのラインを 2 本組で読み込むことを理由に 128 バイトを仮定している。詰め物の幅は自分で数字を書かず、こうしたライブラリの定義に任せるほうが安全だ。</p>
+        <h3>空振りを減らす 3 つの手と、その副作用</h3>
+        <p>最初に試すべきは、外部ドメインを<strong>末尾ドット付きの FQDN</strong> で書くことだ。<code>api.example.com.</code> のように最後に点を付けた名前は「これで完結している」という意味になり、リゾルバは search リストを使わずに 1 回だけ問い合わせる。アプリ側の変更だけで済むが、HTTP クライアントやライブラリによっては Host ヘッダや証明書の名前照合で末尾ドットの扱いが揺れることがあるため、通信先ごとに動作を確かめてから使うほうがよい。</p>
+        <p>次の手は、Pod 単位で <code>ndots</code> を下げることだ。<code>dnsConfig.options</code> に書いた値は kubelet が生成する resolv.conf にそのまま反映される。</p>
+<pre class="code">spec:
+  dnsConfig:
+    options:
+      - name: ndots
+        value: "2"</pre>
+        <p><code>ndots:2</code> にすると、点が 2 つ以上の <code>api.example.com</code> は最初から本来の名前で引かれ、空振りが消える。一方、<code>data.prod</code>（点 1 つ）は従来どおり search リストで補完されるが、<code>data.prod.svc</code>（点 2 つ）は先に外部へ問い合わせて NXDOMAIN を受けてから search リストに戻る。名前解決自体は成功するが、今度はクラスタ内の名前で空振りが起きる。<code>ndots</code> を下げるのは、その Pod が使う名前の形を把握してからにする。</p>
+        <p>3 つ目は、クラスタ側で <strong>NodeLocal DNSCache</strong>（各ノードに DaemonSet として置く DNS キャッシュ）を導入することだ。問い合わせの回数自体は変わらないが、Pod は同じノード上のキャッシュに聞くため、kube-proxy の DNAT や conntrack（Linux カーネルの接続追跡表）を経由しなくなる。公式ドキュメントは、これにより conntrack の競合で UDP パケットが落ちる問題が減り、キャッシュから CoreDNS への通信を TCP に切り替えることでタイムアウト起因のテールレイテンシも減ると説明している。</p>
       </section>
 
       <div class="practical">
         <div class="box-title">💼 実務でどう出会うか</div>
-        <p>Web アプリで二重ループの順序に悩む場面は多くないが、同じ原理は形を変えて現れる。画像処理や行列計算でループの内外を入れ替えるだけで速くなるのは、ここで見た行優先の話そのものだ。Go でゴルーチンごとの統計カウンタを配列で持ったのにコアを増やしても伸びないときは、フォールスシェアリングを疑う理由になる。BigQuery や ClickHouse のような列指向 DB が集計に強い理由の一つも、集計に使う列の値だけがディスクやメモリ上で連続しており、運び込んだデータを無駄なく使えることにある。Ruby や JS の「オブジェクトの配列」は各要素がヒープ上に散らばった参照になりやすいため、数値を大量に処理するなら <code>Float64Array</code> のような連続配列に変えると効くことがある。</p>
+        <p>典型的な入口は「外部 API 呼び出しのレイテンシ p99 だけが 5 秒前後に張り付く」「CoreDNS の CPU 使用率が Pod 数のわりに高い」「CoreDNS のログが NXDOMAIN だらけ」の 3 つだ。どれも Pod 内で <code>cat /etc/resolv.conf</code> を見て、呼び出し先ドメインの点の数と <code>ndots</code> を比べるところから調べ始める。対策は影響範囲の小さい順に、①外部ドメインを末尾ドット付きで書く、②外部呼び出しの多い Pod だけ <code>dnsConfig</code> で <code>ndots</code> を下げる、③クラスタ全体で NodeLocal DNSCache を入れる、と進めるのが無難だ。アプリ側で解決結果をキャッシュする HTTP クライアントやコネクションプールを使っていれば、名前解決の回数自体も減る。</p>
       </div>
 
       <div class="hands-on">
         <div class="box-title">⌨️ 手を動かす（5 分）</div>
-        <p>まず自分の Mac が報告するキャッシュラインの大きさを確かめ、次に Node.js で同じ配列を行ごと・列ごとに合計して時間を比べる。配列は 4096×4096 の <code>Float64Array</code>（約 128MB）で、どちらのループも足し算の回数は同じだ。</p>
-<pre class="code">sysctl hw.cachelinesize
+        <p>kind で作ったローカルクラスタの Pod から、search リストによる空振りを目で見る。<code>dig</code> は標準では search リストを使わないので、<code>+search</code> で resolv.conf の設定に従わせ、<code>+showsearch</code> で途中の問い合わせも表示させる。</p>
+<pre class="code">kind create cluster --name dns-lab
+kubectl run dnstest --image=nicolaka/netshoot --restart=Never -- sleep 3600
+kubectl wait --for=condition=Ready pod/dnstest --timeout=120s
+kubectl exec dnstest -- cat /etc/resolv.conf
 
-cat &gt; /tmp/cache.js &lt;&lt;'EOF'
-const N = 4096;
-const a = new Float64Array(N * N).fill(1);
-function rows() { let s = 0;
-  for (let i = 0; i &lt; N; i++)
-    for (let j = 0; j &lt; N; j++) s += a[i * N + j];
-  return s; }
-function cols() { let s = 0;
-  for (let j = 0; j &lt; N; j++)
-    for (let i = 0; i &lt; N; i++) s += a[i * N + j];
-  return s; }
-for (const f of [rows, cols, rows, cols]) {
-  const t = performance.now(); f();
-  console.log(f.name, (performance.now() - t).toFixed(0), 'ms');
-}
-EOF
-node /tmp/cache.js</pre>
-        <p><code>sysctl</code> は Apple Silicon の Mac なら 128 が返るはずだ（Intel の Mac なら x86 標準の 64 になる）。Node のほうは、<code>cols</code> が <code>rows</code> の数倍の時間を示すはずだ（筆者が Linux 環境で試したときは約 20ms 対約 100ms だった。倍率は CPU によって変わる）。<code>N</code> を 512 程度まで小さくすると配列全体がキャッシュに収まりやすくなり、差が縮まることも確かめてみるとよい。</p>
+# 末尾ドットなし: search リストを順に試す
+kubectl exec dnstest -- dig +search +showsearch +noall +comments +question api.github.com | grep -E 'status:|^;api'
+
+# 末尾ドットあり: 1 回で済む
+kubectl exec dnstest -- dig +search +showsearch +noall +comments +question api.github.com. | grep -E 'status:|^;api'
+
+kind delete cluster --name dns-lab</pre>
+        <p>1 つ目の <code>dig</code> では、<code>api.github.com.default.svc.cluster.local.</code> などの問い合わせに <code>status: NXDOMAIN</code> が返った後、最後の <code>api.github.com.</code> で <code>status: NOERROR</code> になる様子が見えるはずだ。2 つ目は <code>NOERROR</code> の 1 組だけになる。resolv.conf の search リストの段数は、ホスト側の設定によって増えることがある。</p>
       </div>
 
       <div class="misconceptions">
         <div class="box-title">🙅 よくある誤解</div>
         <ul>
-          <li><span class="wrong">計算量が同じなら、実行時間もほぼ同じになる</span> — O 記法はキャッシュミスの回数の差を定数倍として捨てる。同じ O(n²) でも、メモリを読む順序次第で数倍の差が出る。</li>
-          <li><span class="wrong">スレッドごとに別の変数を書いていれば、互いに干渉しない</span> — キャッシュの調停はライン単位なので、別の変数でも同じキャッシュラインに載っていれば、書き込みのたびに相手のコピーが無効化される。</li>
-          <li><span class="wrong">キャッシュラインはどの CPU でも 64 バイトだ</span> — x86 では 64 バイトが標準だが、macOS は Apple Silicon で 128 を報告し、隣接ラインの先読みを考えて 128 バイトを仮定するライブラリもある。</li>
+          <li><span class="wrong">search リストはクラスタ内の短い名前にしか使われない</span> — リゾルバは名前の意味ではなく点の数しか見ない。<code>ndots:5</code> の下では、点が 4 つ以下の外部ドメインもすべて search リストを先に試す。</li>
+          <li><span class="wrong">クラスタ全体で <code>ndots:1</code> にすれば副作用なく解決する</span> — <code>data.prod</code> のような点を含む短縮名が、まず外部 DNS へ問い合わされてから補完されるようになる。外部に同名のドメインが実在すると、意図しない宛先に解決される余地も生まれる。</li>
+          <li><span class="wrong">DNS は UDP の 1 往復なので、回数が増えても誤差の範囲だ</span> — 平常時は速いが、UDP パケットが 1 つ落ちるとリゾルバはタイムアウト（デフォルト 5 秒）まで待つ。往復の回数が増えるほど、まれな数秒の遅延に当たる確率も増える。</li>
         </ul>
       </div>
 
       <div class="glossary">
         <div class="box-title">📖 用語ミニ辞典</div>
         <dl>
-          <dt>CPU キャッシュ</dt><dd>CPU の近くに置かれた小容量・高速のメモリ。L1・L2・L3 と階層になっている。</dd>
-          <dt>キャッシュライン</dt><dd>キャッシュとメモリの間でやり取りするデータの固定長の塊。x86 では 64 バイトが標準。</dd>
-          <dt>空間的局所性</dt><dd>直前に触ったデータの近くを次に触りやすいというプログラムの性質。</dd>
-          <dt>ハードウェアプリフェッチ</dt><dd>アクセスの規則性から、次に要るラインを CPU が先回りして読み込む機能。</dd>
-          <dt>キャッシュコヒーレンシ</dt><dd>複数コアのキャッシュに載った同じデータのコピーを矛盾させない仕組み。MESI が代表例。</dd>
-          <dt>フォールスシェアリング</dt><dd>無関係な変数が同じキャッシュラインに載っているせいで、別コアの書き込みが互いを遅くする現象。</dd>
+          <dt>スタブリゾルバ</dt><dd>libc などに組み込まれ、<code>/etc/resolv.conf</code> に従って DNS サーバーへ問い合わせを投げる部品。</dd>
+          <dt>search リスト</dt><dd>短い名前に補って試すドメインの一覧。resolv.conf の <code>search</code> 行で指定する。</dd>
+          <dt>ndots</dt><dd>名前の点の数がこの値未満なら search リストを先に試し、以上なら名前そのものを先に試す閾値。</dd>
+          <dt>FQDN</dt><dd>ルートまで省略せずに書いた完全な名前。末尾にドットを付けると search リストの対象外になる。</dd>
+          <dt>NXDOMAIN</dt><dd>「その名前は存在しない」を表す DNS の応答コード。</dd>
+          <dt>NodeLocal DNSCache</dt><dd>各ノードに DaemonSet として DNS キャッシュを置き、Pod の問い合わせを同じノード内で受ける Kubernetes の仕組み。</dd>
         </dl>
       </div>
 
       <div class="further-reading">
         <div class="box-title">🔗 もっと深く</div>
         <ul>
-          <li><a href="https://lwn.net/Articles/252125/">Memory part 2: CPU caches - LWN.net</a> — Drepper の古典的解説のキャッシュ編。キャッシュライン、順次・ランダムアクセスの測定、MESI まで本記事の数字の出典。</li>
-          <li><a href="https://docs.kernel.org/kernel-hacking/false-sharing.html">False Sharing - The Linux Kernel documentation</a> — フォールスシェアリングの発生条件と、<code>perf c2c</code> による検出、構造体の並べ替えなどの対策がまとまっている。</li>
-          <li><a href="https://docs.rs/crossbeam-utils/latest/crossbeam_utils/struct.CachePadded.html">CachePadded - crossbeam_utils</a> — アーキテクチャごとに仮定するライン長と、x86-64 で 128 バイトを選んだ理由が書かれている。</li>
+          <li><a href="https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/">DNS for Services and Pods (Kubernetes Docs)</a> — Pod の resolv.conf、<code>dnsPolicy</code> の 4 種類、<code>dnsConfig</code> の書き方と上限が一次情報でまとまっている。</li>
+          <li><a href="https://man7.org/linux/man-pages/man5/resolv.conf.5.html">resolv.conf(5) - Linux manual page</a> — <code>ndots</code>・<code>timeout</code>・<code>attempts</code>・<code>single-request</code> のデフォルト値と挙動の原典。</li>
+          <li><a href="https://kubernetes.io/docs/tasks/administer-cluster/nodelocaldns/">Using NodeLocal DNSCache in Kubernetes Clusters</a> — conntrack と UDP がなぜ DNS のテールレイテンシを生むのか、ノードローカルキャッシュでどう避けるのか。</li>
+          <li><a href="https://kubernetes.io/docs/tasks/administer-cluster/dns-debugging-resolution/">Debugging DNS Resolution (Kubernetes Docs)</a> — クラウドごとに search リストが伸びる例と、Pod 内での名前解決の調べ方。</li>
         </ul>
       </div>
     </article>
@@ -156,6 +151,11 @@ node /tmp/cache.js</pre>
     <!-- recent:start -->
     <section class="section recent-articles">
       <div class="section-title">最近の記事</div>
+      <div class="card">
+        <h3><a href="archive/2026-10-22.html">同じ二重ループなのに、なぜ i と j を入れ替えるだけで何倍も遅くなるのか？</a></h3>
+        <div class="summary">CPU はメモリを 1 バイトずつではなく 64 バイト前後のキャッシュライン単位で運ぶ。行優先の配列を列ごとに回すと運んだ塊の大半を捨てるうえプリフェッチも効かず、別コアが同じラインの別変数に書くとフォールスシェアリングで遅くなる。Drepper の測定値、MESI、Go の CacheLinePad、Apple Silicon の 128 バイトも扱う。</div>
+        <div class="meta"><span class="tag tag-perf">Perf</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-22</span></div>
+      </div>
       <div class="card">
         <h3><a href="archive/2026-10-21.html">たった 1 行の正規表現なのに、なぜ CPU が 100% に張り付くのか？</a></h3>
         <div class="summary">JavaScript・Ruby・Python の正規表現エンジンは失敗すると分岐点に戻って別の道を試すバックトラッキング方式で、(a+)+ のような曖昧なパターンはマッチしない入力に対して区切り方を全通り試すため 1 文字ごとに時間が倍になる。Cloudflare の障害事例、Go/RE2 の線形時間保証と後方参照の放棄、書き換え・アトミックグループ・Regexp.timeout による対策も扱う。</div>
@@ -170,11 +170,6 @@ node /tmp/cache.js</pre>
         <h3><a href="archive/2026-10-19.html">Prometheus の p99 はどこから出てくるのか？ 生の数字は増え続けるカウンタだけなのに</a></h3>
         <div class="summary">アプリが公開するのは起動からの累計カウンタだけで、秒間の値は rate() がリセット補正と外挿を加えて計算する。histogram は「何秒以下が何件」の累積バケットで、p99 は histogram_quantile() がバケット内を一様とみなした補間で推定する。集計順と summary との違いも扱う。</div>
         <div class="meta"><span class="tag tag-obs">Obs</span><span>🌿 基礎</span><span>⏱ 約 8 分</span><span>2026-10-19</span></div>
-      </div>
-      <div class="card">
-        <h3><a href="archive/2026-10-18.html">同じイメージからコンテナを 10 個起動したのに、なぜディスクは 10 倍にならないのか？</a></h3>
-        <div class="summary">コンテナは共有の読み取り専用イメージレイヤーに薄い書き込み層を OverlayFS で重ねるだけなのでディスクが増えない。初回書き込みはファイル丸ごとの copy-up、削除は whiteout になるため、別レイヤーで消してもイメージは縮まない。ボリュームと ephemeral-storage も扱う。</div>
-        <div class="meta"><span class="tag tag-container">Container</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-18</span></div>
       </div>
       <div class="recent-more"><a href="archive/">アーカイブですべて見る →</a></div>
     </section>
