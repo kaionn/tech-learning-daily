@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tech Learning Daily — 同じ UUID の主キーなのに、なぜ v4 だとテーブルが育つほど INSERT が重くなるのか？</title>
+  <link rel="stylesheet" href="../style.css">
+  <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="../feed.xml">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Tech Learning Daily</h1>
+      <div class="date">2026-10-25 (Sun) — 第 100 号</div>
+      <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
+    </header>
+
+    <article class="article">
+      <div class="meta-bar">
+        <span class="tag tag-db">DB</span>
+        <span class="difficulty">🌿 基礎</span>
+        <span class="read-time">⏱ 約 7 分</span>
+      </div>
+      <h2 class="article-title">同じ UUID の主キーなのに、なぜ v4 だとテーブルが育つほど INSERT が重くなるのか？</h2>
+      <p class="lead">Rails で <code>create_table :orders, id: :uuid</code> と書けば、ID の採番を DB に問い合わせずに済み、URL から件数も推測されにくい。ところが「UUID の主キーはインデックスに悪い」「v7 にしろ」という話もよく聞く。同じ 128 ビットの値なのに、生成方法を変えるだけで DB の負荷が変わるのはなぜだろうか。</p>
+
+      <div class="tldr">
+        <div class="box-title">🎯 3 行まとめ</div>
+        <ul>
+          <li>B+Tree はキーの順に並ぶので、完全ランダムな UUIDv4 を入れると挿入先がインデックス全体に散り、ページ分割と「全ページをメモリに置いておく必要」が生じる。</li>
+          <li>UUIDv7 は先頭 48 ビットがミリ秒単位の Unix 時刻なので、新しい値はほぼ常にインデックスの右端に入り、連番 bigint に近い書き込みパターンになる。</li>
+          <li>PostgreSQL 18 で <code>uuidv7()</code> が組み込まれた。ただし v7 は生成時刻を外に漏らすので、推測されてはいけないトークンには v4 を使う。</li>
+        </ul>
+      </div>
+
+      <section class="body-section">
+        <h3>UUID のバージョンは「128 ビットのどこに何を詰めるか」の違い</h3>
+        <p><code>UUID</code>（Universally Unique Identifier）は、中央の採番係なしにどこでも重複しにくい ID を作るための 128 ビットの値で、現行の仕様は RFC 9562 である。どの版も長さは同じで、違いは中身のビットの割り当てにある。版番号は 4 ビットの <code>ver</code> フィールドに書かれ、文字列表記では 3 つ目のブロックの先頭 1 文字（<code>xxxxxxxx-xxxx-<strong>7</strong>xxx-...</code>）として目で見える。</p>
+        <p>v4 は版と variant の固定ビットを除いた 122 ビットがすべて乱数である。Rails の PostgreSQL アダプタが <code>id: :uuid</code> で既定に使う <code>gen_random_uuid()</code> もこの v4 を返す。</p>
+        <p>v7 は先頭 48 ビットにミリ秒単位の Unix 時刻（<code>unix_ts_ms</code>）を入れ、残りの 12 ビット（<code>rand_a</code>）と 62 ビット（<code>rand_b</code>）を乱数かカウンタで埋める。時刻が上位にあるので、v7 はバイト列のまま比較するだけで生成順に並ぶ。</p>
+<pre class="diagram">UUIDv4: 122 ビットがほぼ全部乱数
+┌────────────┬───┬──────┬───┬──────┐
+│ random     │ver│random│var│random│
+│ 48 bit     │ 4 │ 12   │ 2 │ 62   │
+└────────────┴───┴──────┴───┴──────┘
+
+UUIDv7: 上位 48 ビットが時刻
+┌────────────┬───┬──────┬───┬──────┐
+│ unix_ts_ms │ver│rand_a│var│rand_b│
+│ 48 bit     │ 4 │ 12   │ 2 │ 62   │
+└────────────┴───┴──────┴───┴──────┘
+  ▲ ここが大きいほど新しい
+    ▶ B+Tree の右端に入る</pre>
+      </section>
+
+      <section class="body-section">
+        <h3>B+Tree の「どこに入れるか」はキーの値だけで決まる</h3>
+        <p>PostgreSQL でも InnoDB でも、主キーには B+Tree のインデックスが付く。<code>B+Tree</code> は、キーを昇順に並べた固定サイズのページ（InnoDB の既定は 16KB）を木構造でつないだもので、新しいキーを入れる葉ページはキーの大小だけで一意に決まる。連番 bigint なら新しい値は常に最大なので、書き込みは毎回いちばん右の葉ページに集まる。</p>
+        <p>v4 だとこの性質が裏返る。乱数のキーは既存のどのキーとの間にも同じ確率で入りうるので、100 万行目の INSERT が 1 行目の近くのページに入ることもある。満杯のページに入れるときは、そのページを 2 つに割って半分ずつ移す<code>ページ分割</code>が起き、親ページへのポインタ追加も伴う。</p>
+        <p>分割された直後のページは半分ほど空いたまま残る。MySQL のマニュアルは、InnoDB のクラスタ化インデックスに昇順や降順で挿入するとページは約 15/16 まで埋まるが、ランダムな順で挿入すると 1/2〜15/16 になると書いている。同じ行数でもインデックスがかさばるのはこのためだ。</p>
+      </section>
+
+      <div class="analogy">
+        <div class="box-title">🍱 たとえるなら</div>
+        <p>受付番号順に綴じるファイルなら、新しい書類は常に最後のページの後ろに足すだけで済む。ところが書類を「名前のランダムな暗号」順に綴じると決めた途端、1 枚届くたびに棚のどこかのファイルを開き、満杯なら 2 冊に分け直す羽目になる。しかも次にどの棚に行くか分からないので、手元に全部のファイルを広げておかないと速く作業できない。</p>
+      </div>
+
+      <section class="body-section">
+        <h3>本当に効いてくるのは「メモリに載り切らなくなった後」</h3>
+        <p>ページ分割の回数だけが問題に見える。しかし実際に INSERT を重くするのは、どのページに触るかが読めないことのほうだ。DB はディスク上のページをメモリ上のバッファ（PostgreSQL の <code>shared_buffers</code>、InnoDB のバッファプール）にキャッシュして読み書きする。連番なら触るのは右端の数ページだけなので、インデックスが何十 GB になっても書き込みに必要なページはメモリに残り続ける。</p>
+        <p>v4 では INSERT のたびにインデックス全体のどこかのページが必要になるので、書き込みに必要な作業領域（<code>ワーキングセット</code>）がインデックス全体になる。テーブルが小さいうちは全ページがメモリに収まるので差は見えにくい。インデックスがバッファを超えた時点から、INSERT ごとにディスクからページを読み戻す処理が混ざり始め、「最初は速かったのにテーブルが育つほど遅くなる」という形で現れる。</p>
+        <p>WAL も増える。PostgreSQL は既定の <code>full_page_writes = on</code> で、チェックポイント後に初めて変更するページの全内容を WAL に書く。ランダムな挿入はチェックポイントの間に変更するページの種類が多いので、そのぶんページ丸ごとの記録が増える。RFC 9562 の 6.11 節も、ランダムな挿入と時刻順の挿入の性能差は 1 桁以上になりうると述べている。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>InnoDB と PostgreSQL で痛み方が違う</h3>
+        <p>InnoDB は主キーの B+Tree の葉に行データそのものを格納する。これを<code>クラスタ化インデックス</code>と呼ぶ。そのため主キーがランダムだと、インデックスだけでなく行データ本体の配置まで散らばる。さらにセカンダリインデックスの各レコードは行を引くために主キーの値を持つので、8 バイトの bigint を 16 バイトの UUID に変えるとすべてのセカンダリインデックスが太る。</p>
+        <p>PostgreSQL のテーブル本体（ヒープ）は主キー順に並ばないので、散らばるのは主キーのインデックスだけで済む。ただし葉ページの扱いには差がある。B-Tree の <code>fillfactor</code>（既定 90）は、初回構築時と「右端に新しい最大値を足すとき」に葉をどこまで詰めるかを決める設定で、右端に足し続ける時刻順の挿入ではこの割合どおり余白を残して詰まる。ランダムな挿入はページが満杯になってから途中で割れるので、この割合は効かない。</p>
+        <p>PostgreSQL 18（2025 年 9 月 25 日リリース）からは <code>uuidv7()</code> が組み込まれ、拡張なしで既定値にできる。Rails では既定値を明示すれば v4 から切り替わる。</p>
+<pre class="code">create_table :orders, id: :uuid, default: -&gt; { "uuidv7()" } do |t|
+  t.string :status
+  t.timestamps
+end</pre>
+        <p><code>default</code> を書かなければ従来どおり <code>gen_random_uuid()</code>（v4）が使われる。v7 は採番が DB 側でもアプリ側でもよいが、同一ミリ秒内に複数のサーバーで生成した値の前後は乱数で決まる。完全な昇順ではなく「ほぼ右端」に入る値だと理解しておくとよい。</p>
+      </section>
+
+      <div class="practical">
+        <div class="box-title">💼 実務でどう出会うか</div>
+        <p>典型は「ログやイベントのテーブルを UUID 主キーで作り、半年後に INSERT のレイテンシとディスク I/O がじわじわ上がる」パターンである。インデックスサイズがバッファの大きさを超えた頃に症状が出やすいので、<code>pg_relation_size('テーブル名_pkey')</code> を監視しておくと兆候を掴める。新規テーブルなら最初から v7 を既定値にするのが安上がりで、既存テーブルの採番を v7 に変えた場合は、以降の新しい行が右端に入るようになる（既存の散らばったページは <code>REINDEX</code> するまでそのまま残る）。</p>
+      </div>
+
+      <div class="hands-on">
+        <div class="box-title">⌨️ 手を動かす（5 分）</div>
+        <p>PostgreSQL 18 のコンテナで、v4 と v7 を主キーにした同じ形のテーブルに 100 万行ずつ入れ、主キーインデックスの大きさを比べる。</p>
+        <pre class="code">docker run -d --name pg18 -e POSTGRES_PASSWORD=pw postgres:18
+sleep 5
+docker exec -i pg18 psql -U postgres &lt;&lt;'SQL'
+CREATE TABLE t4 (id uuid PRIMARY KEY DEFAULT uuidv4(), n int);
+CREATE TABLE t7 (id uuid PRIMARY KEY DEFAULT uuidv7(), n int);
+\timing on
+INSERT INTO t4 (n) SELECT g FROM generate_series(1, 1000000) g;
+INSERT INTO t7 (n) SELECT g FROM generate_series(1, 1000000) g;
+\timing off
+SELECT relname, pg_size_pretty(pg_relation_size(oid))
+  FROM pg_class WHERE relname IN ('t4_pkey', 't7_pkey');
+SELECT id, uuid_extract_timestamp(id) FROM t7 LIMIT 3;
+SQL
+docker rm -f pg18</pre>
+        <p><code>t4_pkey</code> のほうが同じ行数でも大きくなるはずだ。所要時間の差は、100 万行のインデックスが手元のメモリに収まる規模なので小さいこともある（差が開くのはバッファに載り切らなくなってから）。最後の SELECT では、v7 の ID から生成時刻がそのまま取り出せることが確認できる。</p>
+      </div>
+
+      <div class="misconceptions">
+        <div class="box-title">🙅 よくある誤解</div>
+        <ul>
+          <li><span class="wrong">v7 にすれば連番 bigint と同じ性能になる</span> — 挿入位置の局所性は近づくが、キーは 16 バイトで bigint の倍ある。InnoDB ではすべてのセカンダリインデックスが主キーを持つので、その差がインデックスの数だけ効く。</li>
+          <li><span class="wrong">UUID は推測できないので、v7 もパスワードリセットのトークン等に使える</span> — v7 は上位 48 ビットが生成時刻で、乱数は残りの最大 74 ビットしかない。RFC 9562 もセキュリティ用途に使うなら v4 を使うべきとしている。</li>
+          <li><span class="wrong">UUID を <code>varchar(36)</code> で持っても中身は同じ</span> — 文字列では 36 文字ぶんの領域と文字列比較が必要になる。RFC 9562 も可能なら 128 ビットのバイナリで保存するよう勧めており、PostgreSQL なら <code>uuid</code> 型、MySQL なら <code>BINARY(16)</code> を使う。</li>
+        </ul>
+      </div>
+
+      <div class="glossary">
+        <div class="box-title">📖 用語ミニ辞典</div>
+        <dl>
+          <dt>UUID</dt><dd>中央の採番なしに重複しにくい ID を作る 128 ビットの値。版ごとにビットの割り当てが違う。</dd>
+          <dt>UUIDv7</dt><dd>上位 48 ビットにミリ秒単位の Unix 時刻を置いた UUID。バイト順に並べると生成順になる。</dd>
+          <dt>ページ分割</dt><dd>満杯の B+Tree ページに挿入するとき、ページを 2 つに割って中身を半分ずつ移す処理。</dd>
+          <dt>クラスタ化インデックス</dt><dd>インデックスの葉に行データそのものを持つ構造。InnoDB では主キーがこれになる。</dd>
+          <dt>ワーキングセット</dt><dd>ある処理を速く回すためにメモリに載っていてほしいページの集合。</dd>
+          <dt>fillfactor</dt><dd>インデックスのページをどこまで詰めるかの割合。PostgreSQL の B-Tree の既定は 90。</dd>
+        </dl>
+      </div>
+
+      <div class="further-reading">
+        <div class="box-title">🔗 もっと深く</div>
+        <ul>
+          <li><a href="https://www.rfc-editor.org/rfc/rfc9562.html">RFC 9562: Universally Unique IDentifiers (UUIDs)</a> — 5.7 節の v7 のビット配置と、6.11 節の DB インデックス局所性の議論が一次ソース。</li>
+          <li><a href="https://www.postgresql.org/docs/current/functions-uuid.html">PostgreSQL: UUID Functions</a> — <code>uuidv7()</code> の時刻ずらし引数や <code>uuid_extract_timestamp()</code> の仕様。</li>
+          <li><a href="https://dev.mysql.com/doc/refman/8.0/en/innodb-physical-structure.html">MySQL: The Physical Structure of an InnoDB Index</a> — 順序どおりとランダムな挿入でページの埋まり方がどう違うかの公式記述。</li>
+          <li><a href="https://www.postgresql.org/docs/18/sql-createindex.html">PostgreSQL: CREATE INDEX（fillfactor）</a> — B-Tree の葉を右端拡張時にどう詰めるかの説明。</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- recent:start -->
+    <!-- recent:end -->
+
+    <footer>
+      <p>Generated by Claude Code (GitHub Actions)</p>
+      <a href="./" class="archive-link">過去の記事</a>
+    </footer>
+  </div>
+</body>
+</html>

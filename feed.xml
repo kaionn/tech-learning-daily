@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-10-24T08:56:02+09:00</updated>
+  <updated>2026-10-25T08:23:05+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>同じ UUID の主キーなのに、なぜ v4 だとテーブルが育つほど INSERT が重くなるのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-10-25.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-10-25.html</id>
+    <updated>2026-10-25T08:23:05+09:00</updated>
+    <summary>B+Tree はキー順に並ぶため、乱数の UUIDv4 は挿入先がインデックス全体に散りページ分割とメモリ圧迫を招く。先頭 48 ビットが時刻の UUIDv7 は右端に入り連番に近い書き込みになる。</summary>
+  </entry>
   <entry>
     <title>スレッドは数本しかないのに、なぜ nginx は何千もの接続を同時に捌けるのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-10-24.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-10-12.html</id>
     <updated>2026-10-12T09:40:12+09:00</updated>
     <summary>時刻には世界で1つの「瞬間」と場所ごとの「壁時計時刻」があり、PostgreSQLのtimestamptzは瞬間をUTCで持ちtimestampはオフセットを捨てる。Rails・JSで9時間や1日ずれる仕組みと対策を解説。</summary>
-  </entry>
-  <entry>
-    <title>見た目は 1 文字なのに、なぜ JS は 8、Go は 18、Ruby は 5 と数えるのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-10-11.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-10-11.html</id>
-    <updated>2026-10-11T09:18:58+09:00</updated>
-    <summary>文字には符号位置・符号化(UTF-8/UTF-16)・書記素クラスタの3層があり、言語ごとに数える層が違う。UTF-8の可変長設計、JSのサロゲートペア、MySQLのutf8mb3で絵文字が入らない理由を解説。</summary>
   </entry>
 </feed>
