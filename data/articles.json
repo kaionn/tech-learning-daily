@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-10-26.html",
+    "date": "2026-10-26",
+    "title": "メモリリークはしていないのに、なぜ Rails のプロセスは日に日に太っていくのか？",
+    "summary": "free したメモリは、ヒープの上端に使用中の領域が残る限り OS に返らない。glibc の malloc はスレッド間のロック競合を避けるためにアリーナを 64 ビットでは既定でコア数の 8 倍まで増やすので、空きが分散して断片化し、マルチスレッドで I/O をする Puma や Sidekiq の RSS が高止まりする。MALLOC_ARENA_MAX=2、jemalloc と LD_PRELOAD、Rails の Dockerfile の設定、GVL との関係も扱う。",
+    "category": "lang",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": ["malloc", "アリーナ", "断片化", "RSS", "MALLOC_ARENA_MAX", "jemalloc"]
+  },
+  {
     "file": "2026-10-25.html",
     "date": "2026-10-25",
     "title": "同じ UUID の主キーなのに、なぜ v4 だとテーブルが育つほど INSERT が重くなるのか？",

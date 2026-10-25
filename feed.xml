@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-10-25T08:23:05+09:00</updated>
+  <updated>2026-10-26T08:23:47+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>メモリリークはしていないのに、なぜ Rails のプロセスは日に日に太っていくのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-10-26.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-10-26.html</id>
+    <updated>2026-10-26T08:23:47+09:00</updated>
+    <summary>free した領域は上端に使用中が残る限り OS に返らず、glibc malloc はスレッド競合を避けてアリーナを最大コア数の 8 倍まで増やすため空きが分散する。MALLOC_ARENA_MAX=2 か jemalloc で抑える。</summary>
+  </entry>
   <entry>
     <title>同じ UUID の主キーなのに、なぜ v4 だとテーブルが育つほど INSERT が重くなるのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-10-25.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-10-13.html</id>
     <updated>2026-10-13T11:39:25+09:00</updated>
     <summary>LLMは毎トークン確率の表から候補を選び、temperature・top_k・top_pはその選び方を変える。温度0で乱数は消えるが、同時処理数で足し算の順序が変わりロジットが揺れるため出力は完全には一致しない。</summary>
-  </entry>
-  <entry>
-    <title>created_at は正しく保存したはずなのに、なぜ画面の時刻が 9 時間ずれるのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-10-12.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-10-12.html</id>
-    <updated>2026-10-12T09:40:12+09:00</updated>
-    <summary>時刻には世界で1つの「瞬間」と場所ごとの「壁時計時刻」があり、PostgreSQLのtimestamptzは瞬間をUTCで持ちtimestampはオフセットを捨てる。Rails・JSで9時間や1日ずれる仕組みと対策を解説。</summary>
   </entry>
 </feed>

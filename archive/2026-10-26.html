@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tech Learning Daily — メモリリークはしていないのに、なぜ Rails のプロセスは日に日に太っていくのか？</title>
+  <link rel="stylesheet" href="../style.css">
+  <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="../feed.xml">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Tech Learning Daily</h1>
+      <div class="date">2026-10-26 (Mon) — 第 101 号</div>
+      <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
+    </header>
+
+    <article class="article">
+      <div class="meta-bar">
+        <span class="tag tag-lang">Lang</span>
+        <span class="difficulty">🌿 基礎</span>
+        <span class="read-time">⏱ 約 7 分</span>
+      </div>
+      <h2 class="article-title">メモリリークはしていないのに、なぜ Rails のプロセスは日に日に太っていくのか？</h2>
+      <p class="lead">Puma や Sidekiq のプロセスのメモリ使用量が、デプロイ直後から右肩上がりに増え続けるグラフを見たことはないだろうか。リークを疑って調べても、Ruby のオブジェクト数は増えていない。それでも OS から見たプロセスは太り続け、やがてコンテナのメモリ上限に当たる。犯人は Ruby ではなく、その下で動く C の <code>malloc</code> であることが多い。</p>
+
+      <div class="tldr">
+        <div class="box-title">🎯 3 行まとめ</div>
+        <ul>
+          <li><code>free</code> したメモリはすぐ OS に返るわけではない。malloc は空き領域を手元に抱えて再利用し、ヒープの上端に使用中の領域が残る限り下の空きは返せない。</li>
+          <li>glibc の malloc はスレッドの競合を避けるためにアリーナ（独立したメモリ置き場）を増やし、64 ビットでは既定でコア数の 8 倍まで作る。置き場が多いほど空きが分散して、穴だらけの領域が増える。</li>
+          <li>Ruby アプリでは <code>MALLOC_ARENA_MAX=2</code> でアリーナ数を絞るか、jemalloc に差し替えるのが定番の対策で、現行の Rails が生成する Dockerfile は jemalloc を読み込む設定になっている。</li>
+        </ul>
+      </div>
+
+      <section class="body-section">
+        <h3>free しても OS にメモリが返るとは限らない</h3>
+        <p>Ruby の文字列や配列の中身は、最終的に C ライブラリの <code>malloc</code> で確保され、GC が不要と判断すると <code>free</code> される。<code>malloc</code> はプロセス内のメモリ管理係で、OS から大きめの塊をまとめて借り、それを小さく切り分けてプログラムに渡す。Linux で標準的に使われるのは glibc の実装である。</p>
+        <p>小さな確保（glibc の既定では 128KiB 未満）は、<code>ヒープ</code>と呼ばれる連続した領域から切り出される。メインのヒープは <code>brk</code>/<code>sbrk</code> というシステムコールで上端を伸ばして広げる仕組みなので、縮めるときも上端からしか縮められない（後述のスレッド用の置き場も、上端から使い上端から返す点は同じである）。glibc は上端に 128KiB（<code>M_TRIM_THRESHOLD</code> の既定）以上の空きが溜まったときに上端を切り詰めて OS に返す。</p>
+        <p>問題は真ん中の空きである。ヒープの途中にある領域を free しても、その上に 1 つでも使用中の領域が残っていれば上端は下げられない。空きは次の malloc で再利用されるが、サイズが合わなければ使われずに残る。この「空いているのに返せず、使い回しもしにくい」状態を<code>断片化</code>と呼ぶ。C で確保した領域はポインタで直接指されているので、malloc が中身を動かして詰め直すこともできない。</p>
+        <p>OS から見えるプロセスのメモリ量（<code>RSS</code>: 物理メモリに載っているページの量）は、Ruby が実際に使っている量ではなく、malloc が抱えている量に近い。だから Ruby 側のオブジェクトが増えていなくても RSS は下がらない。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>スレッドが増えると置き場も増える — glibc のアリーナ</h3>
+        <p>空き領域の一覧は共有データなので、複数スレッドが同時に malloc を呼ぶとロックで待たされる。glibc はこれを避けるため、ロックの競合を検出すると<code>アリーナ</code>を追加で作る。アリーナは自前の空き領域リストとロックを持つ独立したメモリ置き場で、競合したスレッドは別のアリーナから確保するようになる。</p>
+        <p>アリーナ数には上限がある。<code>mallopt(3)</code> の <code>M_ARENA_MAX</code> は既定 0（明示的な上限なし）で、そのときはシステム構成から上限が決まり、Heroku のドキュメントによれば 64 ビット環境では CPU コア数の 8 倍になる。4 コアのコンテナなら最大 32 個の置き場ができうる。</p>
+<pre class="diagram">I/O 中のスレッドが同時に malloc する
+T1  T2  T3  T4  …
+ │   │   │   │
+ ▼   ▼   ▼   ▼
+┌──┐┌──┐┌──┐┌──┐
+│a0││a1││a2││a3│ … 上限 8×コア数
+└──┘└──┘└──┘└──┘
+
+1 つのアリーナの中（低位 → 高位）
+┌────┬────┬────┬────┬────┐
+│used│free│free│used│used│◀ 上端
+└────┴────┴────┴────┴────┘
+ free は同じアリーナの malloc だけが
+ 再利用する。上端が used なので返せない</pre>
+        <p>置き場が増えると断片化が悪化する。あるアリーナに空きがあっても、別のアリーナに割り当てられたスレッドはそれを使えない。空きが 32 か所に分散すれば、1 か所にまとまっていれば再利用できたはずの領域が、それぞれのアリーナで抱え込まれたまま残る。</p>
+      </section>
+
+      <div class="analogy">
+        <div class="box-title">🍱 たとえるなら</div>
+        <p>倉庫の在庫棚である。レジ待ちを減らすために棚と係員を 1 組から 32 組に増やすと、各棚に少しずつ空きスペースが散らばる。A 棚にも B 棚にも半端な隙間はあるのに、A 棚の係員は B 棚の隙間を使えないので、新しい荷物が来るたびに倉庫そのものを借り増すことになる。しかも棚の一番奥に荷物が 1 つ残っているだけで、その棚は大家に返せない。</p>
+      </div>
+
+      <section class="body-section">
+        <h3>GVL があるのに Ruby で効いてくる理由</h3>
+        <p>Ruby（CRuby）には GVL（同時に Ruby コードを実行できるスレッドを 1 本に絞るロック）があるので、malloc の競合など起きないように思える。しかし実際は、DB や HTTP の応答を待つ I/O の間は GVL が手放され、その間に C 拡張やランタイム内部で走る確保が他のスレッドと重なる。Nate Berkopec の解説も、アリーナの影響を受けるのは「マルチスレッドで、かつ I/O をする」CRuby アプリだと述べている。Puma のスレッドや Sidekiq の concurrency で多数のスレッドを動かす構成がまさにこれに当たる。</p>
+        <p>影響の大きさは環境によるが、同記事が引用する Heroku での測定（glibc 2.19）では、アリーナ数無制限の場合はメモリが 1.73 倍、<code>MALLOC_ARENA_MAX=2</code> では 0.87 倍で、応答時間の差は 1 割程度だった。Heroku は 2019 年 9 月 24 日以降に作成した Ruby アプリで <code>MALLOC_ARENA_MAX=2</code> を既定にしている。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>対策は 2 つ: アリーナを絞るか、malloc を差し替えるか</h3>
+        <p>1 つ目は環境変数 <code>MALLOC_ARENA_MAX</code> でアリーナ数の上限を決めることだ。値を小さくするとメモリは減るが、ロック待ちが増えて遅くなりうる。Heroku はテスト結果から 2 を推奨し、1 では性能低下が大きい割に節約分はわずかだという報告もある。この変数は最初のメモリ確保より前に読まれるので、<code>.env</code> を Ruby 側で読み込むのでは遅く、プロセス起動時の環境に入れておく必要がある。</p>
+<pre class="code"># Kubernetes の Deployment（コンテナ定義の一部）
+env:
+  - name: MALLOC_ARENA_MAX
+    value: "2"</pre>
+        <p>2 つ目は malloc の実装そのものを <code>jemalloc</code> に替えることだ。jemalloc は断片化を抑える設計の別実装で、<code>LD_PRELOAD</code>（指定したライブラリをプログラムより先に読み込ませ、同名の関数を差し替える仕組み）で glibc の malloc の代わりに使わせられる。現行の <code>rails new</code> が生成する Dockerfile は、<code>libjemalloc2</code> を入れたうえで次の設定を書く。</p>
+<pre class="code">ENV LD_PRELOAD="/usr/local/lib/libjemalloc.so"</pre>
+        <p>jemalloc を使っている場合、<code>MALLOC_ARENA_MAX</code> は glibc 向けの設定なので効果がない（Heroku のドキュメントもこの点を明記している）。どちらも設定しない場合は glibc の既定どおりアリーナが増え、長時間動くワーカーほど RSS が高止まりしやすい。</p>
+      </section>
+
+      <div class="practical">
+        <div class="box-title">💼 実務でどう出会うか</div>
+        <p>典型は「Sidekiq の Pod が数日おきに OOMKilled になり、再起動すると直る」という症状である。コンテナのメモリ上限は RSS を含む使用量で判定されるので、malloc が抱え込んだ空きも上限を食う。まず Dockerfile の <code>LD_PRELOAD</code> と環境変数 <code>MALLOC_ARENA_MAX</code> のどちらかが設定されているかを確認し、どちらも無ければ片方を入れて数日間の RSS の推移を比べる。それでも単調に増え続けるなら、そこで初めて本物のリーク（参照が残り続けるオブジェクト）を疑えばよい。</p>
+      </div>
+
+      <div class="hands-on">
+        <div class="box-title">⌨️ 手を動かす（5 分）</div>
+        <p>macOS の malloc は glibc ではないので、Linux コンテナの中で 16 スレッドが同時に malloc/free を繰り返す小さな C プログラムを動かし、glibc の <code>malloc_stats()</code> が表示するアリーナの数を数える。</p>
+        <pre class="code">mkdir -p /tmp/arena &amp;&amp; cd /tmp/arena
+cat &gt; arena.c &lt;&lt;'EOF'
+#include &lt;malloc.h&gt;
+#include &lt;pthread.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+void *work(void *arg) {
+  for (int i = 0; i &lt; 100000; i++) {
+    char *p = malloc(1024);
+    memset(p, 1, 1024);
+    free(p);
+  }
+  return NULL;
+}
+int main(void) {
+  pthread_t t[16];
+  for (int i = 0; i &lt; 16; i++) pthread_create(&amp;t[i], NULL, work, NULL);
+  for (int i = 0; i &lt; 16; i++) pthread_join(t[i], NULL);
+  malloc_stats();
+  return 0;
+}
+EOF
+docker run --rm -v "$PWD":/w -w /w gcc:14 sh -c '
+  gcc -pthread arena.c -o arena
+  echo "default: $(./arena 2&gt;&amp;1 | grep -c ^Arena)"
+  echo "max=2:   $(MALLOC_ARENA_MAX=2 ./arena 2&gt;&amp;1 | grep -c ^Arena)"
+  ./arena 2&gt;&amp;1 | tail -4'</pre>
+        <p>既定では複数のアリーナが作られ（数は Docker に割り当てたコア数とタイミングで変わる。4 コアの Linux では 15 前後になった）、<code>MALLOC_ARENA_MAX=2</code> では 2 に収まるはずだ。最後の出力では、全スレッドが free し終えた後でも <code>system bytes</code>（OS から借りている量）が <code>in use bytes</code>（実際に使用中の量）よりずっと大きいことが確認できる。</p>
+      </div>
+
+      <div class="misconceptions">
+        <div class="box-title">🙅 よくある誤解</div>
+        <ul>
+          <li><span class="wrong">RSS が増え続けるならメモリリークだ</span> — RSS は malloc が OS から借りて抱えている量で、Ruby が使っている量ではない。オブジェクト数が横ばいで RSS だけが増えるなら、断片化を先に疑う。</li>
+          <li><span class="wrong">GC を頻繁に走らせればメモリは減る</span> — GC は Ruby のオブジェクトを解放して malloc に返すだけで、malloc がそれを OS に返すかは別の話である。上端に使用中の領域が残っていれば、GC 後も RSS はほとんど下がらない。</li>
+          <li><span class="wrong"><code>MALLOC_ARENA_MAX=1</code> にすれば最も省メモリで得</span> — すべてのスレッドが 1 つのロックを奪い合うので性能低下が大きく、2 と比べた節約分はわずかだという報告がある。推奨値として広く使われているのは 2 である。</li>
+        </ul>
+      </div>
+
+      <div class="glossary">
+        <div class="box-title">📖 用語ミニ辞典</div>
+        <dl>
+          <dt>malloc</dt><dd>OS から借りたメモリを小さく切り分けてプログラムに渡す C ライブラリの関数。free で返された領域を再利用する。</dd>
+          <dt>アリーナ</dt><dd>glibc malloc が持つ独立したメモリ置き場。スレッド間のロック競合を避けるために複数作られる。</dd>
+          <dt>断片化</dt><dd>空き領域が使用中の領域の間に細切れに散らばり、再利用も OS への返却もしにくくなった状態。</dd>
+          <dt>RSS</dt><dd>プロセスが実際に物理メモリに載せているページの量。コンテナのメモリ上限の判定にも関わる。</dd>
+          <dt>MALLOC_ARENA_MAX</dt><dd>glibc malloc が作るアリーナ数の上限を決める環境変数。プロセス起動時に設定しておく必要がある。</dd>
+          <dt>jemalloc</dt><dd>断片化を抑える設計の malloc 実装。LD_PRELOAD で glibc の malloc と差し替えて使う。</dd>
+        </dl>
+      </div>
+
+      <div class="further-reading">
+        <div class="box-title">🔗 もっと深く</div>
+        <ul>
+          <li><a href="https://www.speedshop.co/blog/malloc-doubles-ruby-memory/">Malloc Can Double Multi-threaded Ruby Program Memory Usage</a> — スレッドがアリーナを選ぶ手順と、Ruby での測定結果を詳しく追った解説。</li>
+          <li><a href="https://devcenter.heroku.com/articles/tuning-glibc-memory-behavior">Heroku Dev Center: Tuning glibc Memory Behavior</a> — MALLOC_ARENA_MAX の既定値と推奨値、性能とのトレードオフの公式説明。</li>
+          <li><a href="https://man7.org/linux/man-pages/man3/mallopt.3.html">mallopt(3) — Linux manual page</a> — M_ARENA_MAX・M_MMAP_THRESHOLD・M_TRIM_THRESHOLD の既定値と環境変数の一次ソース。</li>
+          <li><a href="https://man7.org/linux/man-pages/man3/malloc_trim.3.html">malloc_trim(3) — Linux manual page</a> — 空き領域を明示的に OS へ返す関数と、glibc 2.8 以降の挙動。</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- recent:start -->
+    <!-- recent:end -->
+
+    <footer>
+      <p>Generated by Claude Code (GitHub Actions)</p>
+      <a href="./" class="archive-link">過去の記事</a>
+    </footer>
+  </div>
+</body>
+</html>

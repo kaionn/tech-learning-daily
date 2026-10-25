@@ -35,9 +35,9 @@
         <button class="chip" data-cat="db">DB <span class="chip-count">13</span></button>
         <button class="chip" data-cat="arch">Arch <span class="chip-count">9</span></button>
         <button class="chip" data-cat="infra">Infra <span class="chip-count">8</span></button>
+        <button class="chip" data-cat="lang">Lang <span class="chip-count">8</span></button>
         <button class="chip" data-cat="security">Security <span class="chip-count">8</span></button>
         <button class="chip" data-cat="ai">AI <span class="chip-count">7</span></button>
-        <button class="chip" data-cat="lang">Lang <span class="chip-count">7</span></button>
         <button class="chip" data-cat="dev" data-overflow="1" hidden>Dev <span class="chip-count">5</span></button>
         <button class="chip" data-cat="perf" data-overflow="1" hidden>Perf <span class="chip-count">5</span></button>
         <button class="chip" data-cat="frontend" data-overflow="1" hidden>Frontend <span class="chip-count">4</span></button>
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-10">
       <div class="section-title">2026 年 10 月 <span class="count"></span></div>
+      <div class="card" data-cat="lang" data-diff="基礎"
+           data-search="メモリリークはしていないのに、なぜ rails のプロセスは日に日に太っていくのか？ free したメモリは、ヒープの上端に使用中の領域が残る限り os に返らない。glibc の malloc はスレッド間のロック競合を避けるためにアリーナを 64 ビットでは既定でコア数の 8 倍まで増やすので、空きが分散して断片化し、マルチスレッドで i/o をする puma や sidekiq の rss が高止まりする。malloc_arena_max=2、jemalloc と ld_preload、rails の dockerfile の設定、gvl との関係も扱う。" data-terms="malloc / アリーナ / 断片化 / RSS / MALLOC_ARENA_MAX / jemalloc">
+        <h3><a href="2026-10-26.html">メモリリークはしていないのに、なぜ Rails のプロセスは日に日に太っていくのか？</a></h3>
+        <div class="summary">free したメモリは、ヒープの上端に使用中の領域が残る限り OS に返らない。glibc の malloc はスレッド間のロック競合を避けるためにアリーナを 64 ビットでは既定でコア数の 8 倍まで増やすので、空きが分散して断片化し、マルチスレッドで I/O をする Puma や Sidekiq の RSS が高止まりする。MALLOC_ARENA_MAX=2、jemalloc と LD_PRELOAD、Rails の Dockerfile の設定、GVL との関係も扱う。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-lang">Lang</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-26</span></div>
+      </div>
       <div class="card" data-cat="db" data-diff="基礎"
            data-search="同じ uuid の主キーなのに、なぜ v4 だとテーブルが育つほど insert が重くなるのか？ b+tree はキー順に並ぶため、乱数の uuidv4 は挿入先がインデックス全体に散りページ分割とメモリ圧迫を招く。先頭 48 ビットが時刻の uuidv7 は右端に入り連番に近い書き込みになる。" data-terms="UUID / UUIDv7 / ページ分割 / クラスタ化インデックス / ワーキングセット / fillfactor">
         <h3><a href="2026-10-25.html">同じ UUID の主キーなのに、なぜ v4 だとテーブルが育つほど INSERT が重くなるのか？</a></h3>
