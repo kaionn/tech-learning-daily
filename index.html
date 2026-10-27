@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tech Learning Daily — メモリリークはしていないのに、なぜ Rails のプロセスは日に日に太っていくのか？</title>
+  <title>Tech Learning Daily — nil を返したはずなのに、なぜ Go の err != nil が true になるのか？</title>
   <link rel="stylesheet" href="style.css">
   <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="feed.xml">
   <link rel="icon" href="/favicon.ico" sizes="48x48">
@@ -14,7 +14,7 @@
   <div class="container">
     <header>
       <h1>Tech Learning Daily</h1>
-      <div class="date">2026-10-26 (Mon) — 第 101 号</div>
+      <div class="date">2026-10-27 (Tue) — 第 102 号</div>
       <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
     </header>
 
@@ -24,136 +24,148 @@
         <span class="difficulty">🌿 基礎</span>
         <span class="read-time">⏱ 約 7 分</span>
       </div>
-      <h2 class="article-title">メモリリークはしていないのに、なぜ Rails のプロセスは日に日に太っていくのか？</h2>
-      <p class="lead">Puma や Sidekiq のプロセスのメモリ使用量が、デプロイ直後から右肩上がりに増え続けるグラフを見たことはないだろうか。リークを疑って調べても、Ruby のオブジェクト数は増えていない。それでも OS から見たプロセスは太り続け、やがてコンテナのメモリ上限に当たる。犯人は Ruby ではなく、その下で動く C の <code>malloc</code> であることが多い。</p>
+      <h2 class="article-title">nil を返したはずなのに、なぜ Go の err != nil が true になるのか？</h2>
+      <p class="lead">バリデーション関数は何も問題なく終わり、最後の <code>return p</code> の <code>p</code> は確かに <code>nil</code> だった。それなのに呼び出し側の <code>if err != nil</code> に入り、ログには <code>error: &lt;nil&gt;</code> と出ている。nil なのに nil ではない値は、Go のどこから生まれるのだろうか。</p>
 
       <div class="tldr">
         <div class="box-title">🎯 3 行まとめ</div>
         <ul>
-          <li><code>free</code> したメモリはすぐ OS に返るわけではない。malloc は空き領域を手元に抱えて再利用し、ヒープの上端に使用中の領域が残る限り下の空きは返せない。</li>
-          <li>glibc の malloc はスレッドの競合を避けるためにアリーナ（独立したメモリ置き場）を増やし、64 ビットでは既定でコア数の 8 倍まで作る。置き場が多いほど空きが分散して、穴だらけの領域が増える。</li>
-          <li>Ruby アプリでは <code>MALLOC_ARENA_MAX=2</code> でアリーナ数を絞るか、jemalloc に差し替えるのが定番の対策で、現行の Rails が生成する Dockerfile は jemalloc を読み込む設定になっている。</li>
+          <li>Go の interface 値は「動的な型」と「動的な値」の 2 つの欄を持ち、<code>== nil</code> は両方が空のときだけ true になる。</li>
+          <li><code>nil</code> の <code>*MyError</code> を <code>error</code> として返すと、型の欄に <code>*MyError</code> が入るので「中身が nil なのに nil ではない error」になる。</li>
+          <li>対策は「エラーが無いときは素の <code>nil</code> を書いて返す」「戻り値の型を具体型でなく <code>error</code> にする」で、staticcheck の SA4023 が典型パターンを検出する。</li>
         </ul>
       </div>
 
       <section class="body-section">
-        <h3>free しても OS にメモリが返るとは限らない</h3>
-        <p>Ruby の文字列や配列の中身は、最終的に C ライブラリの <code>malloc</code> で確保され、GC が不要と判断すると <code>free</code> される。<code>malloc</code> はプロセス内のメモリ管理係で、OS から大きめの塊をまとめて借り、それを小さく切り分けてプログラムに渡す。Linux で標準的に使われるのは glibc の実装である。</p>
-        <p>小さな確保（glibc の既定では 128KiB 未満）は、<code>ヒープ</code>と呼ばれる連続した領域から切り出される。メインのヒープは <code>brk</code>/<code>sbrk</code> というシステムコールで上端を伸ばして広げる仕組みなので、縮めるときも上端からしか縮められない（後述のスレッド用の置き場も、上端から使い上端から返す点は同じである）。glibc は上端に 128KiB（<code>M_TRIM_THRESHOLD</code> の既定）以上の空きが溜まったときに上端を切り詰めて OS に返す。</p>
-        <p>問題は真ん中の空きである。ヒープの途中にある領域を free しても、その上に 1 つでも使用中の領域が残っていれば上端は下げられない。空きは次の malloc で再利用されるが、サイズが合わなければ使われずに残る。この「空いているのに返せず、使い回しもしにくい」状態を<code>断片化</code>と呼ぶ。C で確保した領域はポインタで直接指されているので、malloc が中身を動かして詰め直すこともできない。</p>
-        <p>OS から見えるプロセスのメモリ量（<code>RSS</code>: 物理メモリに載っているページの量）は、Ruby が実際に使っている量ではなく、malloc が抱えている量に近い。だから Ruby 側のオブジェクトが増えていなくても RSS は下がらない。</p>
+        <h3>interface 値は「型」と「値」の 2 欄でできている</h3>
+        <p>interface 型とは、メソッドの集合だけを定めて、それを満たす任意の具体型の値を入れられる型である。<code>error</code> も <code>Error() string</code> というメソッドを 1 つだけ持つ interface 型にすぎない。</p>
+        <p>Go の FAQ によれば、interface 値は内部的に型 <code>T</code> と値 <code>V</code> の 2 要素で実装されている。<code>V</code> は <code>int</code> や構造体やポインタなどの具体的な値で、これを<strong>動的な値</strong>と呼ぶ。<code>T</code> はその値の具体型で、これを<strong>動的な型</strong>と呼ぶ。「動的」と呼ぶのは、同じ interface 変数が実行中に別の型・別の値を入れ替えて保持できるからである。</p>
+        <p>メモリ上ではこれは 2 ワードの組になる。Russ Cox の解説によると、1 ワード目は型情報を指し、メソッドを持つ interface では <strong>itab</strong>（interface table: 型のメタデータと、その interface のメソッドの関数ポインタ表）を指す。2 ワード目はデータを指す。<code>err.Error()</code> の呼び出しは、itab から関数ポインタを取り出し、2 ワード目をレシーバとして渡す処理にコンパイルされる。型の欄が要るのは、どの具体型の <code>Error</code> を呼ぶかをこの欄で決めているからである。</p>
+<pre class="diagram">var err error  // 何も入れていない
+┌──────────┬──────────┐
+│ 型       │ 値       │
+│ (空)     │ (空)     │ → err == nil: true
+└──────────┴──────────┘
+
+var p *MyError // p は nil ポインタ
+err = p
+┌──────────┬──────────┐
+│ 型       │ 値       │
+│ *MyError │ nil      │ → err == nil: false
+└──────────┴──────────┘</pre>
       </section>
 
       <section class="body-section">
-        <h3>スレッドが増えると置き場も増える — glibc のアリーナ</h3>
-        <p>空き領域の一覧は共有データなので、複数スレッドが同時に malloc を呼ぶとロックで待たされる。glibc はこれを避けるため、ロックの競合を検出すると<code>アリーナ</code>を追加で作る。アリーナは自前の空き領域リストとロックを持つ独立したメモリ置き場で、競合したスレッドは別のアリーナから確保するようになる。</p>
-        <p>アリーナ数には上限がある。<code>mallopt(3)</code> の <code>M_ARENA_MAX</code> は既定 0（明示的な上限なし）で、そのときはシステム構成から上限が決まり、Heroku のドキュメントによれば 64 ビット環境では CPU コア数の 8 倍になる。4 コアのコンテナなら最大 32 個の置き場ができうる。</p>
-<pre class="diagram">I/O 中のスレッドが同時に malloc する
-T1  T2  T3  T4  …
- │   │   │   │
- ▼   ▼   ▼   ▼
-┌──┐┌──┐┌──┐┌──┐
-│a0││a1││a2││a3│ … 上限 8×コア数
-└──┘└──┘└──┘└──┘
-
-1 つのアリーナの中（低位 → 高位）
-┌────┬────┬────┬────┬────┐
-│used│free│free│used│used│◀ 上端
-└────┴────┴────┴────┴────┘
- free は同じアリーナの malloc だけが
- 再利用する。上端が used なので返せない</pre>
-        <p>置き場が増えると断片化が悪化する。あるアリーナに空きがあっても、別のアリーナに割り当てられたスレッドはそれを使えない。空きが 32 か所に分散すれば、1 か所にまとまっていれば再利用できたはずの領域が、それぞれのアリーナで抱え込まれたまま残る。</p>
+        <h3><code>== nil</code> は 2 欄とも空かを見ている</h3>
+        <p>言語仕様の比較演算子の節は、2 つの interface 値が等しいのは「動的な型が同一で動的な値が等しいとき、または両方が <code>nil</code> のとき」と定めている。interface 型の変数の初期値は <code>nil</code> で、このとき型の欄も値の欄も空である。つまり <code>err == nil</code> は「中身のポインタが nil か」ではなく「型の欄も値の欄も空か」を問う式である。</p>
+        <p><code>var p *MyError = nil</code> の <code>p</code> を <code>error</code> 型の戻り値として返すと、コンパイラは <code>*MyError</code> から <code>error</code> への暗黙の変換を行い、型の欄に <code>*MyError</code>、値の欄に nil ポインタを入れる。FAQ の言い方では (<code>T=*MyError</code>, <code>V=nil</code>) である。型の欄が埋まっているので、この interface 値は nil ではない。</p>
+        <p>ここで lead の謎、ログに <code>&lt;nil&gt;</code> と出る件が回収できる。<code>fmt</code> は <code>%v</code> で error を表示するとき <code>Error()</code> を呼ぶ。中で nil ポインタを参照して panic しても、<code>fmt</code> のドキュメントにある通り「nil レシーバが原因の panic なら装飾なしの文字列 <code>&lt;nil&gt;</code> を出力する」。ログは中身が nil だと正直に表示しており、それでも interface としては nil ではない。<code>%v</code> でなく <code>%T</code>（引数の型を表示する verb）で出せば <code>*main.MyError</code> と表示され、型の欄が埋まっていることが見える。</p>
       </section>
 
       <div class="analogy">
         <div class="box-title">🍱 たとえるなら</div>
-        <p>倉庫の在庫棚である。レジ待ちを減らすために棚と係員を 1 組から 32 組に増やすと、各棚に少しずつ空きスペースが散らばる。A 棚にも B 棚にも半端な隙間はあるのに、A 棚の係員は B 棚の隙間を使えないので、新しい荷物が来るたびに倉庫そのものを借り増すことになる。しかも棚の一番奥に荷物が 1 つ残っているだけで、その棚は大家に返せない。</p>
+        <p>宛名ラベル付きの宅配便の箱である。「箱が届いていない」状態（ラベルも中身も無い）と、「〇〇エラー様宛」とラベルが貼られた空箱が届いた状態は違う。玄関先の判定 <code>err != nil</code> は「箱が届いたか」しか見ないので、空箱でも受け取った扱いになる。そして開封係（<code>Error()</code>）は、ラベルに書かれた宛先の手順で箱を開ける。ラベルが無ければ誰が開けるかも決められないので、ラベルの有無が判定の基準になっている。</p>
       </div>
 
       <section class="body-section">
-        <h3>GVL があるのに Ruby で効いてくる理由</h3>
-        <p>Ruby（CRuby）には GVL（同時に Ruby コードを実行できるスレッドを 1 本に絞るロック）があるので、malloc の競合など起きないように思える。しかし実際は、DB や HTTP の応答を待つ I/O の間は GVL が手放され、その間に C 拡張やランタイム内部で走る確保が他のスレッドと重なる。Nate Berkopec の解説も、アリーナの影響を受けるのは「マルチスレッドで、かつ I/O をする」CRuby アプリだと述べている。Puma のスレッドや Sidekiq の concurrency で多数のスレッドを動かす構成がまさにこれに当たる。</p>
-        <p>影響の大きさは環境によるが、同記事が引用する Heroku での測定（glibc 2.19）では、アリーナ数無制限の場合はメモリが 1.73 倍、<code>MALLOC_ARENA_MAX=2</code> では 0.87 倍で、応答時間の差は 1 割程度だった。Heroku は 2019 年 9 月 24 日以降に作成した Ruby アプリで <code>MALLOC_ARENA_MAX=2</code> を既定にしている。</p>
+        <h3>型付き nil はどこで紛れ込むのか</h3>
+        <p>具体型のポインタを nil で初期化し、「問題があれば値を入れる」スタイルで最後に返すのが FAQ の典型例である。成功時には nil ポインタがそのまま <code>error</code> に変換されて返る。</p>
+<pre class="code">// NG: 成功時も non-nil の error が返る
+func validate(u User) error {
+    var e *ValidationError
+    if u.Name == "" {
+        e = &amp;ValidationError{Field: "name"}
+    }
+    return e
+}
+
+// OK: エラーが無ければ素の nil を返す
+func validate(u User) error {
+    if u.Name == "" {
+        return &amp;ValidationError{Field: "name"}
+    }
+    return nil
+}</pre>
+        <p>もう 1 つの経路は、具体型を返す関数の戻り値を <code>error</code> 型の変数に代入する場面である。<code>func check() *ValidationError</code> が nil を返しても、<code>var err error = check()</code> と受けた時点で同じ変換が起きる。関数の中では正しく nil を返しているので、関数単体のテストでは見つからず、呼び出し側でしか顕在化しない。</p>
+        <p>FAQ は、エラーを返す関数のシグネチャには具体型でなく <code>error</code> を使うよう勧めており、例として <code>os.Open</code> を挙げている。<code>os.Open</code> の失敗時の値は常に <code>*os.PathError</code> だが、戻り値の型は <code>error</code> である。戻り値を <code>error</code> にしておけば、関数の中で <code>return nil</code> と書いた箇所はそのまま空の interface 値になり、変換が起きる場所自体が減る。</p>
       </section>
 
       <section class="body-section">
-        <h3>対策は 2 つ: アリーナを絞るか、malloc を差し替えるか</h3>
-        <p>1 つ目は環境変数 <code>MALLOC_ARENA_MAX</code> でアリーナ数の上限を決めることだ。値を小さくするとメモリは減るが、ロック待ちが増えて遅くなりうる。Heroku はテスト結果から 2 を推奨し、1 では性能低下が大きい割に節約分はわずかだという報告もある。この変数は最初のメモリ確保より前に読まれるので、<code>.env</code> を Ruby 側で読み込むのでは遅く、プロセス起動時の環境に入れておく必要がある。</p>
-<pre class="code"># Kubernetes の Deployment（コンテナ定義の一部）
-env:
-  - name: MALLOC_ARENA_MAX
-    value: "2"</pre>
-        <p>2 つ目は malloc の実装そのものを <code>jemalloc</code> に替えることだ。jemalloc は断片化を抑える設計の別実装で、<code>LD_PRELOAD</code>（指定したライブラリをプログラムより先に読み込ませ、同名の関数を差し替える仕組み）で glibc の malloc の代わりに使わせられる。現行の <code>rails new</code> が生成する Dockerfile は、<code>libjemalloc2</code> を入れたうえで次の設定を書く。</p>
-<pre class="code">ENV LD_PRELOAD="/usr/local/lib/libjemalloc.so"</pre>
-        <p>jemalloc を使っている場合、<code>MALLOC_ARENA_MAX</code> は glibc 向けの設定なので効果がない（Heroku のドキュメントもこの点を明記している）。どちらも設定しない場合は glibc の既定どおりアリーナが増え、長時間動くワーカーほど RSS が高止まりしやすい。</p>
+        <h3>なぜ Go は「中身が nil なら nil」と扱わないのか</h3>
+        <p>中身が nil ポインタなら <code>== nil</code> を true にしてくれればよいように思える。しかし Go では、nil ポインタはメソッドを呼べる正当な値である。ポインタレシーバのメソッドは、中でレシーバを参照しない限り nil に対して呼んでも panic しない。たとえば連結リストの <code>func (l *List) Len() int</code> が <code>l == nil</code> なら 0 を返す、という書き方は合法である。</p>
+        <p>そのため (<code>T=*List</code>, <code>V=nil</code>) は「振る舞いを持つ値」であり、「何も入っていない」(<code>T=nil</code>) とは意味が違う。言語が両者を同一視すると、nil レシーバで動くメソッドを interface 越しに呼べなくなる。Go は区別を保つ設計を選び、その代償として error の文脈でこの落とし穴が生まれた。</p>
+        <p>呼び出し側で <code>reflect.ValueOf(err).IsNil()</code> のように中身まで確かめる回避策もあるが、これは返す側の間違いを受け取る側で吸収しているだけである。直すべきは返す側で、静的解析で見つけるのが現実的である。staticcheck の SA4023（2020.2 から利用可能）は「interface 値と untyped nil の比較が成立し得ない」パターンを報告する。</p>
+<pre class="code">go install honnef.co/go/tools/cmd/staticcheck@latest
+staticcheck -checks SA4023 ./...</pre>
+        <p><code>-checks</code> を省略すると既定のチェック群がまとめて走る。CI では既定のまま回し、SA4023 を含む全体をゲートにするのが扱いやすい。</p>
       </section>
 
       <div class="practical">
         <div class="box-title">💼 実務でどう出会うか</div>
-        <p>典型は「Sidekiq の Pod が数日おきに OOMKilled になり、再起動すると直る」という症状である。コンテナのメモリ上限は RSS を含む使用量で判定されるので、malloc が抱え込んだ空きも上限を食う。まず Dockerfile の <code>LD_PRELOAD</code> と環境変数 <code>MALLOC_ARENA_MAX</code> のどちらかが設定されているかを確認し、どちらも無ければ片方を入れて数日間の RSS の推移を比べる。それでも単調に増え続けるなら、そこで初めて本物のリーク（参照が残り続けるオブジェクト）を疑えばよい。</p>
+        <p>よくあるのは、独自エラー型 <code>*AppError</code> を返すヘルパーを作り、ハンドラで <code>var err error = svc.Do()</code> と受けたら成功時も 500 が返る、という障害である。ログには <code>&lt;nil&gt;</code> としか出ないので原因が分かりにくい。<code>%T</code> でログに型を出すか、エラーを返す関数の戻り値型が具体型になっていないかを最初に疑うとよい。同じことは <code>io.Reader</code> などの他の interface でも起こり、nil の <code>*bytes.Buffer</code> を <code>io.Reader</code> 引数に渡すと、受け取り側の nil チェックをすり抜ける。</p>
       </div>
 
       <div class="hands-on">
         <div class="box-title">⌨️ 手を動かす（5 分）</div>
-        <p>macOS の malloc は glibc ではないので、Linux コンテナの中で 16 スレッドが同時に malloc/free を繰り返す小さな C プログラムを動かし、glibc の <code>malloc_stats()</code> が表示するアリーナの数を数える。</p>
-        <pre class="code">mkdir -p /tmp/arena &amp;&amp; cd /tmp/arena
-cat &gt; arena.c &lt;&lt;'EOF'
-#include &lt;malloc.h&gt;
-#include &lt;pthread.h&gt;
-#include &lt;stdlib.h&gt;
-#include &lt;string.h&gt;
-void *work(void *arg) {
-  for (int i = 0; i &lt; 100000; i++) {
-    char *p = malloc(1024);
-    memset(p, 1, 1024);
-    free(p);
-  }
-  return NULL;
+        <p>中身が nil の <code>*MyError</code> を <code>error</code> として返し、<code>== nil</code> の結果と <code>%v</code>・<code>%T</code> の表示を比べる。ローカルに Go が無ければ <code>go run</code> の行を <code>docker run --rm -v "$PWD":/w -w /w golang go run main.go</code> に置き換える。</p>
+        <pre class="code">mkdir -p /tmp/typednil &amp;&amp; cd /tmp/typednil
+cat &gt; main.go &lt;&lt;'EOF'
+package main
+
+import "fmt"
+
+type MyError struct{ Msg string }
+
+func (e *MyError) Error() string { return e.Msg }
+
+func bad() error {
+	var p *MyError
+	return p
 }
-int main(void) {
-  pthread_t t[16];
-  for (int i = 0; i &lt; 16; i++) pthread_create(&amp;t[i], NULL, work, NULL);
-  for (int i = 0; i &lt; 16; i++) pthread_join(t[i], NULL);
-  malloc_stats();
-  return 0;
+
+func good() error {
+	return nil
+}
+
+func main() {
+	e1, e2 := bad(), good()
+	fmt.Println("bad  == nil:", e1 == nil)
+	fmt.Printf("bad  %%v=%v %%T=%T\n", e1, e1)
+	fmt.Println("good == nil:", e2 == nil)
+	fmt.Printf("good %%v=%v %%T=%T\n", e2, e2)
 }
 EOF
-docker run --rm -v "$PWD":/w -w /w gcc:14 sh -c '
-  gcc -pthread arena.c -o arena
-  echo "default: $(./arena 2&gt;&amp;1 | grep -c ^Arena)"
-  echo "max=2:   $(MALLOC_ARENA_MAX=2 ./arena 2&gt;&amp;1 | grep -c ^Arena)"
-  ./arena 2&gt;&amp;1 | tail -4'</pre>
-        <p>既定では複数のアリーナが作られ（数は Docker に割り当てたコア数とタイミングで変わる。4 コアの Linux では 15 前後になった）、<code>MALLOC_ARENA_MAX=2</code> では 2 に収まるはずだ。最後の出力では、全スレッドが free し終えた後でも <code>system bytes</code>（OS から借りている量）が <code>in use bytes</code>（実際に使用中の量）よりずっと大きいことが確認できる。</p>
+go run main.go</pre>
+        <p><code>bad</code> は <code>== nil</code> が <code>false</code> なのに、<code>%v</code> は <code>&lt;nil&gt;</code>、<code>%T</code> は <code>*main.MyError</code> と表示されるはずである。<code>good</code> は <code>true</code> で、<code>%T</code> も <code>&lt;nil&gt;</code> になり、型の欄まで空であることが確かめられる。</p>
       </div>
 
       <div class="misconceptions">
         <div class="box-title">🙅 よくある誤解</div>
         <ul>
-          <li><span class="wrong">RSS が増え続けるならメモリリークだ</span> — RSS は malloc が OS から借りて抱えている量で、Ruby が使っている量ではない。オブジェクト数が横ばいで RSS だけが増えるなら、断片化を先に疑う。</li>
-          <li><span class="wrong">GC を頻繁に走らせればメモリは減る</span> — GC は Ruby のオブジェクトを解放して malloc に返すだけで、malloc がそれを OS に返すかは別の話である。上端に使用中の領域が残っていれば、GC 後も RSS はほとんど下がらない。</li>
-          <li><span class="wrong"><code>MALLOC_ARENA_MAX=1</code> にすれば最も省メモリで得</span> — すべてのスレッドが 1 つのロックを奪い合うので性能低下が大きく、2 と比べた節約分はわずかだという報告がある。推奨値として広く使われているのは 2 である。</li>
+          <li><span class="wrong">ログに &lt;nil&gt; と出ているならエラーは nil だ</span> — <code>fmt</code> は nil レシーバで panic した <code>Error()</code> を <code>&lt;nil&gt;</code> と表示するだけで、interface 値が nil かどうかは表示しない。型を見るには <code>%T</code> を使う。</li>
+          <li><span class="wrong">nil ポインタに対してメソッドを呼ぶと必ず panic する</span> — panic するのはメソッドの中でレシーバを参照したときで、参照しないメソッドは nil レシーバでも正常に動く。この性質があるので、Go は型付き nil を空の interface と区別している。</li>
+          <li><span class="wrong">具体型のエラーを返したほうが型安全で親切だ</span> — 呼び出し側が <code>error</code> 変数で受けた瞬間に型付き nil が生まれる。具体型が欲しい呼び出し側は <code>errors.As</code> で取り出せるので、シグネチャは <code>error</code> にしておくのが安全である。</li>
         </ul>
       </div>
 
       <div class="glossary">
         <div class="box-title">📖 用語ミニ辞典</div>
         <dl>
-          <dt>malloc</dt><dd>OS から借りたメモリを小さく切り分けてプログラムに渡す C ライブラリの関数。free で返された領域を再利用する。</dd>
-          <dt>アリーナ</dt><dd>glibc malloc が持つ独立したメモリ置き場。スレッド間のロック競合を避けるために複数作られる。</dd>
-          <dt>断片化</dt><dd>空き領域が使用中の領域の間に細切れに散らばり、再利用も OS への返却もしにくくなった状態。</dd>
-          <dt>RSS</dt><dd>プロセスが実際に物理メモリに載せているページの量。コンテナのメモリ上限の判定にも関わる。</dd>
-          <dt>MALLOC_ARENA_MAX</dt><dd>glibc malloc が作るアリーナ数の上限を決める環境変数。プロセス起動時に設定しておく必要がある。</dd>
-          <dt>jemalloc</dt><dd>断片化を抑える設計の malloc 実装。LD_PRELOAD で glibc の malloc と差し替えて使う。</dd>
+          <dt>interface 型</dt><dd>メソッドの集合だけを定め、それを満たす任意の具体型の値を保持できる型。</dd>
+          <dt>動的な型 / 動的な値</dt><dd>interface 値が実行時に保持している具体型と具体値。この 2 つの組が interface 値の中身である。</dd>
+          <dt>itab</dt><dd>interface 値の 1 ワード目が指す表。具体型の情報と、interface のメソッドの関数ポインタを持つ。</dd>
+          <dt>型付き nil</dt><dd>動的な型は埋まっているが動的な値が nil の interface 値。<code>== nil</code> は false になる。</dd>
+          <dt>nil レシーバ</dt><dd>nil ポインタに対してメソッドを呼んだときのレシーバ。参照しなければ panic しない。</dd>
         </dl>
       </div>
 
       <div class="further-reading">
         <div class="box-title">🔗 もっと深く</div>
         <ul>
-          <li><a href="https://www.speedshop.co/blog/malloc-doubles-ruby-memory/">Malloc Can Double Multi-threaded Ruby Program Memory Usage</a> — スレッドがアリーナを選ぶ手順と、Ruby での測定結果を詳しく追った解説。</li>
-          <li><a href="https://devcenter.heroku.com/articles/tuning-glibc-memory-behavior">Heroku Dev Center: Tuning glibc Memory Behavior</a> — MALLOC_ARENA_MAX の既定値と推奨値、性能とのトレードオフの公式説明。</li>
-          <li><a href="https://man7.org/linux/man-pages/man3/mallopt.3.html">mallopt(3) — Linux manual page</a> — M_ARENA_MAX・M_MMAP_THRESHOLD・M_TRIM_THRESHOLD の既定値と環境変数の一次ソース。</li>
-          <li><a href="https://man7.org/linux/man-pages/man3/malloc_trim.3.html">malloc_trim(3) — Linux manual page</a> — 空き領域を明示的に OS へ返す関数と、glibc 2.8 以降の挙動。</li>
+          <li><a href="https://go.dev/doc/faq#nil_error">Go FAQ: Why is my nil error value not equal to nil?</a> — 本記事の (T, V) モデルと典型コード例の一次ソース。短いので原文で読む価値がある。</li>
+          <li><a href="https://go.dev/ref/spec#Comparison_operators">The Go Programming Language Specification: Comparison operators</a> — interface 値同士・interface と具体型の値の等価条件と、比較不能な型で panic する条件が書かれている。</li>
+          <li><a href="https://research.swtch.com/interfaces">Go Data Structures: Interfaces (Russ Cox)</a> — interface 値の 2 ワード表現と itab によるメソッド呼び出しを図で解説している。</li>
+          <li><a href="https://staticcheck.dev/docs/checks/#SA4023">Staticcheck: SA4023</a> — 型付き nil の比較を検出するチェックの説明。CI に入れる前に何が報告されるかを確認できる。</li>
         </ul>
       </div>
     </article>
@@ -161,6 +173,11 @@ docker run --rm -v "$PWD":/w -w /w gcc:14 sh -c '
     <!-- recent:start -->
     <section class="section recent-articles">
       <div class="section-title">最近の記事</div>
+      <div class="card">
+        <h3><a href="archive/2026-10-26.html">メモリリークはしていないのに、なぜ Rails のプロセスは日に日に太っていくのか？</a></h3>
+        <div class="summary">free したメモリは、ヒープの上端に使用中の領域が残る限り OS に返らない。glibc の malloc はスレッド間のロック競合を避けるためにアリーナを 64 ビットでは既定でコア数の 8 倍まで増やすので、空きが分散して断片化し、マルチスレッドで I/O をする Puma や Sidekiq の RSS が高止まりする。MALLOC_ARENA_MAX=2、jemalloc と LD_PRELOAD、Rails の Dockerfile の設定、GVL との関係も扱う。</div>
+        <div class="meta"><span class="tag tag-lang">Lang</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-26</span></div>
+      </div>
       <div class="card">
         <h3><a href="archive/2026-10-25.html">同じ UUID の主キーなのに、なぜ v4 だとテーブルが育つほど INSERT が重くなるのか？</a></h3>
         <div class="summary">B+Tree はキー順に並ぶため、乱数の UUIDv4 は挿入先がインデックス全体に散りページ分割とメモリ圧迫を招く。先頭 48 ビットが時刻の UUIDv7 は右端に入り連番に近い書き込みになる。</div>
@@ -175,11 +192,6 @@ docker run --rm -v "$PWD":/w -w /w gcc:14 sh -c '
         <h3><a href="archive/2026-10-23.html">api.example.com を 1 回引いただけなのに、なぜ Pod は DNS に 4 回も問い合わせるのか？</a></h3>
         <div class="summary">Kubernetes の kubelet は Pod の resolv.conf に search ドメイン 3 つと ndots:5 を書くため、点が 5 個未満の外部ドメインは search リストを順に試して NXDOMAIN を受けてから本来の名前で引かれる。A/AAAA の並行問い合わせ、UDP 落ち時の 5 秒タイムアウト、末尾ドット FQDN、dnsConfig での ndots 調整とその副作用、NodeLocal DNSCache を扱う。</div>
         <div class="meta"><span class="tag tag-container">Container</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-23</span></div>
-      </div>
-      <div class="card">
-        <h3><a href="archive/2026-10-22.html">同じ二重ループなのに、なぜ i と j を入れ替えるだけで何倍も遅くなるのか？</a></h3>
-        <div class="summary">CPU はメモリを 1 バイトずつではなく 64 バイト前後のキャッシュライン単位で運ぶ。行優先の配列を列ごとに回すと運んだ塊の大半を捨てるうえプリフェッチも効かず、別コアが同じラインの別変数に書くとフォールスシェアリングで遅くなる。Drepper の測定値、MESI、Go の CacheLinePad、Apple Silicon の 128 バイトも扱う。</div>
-        <div class="meta"><span class="tag tag-perf">Perf</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-22</span></div>
       </div>
       <div class="recent-more"><a href="archive/">アーカイブですべて見る →</a></div>
     </section>

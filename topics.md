@@ -6,6 +6,7 @@
 
 ## 消化済み
 
+- 2026-10-27 Go の interface と型付き nil（interface 値が動的な型と動的な値の 2 欄=2 ワードで itab を指す表現、仕様上 == nil は両欄が空のときだけ true であること、nil の *MyError を error で返すと (T=*MyError, V=nil) になり err != nil になる FAQ の典型例、fmt が nil レシーバの panic を <nil> と表示するため %v では気づけず %T で型が見えること、具体型の戻り値を error 変数で受ける経路、戻り値を error 型にして素の nil を返す対策、nil レシーバのメソッドが合法なため Go が区別を保つ理由、staticcheck SA4023）（自動選定）
 - 2026-10-26 malloc のアリーナと断片化（free したメモリがヒープ上端に使用中が残る限り OS に返らない理由と M_TRIM_THRESHOLD 既定 128KiB、glibc がロック競合でアリーナを増やし 64 ビットで既定コア数の 8 倍まで作ること、アリーナ間で空きが分散する断片化、GVL があってもマルチスレッド+I/O の CRuby で効く理由、MALLOC_ARENA_MAX=2 と Heroku の既定、jemalloc と LD_PRELOAD・Rails の Dockerfile、RSS とコンテナの OOMKilled）（自動選定）
 - 2026-10-25 UUID の主キーと B+Tree の局所性（v4 の 122 ビット乱数と v7 の先頭 48 ビット unix_ts_ms、ランダム挿入で挿入先が散りページ分割が起きる仕組みと InnoDB の 15/16 vs 1/2〜15/16、ワーキングセットがインデックス全体になりバッファを超えると遅くなる理由、full_page_writes による WAL 増、InnoDB のクラスタ化インデックスとセカンダリインデックスが主キーを持つこと、PostgreSQL の B-Tree fillfactor 既定 90 と右端拡張、PostgreSQL 18 の uuidv7() と Rails の default 指定、v7 が生成時刻を漏らすためトークンには v4、binary 保存）（自動選定）
 - 2026-10-24 I/O 多重化と epoll（1接続1スレッドがメモリとコンテキストスイッチで頭打ちになる理由とC10K、ノンブロッキングI/OとEAGAIN、selectのFD_SETSIZE=1024とfd_set上書き、epollのインタレストリスト/レディリストとepoll_ctl/epoll_wait、レベルトリガ(デフォルト)とエッジトリガでEAGAINまで読み切る理由、Goのnetpollerがgoroutineだけを止める仕組み、nginxのworker_processes/worker_connections(既定512、upstream接続も含む)/worker_rlimit_nofile、イベントループ内のCPU処理が全接続を止める弱点）（自動選定）

@@ -34,8 +34,8 @@
         <button class="chip" data-cat="network">Network <span class="chip-count">14</span></button>
         <button class="chip" data-cat="db">DB <span class="chip-count">13</span></button>
         <button class="chip" data-cat="arch">Arch <span class="chip-count">9</span></button>
+        <button class="chip" data-cat="lang">Lang <span class="chip-count">9</span></button>
         <button class="chip" data-cat="infra">Infra <span class="chip-count">8</span></button>
-        <button class="chip" data-cat="lang">Lang <span class="chip-count">8</span></button>
         <button class="chip" data-cat="security">Security <span class="chip-count">8</span></button>
         <button class="chip" data-cat="ai">AI <span class="chip-count">7</span></button>
         <button class="chip" data-cat="dev" data-overflow="1" hidden>Dev <span class="chip-count">5</span></button>
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-10">
       <div class="section-title">2026 年 10 月 <span class="count"></span></div>
+      <div class="card" data-cat="lang" data-diff="基礎"
+           data-search="nil を返したはずなのに、なぜ go の err != nil が true になるのか？ go の interface 値は「動的な型」と「動的な値」の 2 欄を持ち、nil の具体型ポインタを error として返すと型の欄が埋まって err != nil になる仕組みと、fmt が &lt;nil&gt; と表示する理由、防ぎ方を解説する。" data-terms="interface 型 / 動的な型 / 動的な値 / itab / 型付き nil / nil レシーバ">
+        <h3><a href="2026-10-27.html">nil を返したはずなのに、なぜ Go の err != nil が true になるのか？</a></h3>
+        <div class="summary">Go の interface 値は「動的な型」と「動的な値」の 2 欄を持ち、nil の具体型ポインタを error として返すと型の欄が埋まって err != nil になる仕組みと、fmt が &lt;nil&gt; と表示する理由、防ぎ方を解説する。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-lang">Lang</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-27</span></div>
+      </div>
       <div class="card" data-cat="lang" data-diff="基礎"
            data-search="メモリリークはしていないのに、なぜ rails のプロセスは日に日に太っていくのか？ free したメモリは、ヒープの上端に使用中の領域が残る限り os に返らない。glibc の malloc はスレッド間のロック競合を避けるためにアリーナを 64 ビットでは既定でコア数の 8 倍まで増やすので、空きが分散して断片化し、マルチスレッドで i/o をする puma や sidekiq の rss が高止まりする。malloc_arena_max=2、jemalloc と ld_preload、rails の dockerfile の設定、gvl との関係も扱う。" data-terms="malloc / アリーナ / 断片化 / RSS / MALLOC_ARENA_MAX / jemalloc">
         <h3><a href="2026-10-26.html">メモリリークはしていないのに、なぜ Rails のプロセスは日に日に太っていくのか？</a></h3>

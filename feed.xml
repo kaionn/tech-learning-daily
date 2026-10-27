@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-10-26T08:23:47+09:00</updated>
+  <updated>2026-10-27T09:35:08+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>nil を返したはずなのに、なぜ Go の err != nil が true になるのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-10-27.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-10-27.html</id>
+    <updated>2026-10-27T09:35:08+09:00</updated>
+    <summary>Go の interface 値は動的な型と値の 2 欄を持ち、== nil は両方空のときだけ true。nil の *MyError を error で返すと型の欄が埋まり non-nil になる。素の nil を返し、戻り値は error 型にする。</summary>
+  </entry>
   <entry>
     <title>メモリリークはしていないのに、なぜ Rails のプロセスは日に日に太っていくのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-10-26.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-10-14.html</id>
     <updated>2026-10-14T09:23:05+09:00</updated>
     <summary>load average はCPU使用率ではなく実行中・実行待ちのタスク数をならした値で、Linuxはディスク待ちなどのD状態も数えるためCPUが空いていても跳ね上がる。1・5・15分値は指数減衰で、内訳はvmstatやPSIで切り分ける。</summary>
-  </entry>
-  <entry>
-    <title>temperature を 0 にしたのに、なぜ LLM の答えは毎回同じにならないのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-10-13.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-10-13.html</id>
-    <updated>2026-10-13T11:39:25+09:00</updated>
-    <summary>LLMは毎トークン確率の表から候補を選び、temperature・top_k・top_pはその選び方を変える。温度0で乱数は消えるが、同時処理数で足し算の順序が変わりロジットが揺れるため出力は完全には一致しない。</summary>
   </entry>
 </feed>

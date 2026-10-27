@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-10-27.html",
+    "date": "2026-10-27",
+    "title": "nil を返したはずなのに、なぜ Go の err != nil が true になるのか？",
+    "summary": "Go の interface 値は「動的な型」と「動的な値」の 2 欄を持ち、nil の具体型ポインタを error として返すと型の欄が埋まって err != nil になる仕組みと、fmt が <nil> と表示する理由、防ぎ方を解説する。",
+    "category": "lang",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": ["interface 型", "動的な型 / 動的な値", "itab", "型付き nil", "nil レシーバ"]
+  },
+  {
     "file": "2026-10-26.html",
     "date": "2026-10-26",
     "title": "メモリリークはしていないのに、なぜ Rails のプロセスは日に日に太っていくのか？",
