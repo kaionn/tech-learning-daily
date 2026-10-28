@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-10-27T09:35:08+09:00</updated>
+  <updated>2026-10-28T09:35:23+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>ping も TCP 接続も通るのに、なぜ大きなレスポンスだけが返ってこないのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-10-28.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-10-28.html</id>
+    <updated>2026-10-28T09:35:23+09:00</updated>
+    <summary>経路上のトンネルで MTU が縮むと、送信側は ICMP Type 3 Code 4 を頼りに小さく送り直すが、ICMP を捨てる FW があると大きなパケットだけが消える。ICMP を通す・MSS クランプ・MTU 調整で防ぐ。</summary>
+  </entry>
   <entry>
     <title>nil を返したはずなのに、なぜ Go の err != nil が true になるのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-10-27.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-10-15.html</id>
     <updated>2026-10-15T09:01:00+09:00</updated>
     <summary>malloc が返すのは仮想アドレスの予約で物理メモリは書き込み時に割り当てられるため、Linux のオーバーコミット下では不足が書き込み時に表面化し、OOM killer がスコア最大のプロセスを SIGKILL する。</summary>
-  </entry>
-  <entry>
-    <title>CPU は半分も使っていないのに、なぜ load average は 20 もあるのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-10-14.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-10-14.html</id>
-    <updated>2026-10-14T09:23:05+09:00</updated>
-    <summary>load average はCPU使用率ではなく実行中・実行待ちのタスク数をならした値で、Linuxはディスク待ちなどのD状態も数えるためCPUが空いていても跳ね上がる。1・5・15分値は指数減衰で、内訳はvmstatやPSIで切り分ける。</summary>
   </entry>
 </feed>

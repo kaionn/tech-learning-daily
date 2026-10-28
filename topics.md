@@ -6,6 +6,7 @@
 
 ## 消化済み
 
+- 2026-10-28 MTU と Path MTU Discovery（Ethernet の 1500 MTU と IPv4 で MTU−40 になる MSS を SYN で両端のインターフェースから決めるため途中のトンネルを考慮しないこと、DF ビットとルータが返す ICMP Type 3 Code 4・IPv6 の Packet Too Big、ICMP を捨てる FW による PMTUD ブラックホールでハンドシェイクと ping は通り一括転送だけ止まる RFC 2923 の症状、VXLAN 50/IP-in-IP 20/WireGuard 60 バイトのヘッダと Calico の推奨 MTU、AWS の VPC 内 9001 と IGW・VPN の 1500 制限およびネットワーク ACL での ICMP 遮断、iptables TCPMSS --clamp-mss-to-pmtu、tcp_mtu_probing 0/1/2、Cloudflare の ECMP で ICMP が別サーバーに届いた事例、ping -D -s 1472）（自動選定）
 - 2026-10-27 Go の interface と型付き nil（interface 値が動的な型と動的な値の 2 欄=2 ワードで itab を指す表現、仕様上 == nil は両欄が空のときだけ true であること、nil の *MyError を error で返すと (T=*MyError, V=nil) になり err != nil になる FAQ の典型例、fmt が nil レシーバの panic を <nil> と表示するため %v では気づけず %T で型が見えること、具体型の戻り値を error 変数で受ける経路、戻り値を error 型にして素の nil を返す対策、nil レシーバのメソッドが合法なため Go が区別を保つ理由、staticcheck SA4023）（自動選定）
 - 2026-10-26 malloc のアリーナと断片化（free したメモリがヒープ上端に使用中が残る限り OS に返らない理由と M_TRIM_THRESHOLD 既定 128KiB、glibc がロック競合でアリーナを増やし 64 ビットで既定コア数の 8 倍まで作ること、アリーナ間で空きが分散する断片化、GVL があってもマルチスレッド+I/O の CRuby で効く理由、MALLOC_ARENA_MAX=2 と Heroku の既定、jemalloc と LD_PRELOAD・Rails の Dockerfile、RSS とコンテナの OOMKilled）（自動選定）
 - 2026-10-25 UUID の主キーと B+Tree の局所性（v4 の 122 ビット乱数と v7 の先頭 48 ビット unix_ts_ms、ランダム挿入で挿入先が散りページ分割が起きる仕組みと InnoDB の 15/16 vs 1/2〜15/16、ワーキングセットがインデックス全体になりバッファを超えると遅くなる理由、full_page_writes による WAL 増、InnoDB のクラスタ化インデックスとセカンダリインデックスが主キーを持つこと、PostgreSQL の B-Tree fillfactor 既定 90 と右端拡張、PostgreSQL 18 の uuidv7() と Rails の default 指定、v7 が生成時刻を漏らすためトークンには v4、binary 保存）（自動選定）

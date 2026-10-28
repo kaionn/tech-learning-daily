@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-10-28.html",
+    "date": "2026-10-28",
+    "title": "ping も TCP 接続も通るのに、なぜ大きなレスポンスだけが返ってこないのか？",
+    "summary": "経路上のトンネルで MTU が縮むと、DF 付きの大きなパケットは ICMP で「大きすぎる」と知らされて送り直される。その ICMP をファイアウォールが捨てると、ping や SYN は通るのに大きな応答だけが消える仕組みと防ぎ方を解説する。",
+    "category": "network",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": ["MTU", "MSS", "DF ビット", "PMTUD（Path MTU Discovery）", "PMTUD ブラックホール", "MSS クランプ"]
+  },
+  {
     "file": "2026-10-27.html",
     "date": "2026-10-27",
     "title": "nil を返したはずなのに、なぜ Go の err != nil が true になるのか？",

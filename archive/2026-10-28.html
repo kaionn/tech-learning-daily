@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tech Learning Daily — ping も TCP 接続も通るのに、なぜ大きなレスポンスだけが返ってこないのか？</title>
+  <link rel="stylesheet" href="../style.css">
+  <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="../feed.xml">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Tech Learning Daily</h1>
+      <div class="date">2026-10-28 (Wed) — 第 103 号</div>
+      <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
+    </header>
+
+    <article class="article">
+      <div class="meta-bar">
+        <span class="tag tag-network">Network</span>
+        <span class="difficulty">🌿 基礎</span>
+        <span class="read-time">⏱ 約 7 分</span>
+      </div>
+      <h2 class="article-title">ping も TCP 接続も通るのに、なぜ大きなレスポンスだけが返ってこないのか？</h2>
+      <p class="lead">VPN 越しに社内 API を叩くと、<code>/health</code> は一瞬で 200 が返るのに、一覧 API だけが固まってタイムアウトする。<code>ping</code> は通り、<code>curl -v</code> を見ると TCP 接続も TLS の最初のやり取りも始まっている。小さいものは届き大きいものだけが消える経路で、何が起きているのだろうか。</p>
+
+      <div class="tldr">
+        <div class="box-title">🎯 3 行まとめ</div>
+        <ul>
+          <li>経路上の各リンクには 1 パケットの上限サイズ（MTU）があり、トンネルやオーバーレイを通ると途中の上限が端の 1500 バイトより小さくなる。</li>
+          <li>送信側は「大きすぎたら ICMP で知らせてくれ」という前提で大きなパケットを送るため、その ICMP がファイアウォールで捨てられると大きなパケットだけが黙って消える（PMTUD ブラックホール）。</li>
+          <li>対策は ICMP Type 3 Code 4 / ICMPv6 Packet Too Big を通す、境界で MSS をクランプする、インターフェースの MTU をトンネルに合わせる、の 3 つである。</li>
+        </ul>
+      </div>
+
+      <section class="body-section">
+        <h3>MTU と MSS: パケットには「通れる大きさ」がある</h3>
+        <p><strong>MTU</strong>（Maximum Transmission Unit）とは、あるリンクが 1 回で運べる IP パケットの最大バイト数である。AWS のドキュメントが述べるとおり、標準的な Ethernet v2 フレームは 1500 MTU を扱い、これがインターネットの大半で通る最大サイズになっている。</p>
+        <p>TCP はこの上限を前提に、1 セグメントに載せるデータ量を決める。その値が <strong>MSS</strong>（Maximum Segment Size: TCP セグメント 1 個に載せるデータ部分の最大バイト数）で、IPv4 では MTU から IP ヘッダ 20 バイトと TCP ヘッダ 20 バイトを引いた値になる。MTU 1500 なら MSS は 1460 で、各端は自分のインターフェースから計算した MSS を SYN に載せて相手に伝える。</p>
+        <p>ここに落とし穴がある。MSS を決めるのは両端のインターフェースであり、途中の経路は計算に入っていない。クライアントもサーバーも MTU 1500 の NIC を持っていれば、間に MTU 1400 のトンネルが挟まっていても、ハンドシェイクは 1460 で合意してしまう。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>Path MTU Discovery: 「大きすぎた」を ICMP で教わる仕組み</h3>
+        <p>途中に細い区間がある問題に対して IP が用意している仕組みが <strong>PMTUD</strong>（Path MTU Discovery: 経路全体で通る最小の MTU を送信側が学習する手順）である。送信側は IP ヘッダの <strong>DF ビット</strong>（Don't Fragment: 途中で分割するなという指示）を立てて送る。Linux では PMTUD を止める <code>ip_no_pmtu_disc</code> の既定が FALSE なので、TCP は普通この方式で送っている。</p>
+        <p>DF 付きのパケットが自分の MTU より大きいとき、ルータはパケットを分割せずに捨て、送信元に ICMP の <code>Destination Unreachable: Fragmentation Needed and Don't Fragment was Set</code>（Type 3, Code 4）を返す。このメッセージには「この先は何バイトまで」が書かれていて、送信側はそれを経路の MTU としてキャッシュし、小さく切り直して再送する。IPv6 ではルータが分割を一切しないため、同じ役割を ICMPv6 の Packet Too Big（Type 2）が担う。</p>
+<pre class="diagram">クライアント    VPN 区間       サーバー
+ MTU 1500     MTU 1400       MTU 1500
+    │            │              │
+    │ SYN (小)   │              │
+    │───────────▶│─────────────▶│ 通る
+    │            │   応答 1500B │
+    │            │◀─────────────│ DF 付き
+    │            │ 捨てる       │
+    │            │ ICMP 3/4     │
+    │            │─────────────▶│
+    │            │      ✕       │
+    │            │  FW が ICMP  │
+    │            │  を捨てる    │
+    │ 届かない…  │              │
+    ▼ タイムアウト              ▼</pre>
+        <p>なぜわざわざ DF を立てるのか。途中のルータに分割させる方式も IPv4 にはあるが、断片が 1 つでも落ちるとパケット全体が失われ、分割と再組み立ての負荷もかかる。だから「端が経路に合わせて小さく送る」設計が選ばれた。その代わり、ICMP が送信元に届くことが前提になった。</p>
+      </section>
+
+      <div class="analogy">
+        <div class="box-title">🍱 たとえるなら</div>
+        <p>高さ制限のある高架下を通る配送ルートに近い。トラックは「入れなければ手前の係員が制限の高さを書いたメモを本社に返す」約束で出発する。メモが届けば本社は荷を低く積み直して出し直せる。ところが途中の守衛が「怪しい郵便は全部捨てる」方針でメモを処分していると、本社は理由を知らないまま同じ高さで出し続ける。背の低い軽自動車（SYN や ping）は毎回通るので、ルート自体は生きているように見える。</p>
+      </div>
+
+      <section class="body-section">
+        <h3>ICMP を捨てると何が起きるか: PMTUD ブラックホール</h3>
+        <p>ICMP は ping のための補助的なものだと思われがちで、「念のため ICMP は全部遮断」というファイアウォール設定は珍しくない。RFC 2923 もファイアウォールが ICMP を丸ごと抑制するよう誤設定されていることが多いと書いている。こうして Type 3 Code 4 が送信元に戻らなくなった状態が <strong>PMTUD ブラックホール</strong>である。</p>
+        <p>症状は冒頭の謎とそのまま重なる。SYN は小さいので通りハンドシェイクは成功し、小さな対話的通信も動く。しかし RFC 2923 が書くとおり、一括転送は最初の大きなパケットで止まり、接続はやがてタイムアウトする。ping も通るので、「ネットワークは生きている、アプリが遅い」と誤診しやすい。</p>
+        <p>帯域の問題に見えるが、実際には大きさの問題である。同じ API でも件数が少ないときは応答が MTU に収まって返り、件数が増えて 1 パケットを超えた途端に固まる。データ量で再現が変わるため、アプリのバグと区別しにくい。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>MTU が縮む場所と、3 つの対策</h3>
+        <p>MTU が端より小さくなるのは、元のパケットに外側のヘッダを足して運ぶ区間である。Calico のドキュメントによれば、IPv4 の VXLAN は 50 バイト、IP-in-IP は 20 バイト、IPv4 の WireGuard は 60 バイトのヘッダを足すので、物理 MTU 1500 の上では Pod 側の MTU をそれぞれ 1450 / 1480 / 1440 にすることが推奨されている。逆向きの段差もあり、AWS の VPC 内は最大 9001 MTU のジャンボフレームを使えるが、インターネットゲートウェイと VPN 接続を通る通信は 1500 に制限される。</p>
+        <p>1 つ目の対策は ICMP を通すことである。AWS はセキュリティグループで ICMP を許可していても、サブネットのネットワーク ACL が ICMP を拒否していればやはり遮断されると注意している。ping（Echo）を許すかどうかとは別に、Type 3 Code 4 と ICMPv6 Packet Too Big は通す、と分けて考える。</p>
+        <p>2 つ目は、細い区間の入口にあるルータで SYN に載った MSS を書き換える <strong>MSS クランプ</strong>である。iptables の <code>TCPMSS</code> ターゲットに <code>--clamp-mss-to-pmtu</code> を付けると、MSS を経路 MTU から IPv4 なら 40、IPv6 なら 60 を引いた値まで下げる。両端は最初から小さいセグメントで話すので、ICMP に頼らずに済む。</p>
+<pre class="code"># VPN ゲートウェイ等の転送経路で SYN の MSS を下げる
+iptables -t mangle -A FORWARD -p tcp \
+  --tcp-flags SYN,RST SYN \
+  -j TCPMSS --clamp-mss-to-pmtu</pre>
+        <p>ただし man ページは、行きと帰りで経路 MTU が違う非対称経路では期待どおり動かないことがあると注意している。3 つ目は、トンネルの内側にあるインターフェースの MTU 自体を小さく設定することだ（<code>ip link set dev wg0 mtu 1420</code> のように）。MTU を合わせておけば両端の MSS は最初から正しい値になる。Calico のように MTU を自動検出する CNI もあるが、使わないカプセル化を有効のままにしていると検出を誤ることがある。</p>
+        <p>端末側の保険として、Linux には <code>net.ipv4.tcp_mtu_probing</code> がある。これは ICMP に頼らず TCP 自身が小さいサイズを試して経路 MTU を探る方式（Packetization-Layer PMTUD）を制御し、<code>0</code> で無効、<code>1</code> でブラックホールを検知したときだけ有効、<code>2</code> で常に有効（初期 MSS は <code>tcp_base_mss</code>）になる。<code>1</code> にすると、ブラックホールを検知した接続は再送タイムアウトを経て小さいサイズに落とすので、固まり続ける代わりに「最初だけ遅い」接続で済むことが多い。</p>
+      </section>
+
+      <div class="practical">
+        <div class="box-title">💼 実務でどう出会うか</div>
+        <p>典型的なのは「VPN を繋ぐと特定の API だけ固まる」「Kubernetes で Pod 間の小さなリクエストは通るのに、大きなレスポンスや <code>docker pull</code> が途中で止まる」「Terraform でネットワーク ACL を絞ったら一部の外部通信だけタイムアウトするようになった」といった場面である。データサイズで再現が変わり、ping と TCP 接続は正常なら、MTU を疑う価値がある。Cloudflare も 2015 年に、ECMP でパケットを複数サーバーに振り分けた結果、ICMP が TCP 接続を持たない別サーバーに届き、トンネル経由の一部ユーザーが接続できなくなった事例を公開している。ICMP を通していても、届く先がずれれば同じ症状になる。</p>
+      </div>
+
+      <div class="hands-on">
+        <div class="box-title">⌨️ 手を動かす（5 分）</div>
+        <p>自分の Mac から外へ出られるパケットの大きさを、DF ビット付きの ping で確かめる。<code>-s</code> は ICMP のデータ部のサイズで、IP ヘッダ 20 バイトと ICMP ヘッダ 8 バイトを足したものがパケット長になる。</p>
+<pre class="code"># インターフェースの MTU を見る（Wi-Fi は多くの場合 en0）
+ifconfig en0 | grep mtu
+
+# 1472 + 28 = 1500 バイト、DF 付き
+ping -D -s 1472 -c 3 1.1.1.1
+
+# 1 バイト増やして 1501 バイト
+ping -D -s 1473 -c 3 1.1.1.1</pre>
+        <p>MTU 1500 の環境なら、1472 は応答が返り、1473 は手元のインターフェースで送信できずエラーになるはずだ（自分の MTU を超えるパケットはカーネルが送る前に拒否する）。VPN を繋いだ状態や PPPoE 回線では、1472 でも応答が返らなくなる場合がある。その場合は <code>-s</code> を少しずつ減らし、応答が返る最大値に 28 を足せば経路の MTU の目安になる。</p>
+      </div>
+
+      <div class="misconceptions">
+        <div class="box-title">🙅 よくある誤解</div>
+        <ul>
+          <li><span class="wrong">ICMP は ping 用なので全部塞いでも困らない</span> — Type 3 Code 4 と ICMPv6 Packet Too Big は TCP の通信サイズ調整に使われている。塞ぐと大きなパケットだけが消える。</li>
+          <li><span class="wrong">MSS は経路に合わせて自動で決まる</span> — SYN で交換する MSS は両端のインターフェースの MTU から計算した値で、途中のトンネルは考慮されない。経路への適応は PMTUD か MSS クランプが担う。</li>
+          <li><span class="wrong">MTU は大きいほど速いので、ジャンボフレームにしておけば得をする</span> — 効果があるのは経路全体が大きな MTU を通す区間だけである。AWS ではインターネットゲートウェイや VPN を通る通信は 1500 に制限され、超えた分は分割されるか、DF 付きなら捨てられる。</li>
+        </ul>
+      </div>
+
+      <div class="glossary">
+        <div class="box-title">📖 用語ミニ辞典</div>
+        <dl>
+          <dt>MTU</dt><dd>リンクが 1 回で運べる IP パケットの最大バイト数。標準的な Ethernet では 1500。</dd>
+          <dt>MSS</dt><dd>TCP セグメント 1 個に載せるデータ部分の最大バイト数。IPv4 では MTU − 40 で、SYN で相手に伝える。</dd>
+          <dt>DF ビット</dt><dd>IPv4 ヘッダの「途中で分割するな」フラグ。立っていると、大きすぎるパケットはルータで捨てられる。</dd>
+          <dt>PMTUD（Path MTU Discovery）</dt><dd>大きすぎたときに返る ICMP を手がかりに、経路全体で通る最小 MTU を送信側が学習する仕組み。</dd>
+          <dt>PMTUD ブラックホール</dt><dd>その ICMP が途中で捨てられ、大きなパケットだけが理由を知らされないまま消え続ける状態。</dd>
+          <dt>MSS クランプ</dt><dd>経路上のルータが通過する SYN の MSS を細い区間に合わせて書き換え、両端に小さく送らせる手法。</dd>
+        </dl>
+      </div>
+
+      <div class="further-reading">
+        <div class="box-title">🔗 もっと深く</div>
+        <ul>
+          <li><a href="https://www.rfc-editor.org/rfc/rfc2923.html">RFC 2923: TCP Problems with Path MTU Discovery</a> — ブラックホールの症状（ハンドシェイクは通り一括転送で止まる）と、TCP 側での検知・回避の考え方が整理されている。</li>
+          <li><a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/network_mtu.html">Network maximum transmission unit (MTU) for your EC2 instance</a> — VPC 内 9001 と外向き 1500 の境界、PMTUD とセキュリティグループ・ネットワーク ACL の関係が一枚で分かる。</li>
+          <li><a href="https://docs.tigera.io/calico/latest/networking/configuring/mtu">Calico: Configure MTU to maximize network performance</a> — VXLAN・IP-in-IP・WireGuard それぞれのヘッダ長と推奨 MTU の対応表。</li>
+          <li><a href="https://blog.cloudflare.com/path-mtu-discovery-in-practice/">Cloudflare Blog: Path MTU discovery in practice</a> — ECMP で ICMP が別サーバーに届いてしまう、ICMP を許可しているのに壊れるケースの実例。</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- recent:start -->
+    <!-- recent:end -->
+
+    <footer>
+      <p>Generated by Claude Code (GitHub Actions)</p>
+      <a href="./" class="archive-link">過去の記事</a>
+    </footer>
+  </div>
+</body>
+</html>

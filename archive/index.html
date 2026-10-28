@@ -31,7 +31,7 @@
         <span class="row-label">カテゴリ</span>
         <button class="chip on" data-cat="">すべて</button>
         <button class="chip" data-cat="container">Container <span class="chip-count">16</span></button>
-        <button class="chip" data-cat="network">Network <span class="chip-count">14</span></button>
+        <button class="chip" data-cat="network">Network <span class="chip-count">15</span></button>
         <button class="chip" data-cat="db">DB <span class="chip-count">13</span></button>
         <button class="chip" data-cat="arch">Arch <span class="chip-count">9</span></button>
         <button class="chip" data-cat="lang">Lang <span class="chip-count">9</span></button>
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-10">
       <div class="section-title">2026 年 10 月 <span class="count"></span></div>
+      <div class="card" data-cat="network" data-diff="基礎"
+           data-search="ping も tcp 接続も通るのに、なぜ大きなレスポンスだけが返ってこないのか？ 経路上のトンネルで mtu が縮むと、df 付きの大きなパケットは icmp で「大きすぎる」と知らされて送り直される。その icmp をファイアウォールが捨てると、ping や syn は通るのに大きな応答だけが消える仕組みと防ぎ方を解説する。" data-terms="MTU / MSS / DF ビット / PMTUD（Path MTU Discovery） / PMTUD ブラックホール / MSS クランプ">
+        <h3><a href="2026-10-28.html">ping も TCP 接続も通るのに、なぜ大きなレスポンスだけが返ってこないのか？</a></h3>
+        <div class="summary">経路上のトンネルで MTU が縮むと、DF 付きの大きなパケットは ICMP で「大きすぎる」と知らされて送り直される。その ICMP をファイアウォールが捨てると、ping や SYN は通るのに大きな応答だけが消える仕組みと防ぎ方を解説する。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-network">Network</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-28</span></div>
+      </div>
       <div class="card" data-cat="lang" data-diff="基礎"
            data-search="nil を返したはずなのに、なぜ go の err != nil が true になるのか？ go の interface 値は「動的な型」と「動的な値」の 2 欄を持ち、nil の具体型ポインタを error として返すと型の欄が埋まって err != nil になる仕組みと、fmt が &lt;nil&gt; と表示する理由、防ぎ方を解説する。" data-terms="interface 型 / 動的な型 / 動的な値 / itab / 型付き nil / nil レシーバ">
         <h3><a href="2026-10-27.html">nil を返したはずなのに、なぜ Go の err != nil が true になるのか？</a></h3>
