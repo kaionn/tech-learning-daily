@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-10-29.html",
+    "date": "2026-10-29",
+    "title": "Puma のワーカーを 4 つ fork したのに、なぜメモリは 4 倍にならないのか？",
+    "summary": "fork は親のメモリを即座に複製せず、物理ページを親子で共有して書き込まれたページだけをその時点でコピーする（Copy-on-Write）。RSS は共有ページを重複計上するため PSS と Private_Dirty で測る理由、Ruby 2.0 の Bitmap Marking GC と、それでも子の GC で共有が剥がれる現象、Puma の preload_app! と phased restart の非互換、fork 前の Process.warmup、Python の参照カウントと gc.freeze() も扱う。",
+    "category": "lang",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": ["fork", "Copy-on-Write", "ページテーブル", "RSS", "PSS", "preload_app!"]
+  },
+  {
     "file": "2026-10-28.html",
     "date": "2026-10-28",
     "title": "ping も TCP 接続も通るのに、なぜ大きなレスポンスだけが返ってこないのか？",

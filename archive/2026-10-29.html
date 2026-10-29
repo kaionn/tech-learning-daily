@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tech Learning Daily — Puma のワーカーを 4 つ fork したのに、なぜメモリは 4 倍にならないのか？</title>
+  <link rel="stylesheet" href="../style.css">
+  <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="../feed.xml">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Tech Learning Daily</h1>
+      <div class="date">2026-10-29 (Thu) — 第 104 号</div>
+      <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
+    </header>
+
+    <article class="article">
+      <div class="meta-bar">
+        <span class="tag tag-lang">Lang</span>
+        <span class="difficulty">🌿 基礎</span>
+        <span class="read-time">⏱ 約 7 分</span>
+      </div>
+      <h2 class="article-title">Puma のワーカーを 4 つ fork したのに、なぜメモリは 4 倍にならないのか？</h2>
+      <p class="lead"><code>config/puma.rb</code> に <code>workers 4</code> と書いて本番に出したことがあるはずだ。<code>top</code> を見ると各ワーカーの RSS は親とほぼ同じなのに、合計してもコンテナのメモリ使用量はその 4 倍には届かない。では、その「届かない分」はどこへ消えたのか。そして、なぜデプロイ直後は軽かったワーカーが数時間でじわじわ重くなるのか。</p>
+
+      <div class="tldr">
+        <div class="box-title">🎯 3 行まとめ</div>
+        <ul>
+          <li><code>fork</code> は親のメモリを即座に複製せず、同じ物理ページを親子で共有し、どちらかが書き込んだページだけをその時点でコピーする（Copy-on-Write）。</li>
+          <li>RSS は共有ページを各プロセスに重複して数えるので、合計すると実際より大きく見える。実使用量は PSS や Private_Dirty で見る。</li>
+          <li>Ruby では GC 自身がヒープに書き込むため共有が剥がれていく。<code>preload_app!</code> と fork 前の <code>Process.warmup</code> で剥がれにくくできる。</li>
+        </ul>
+      </div>
+
+      <section class="body-section">
+        <h3>fork は「コピー」ではなく「共有の約束」</h3>
+        <p><code>fork</code> は、呼び出したプロセスとそっくり同じ子プロセスを作る Linux のシステムコールだ。Puma のクラスタモードでは、master プロセスがアプリを読み込んだあと <code>fork</code> でワーカーを生み、各ワーカーがリクエストを処理する。man ページによれば、親の仮想アドレス空間はまるごと子に複製され、fork 直後の両者の中身は同じだが、以後は互いの書き込みが相手に影響しない別々のメモリ空間になる。</p>
+        <p>ここで素朴に考えると、「中身が同じで互いに独立」なら、親の 200MB を子にも 200MB 丸ごとコピーしているように思える。しかし実際は違う。man ページは Linux の <code>fork</code> が <strong>Copy-on-Write（CoW: 書き込まれるまでコピーを遅らせる方式）</strong>のページで実装されており、fork のコストは主に親のページテーブルの複製にかかると書いている。ページテーブルとは、プロセスが見ている仮想アドレスをどの物理メモリ（ページ単位の区画）に対応させるかを記録した表のことだ。</p>
+        <p>つまり fork 直後の子は、親と同じ物理ページを指すページテーブルを受け取っただけで、データ本体は 1 部しかない。共有ページは書き込み禁止の印が付き、どちらかが書き込もうとした瞬間に CPU が違反を検出してカーネルに制御を渡す。カーネルはそのページだけを複製し、書き込んだ側のページテーブルを新しいコピーに付け替える。</p>
+<pre class="diagram">[fork 直後]
+ 親のページ表 ──┐
+                ├──▶ 物理ページ A
+ 子のページ表 ──┘     （書込禁止で共有）
+
+[子が A に書き込んだ瞬間]
+ 1. CPU が書込禁止違反を検出
+ 2. カーネルが A を複製して A' を作る
+ 3. 子のページ表を A' に付け替える
+
+ 親のページ表 ─────▶ 物理ページ A
+ 子のページ表 ─────▶ 物理ページ A'</pre>
+        <p>コピーが「書き込まれたページだけ」「書き込まれた時に」起きるので、読むだけのページ（アプリのコード、起動時に作った設定やクラス定義など）は何個ワーカーを作っても物理的には 1 部で済む。これが 4 倍にならない理由だ。</p>
+      </section>
+
+      <div class="analogy">
+        <div class="box-title">🍱 たとえるなら</div>
+        <p>4 人の新人に同じマニュアルを渡すとき、最初から 4 冊コピーせず、1 冊を回し読みさせる。誰かが書き込みをしたくなったら、そのページだけをコピーしてその人専用にする。書き込みの多い人ほど手元のコピーが増え、全員がすべてのページに書き込めば、結局 4 冊分の紙が要る。</p>
+      </div>
+
+      <section class="body-section">
+        <h3>RSS を足すと嘘になる: PSS と Private_Dirty</h3>
+        <p><code>top</code> や <code>ps</code> が出す <strong>RSS（Resident Set Size: いま物理メモリに載っている量）</strong>は、共有ページもそのプロセスの分として丸ごと数える。親と 4 ワーカーが同じ 180MB を共有していれば、5 プロセスすべての RSS に 180MB が含まれ、足すと 900MB に見えるが、物理的には 180MB しか使っていない。</p>
+        <p>Linux の <code>/proc/PID/smaps</code> には、これを補正した <strong>PSS（Proportional Set Size: 共有ページを共有しているプロセス数で割って按分した量）</strong>がある。カーネルのドキュメントは PSS を「そのマッピングに対するプロセスの比例配分の取り分」と定義し、ページが 1 プロセスからしか参照されていなければ private として数えると書いている。全プロセスの PSS を足すと実際の物理使用量に近づく。<code>/proc/PID/smaps_rollup</code> はこれらをプロセス全体で合計したものだ。</p>
+        <p>CoW の剥がれ具合を見るには <code>Private_Dirty</code>（そのプロセスだけが持ち、書き込みで変更済みのページ量）が直接の指標になる。fork 直後のワーカーはこれがほぼ 0 で、時間とともに増えていく分が「コピーされてしまった分」だ。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>何もしていないのに剥がれる: GC が書き込む</h3>
+        <p>アプリのコードは読むだけなので共有され続けそうに思える。しかし Ruby のオブジェクトはヒープ上に並んでおり、GC（ガベージコレクタ: 不要になったオブジェクトを自動回収する仕組み）は生きているオブジェクトを調べる過程で管理情報を書き換える。書き込み先が共有ページなら、たとえアプリが値を変えていなくてもそのページはコピーされる。</p>
+        <p>Ruby 1.9 までの GC は「生きている」印（マークビット）を各オブジェクトの中に直接書き込んでいたため、子で GC が 1 回走るだけでヒープのほぼ全ページが汚れた。Ruby 2.0 で中村成洋さんの Bitmap Marking GC が入り、マークビットをオブジェクトとは別のビットマップ領域に移したことで、マークのたびにオブジェクトのページを汚すことはなくなった。Ruby 2.0 の解説記事は、Bitmap Marking なしで fork すると GC が何度か走るうちにメモリ使用量が大きく増えうると述べている。</p>
+        <p>それでも GC の書き込みがゼロになったわけではない。Ruby 3.3 で入った <code>Process.warmup</code> のドキュメントは、この API が「起動完了」を VM に伝え、major GC・ヒープのコンパクション・生き残ったオブジェクトの old 世代への昇格・空きページの解放などを行うと説明し、pre-fork 型のサーバーでは最初の fork の前に呼ぶよう勧めている。fork 後のワーカーでやると共有ページを汚す後始末を、fork 前の親で済ませておく発想だ。下の手を動かすの実験では、fork 前に何もしないと子で <code>GC.start</code> を 1 回呼んだだけで Private_Dirty が 0 から 159MB に跳ね、<code>Process.warmup</code> を挟むと 27MB で止まった。</p>
+        <p>Python ではこの問題がさらに鋭い。Instagram のエンジニアリングブログによれば、Python はオブジェクトを参照するたびに参照カウントを書き換えるため、読むだけでもページがコピーされる。彼らは GC を止め、のちに <code>gc.freeze()</code> を CPython に入れて fork 前のオブジェクトを GC の追跡対象から外した。言語ランタイムの設計が、OS の CoW の効き方を左右している。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>Puma の設定: preload_app! と Process.warmup</h3>
+        <p>CoW の恩恵を受けるには、そもそもアプリを fork の<strong>前</strong>に親で読み込んでおく必要がある。Puma の README は、<code>preload_app!</code> がアプリのコードを fork 前に読み込み、Copy-on-Write によって総メモリ使用量を減らすと説明している。preload しないと各ワーカーが fork 後に自分でアプリを読み込むので、同じクラス定義がワーカーの数だけ別々に作られ、共有できない。</p>
+        <p>README によれば、ワーカー数が 1 より大きい場合は preload がデフォルトで有効になる（<code>--prune-bundler</code> 指定時を除く）。明示しておくと意図が読み手に伝わる。</p>
+<pre class="code"># config/puma.rb
+workers 4
+preload_app!
+
+before_fork do
+  # fork 前に GC・昇格・コンパクションを親で済ませる
+  Process.warmup if Process.respond_to?(:warmup)
+end</pre>
+        <p>代償もある。README は preload と phased restart（ワーカーを 1 つずつ再起動して新しいコードに入れ替える無停止再起動）は併用できないと明記している。preload したワーカーは master が持つ古いコードのコピーなので、ワーカーだけ再起動しても新しいコードにならないからだ。メモリを取るか、ワーカー単位の無停止入れ替えを取るかの選択になる。</p>
+      </section>
+
+      <div class="practical">
+        <div class="box-title">💼 実務でどう出会うか</div>
+        <p>「Puma のワーカーを増やしたらコンテナが OOMKilled した」とき、各ワーカーの RSS × ワーカー数で見積もると過大になり、逆に fork 直後の使用量で見積もると時間が経って Private_Dirty が育った後に足りなくなる。容量計画はデプロイから数時間後の PSS 合計で行うとよい。ワーカーが日に日に重くなる現象には、CoW の剥がれと、2026-10-26 の記事で扱った malloc の断片化の 2 つが重なっていることが多く、Private_Dirty が育っているのか、ヒープの空きが返っていないのかを分けて見ると原因に近づける。Sidekiq や Unicorn、Python の gunicorn など、pre-fork 型のサーバーすべてに同じ構造がある。</p>
+      </div>
+
+      <div class="hands-on">
+        <div class="box-title">⌨️ 手を動かす（5 分）</div>
+        <p>Docker の Linux コンテナ内で 300 万個の文字列を作ってから fork し、子の RSS・PSS・Private_Dirty が fork 直後と GC 後でどう変わるかを見る。2 回目は fork 前に <code>Process.warmup</code> を呼ぶ。</p>
+<pre class="code">mkdir -p ~/cowtest &amp;&amp; cat &gt; ~/cowtest/cow.rb &lt;&lt;'EOF'
+def mem(label)
+  r = File.read("/proc/self/smaps_rollup")
+  mb = -&gt;(k) { r[/^#{k}:\s+(\d+)/, 1].to_i / 1024 }
+  puts format("%-11s Rss=%4dMB Pss=%4dMB Private_Dirty=%4dMB",
+    label, mb["Rss"], mb["Pss"], mb["Private_Dirty"])
+end
+data = Array.new(3_000_000) { |i| "item-#{i}" }
+Process.warmup if ENV["WARMUP"]
+mem("parent")
+pid = fork do
+  mem("child:fork")
+  GC.start
+  mem("child:GC")
+end
+Process.wait(pid)
+EOF
+docker run --rm -v ~/cowtest:/w ruby:3.3 ruby /w/cow.rb
+docker run --rm -e WARMUP=1 -v ~/cowtest:/w ruby:3.3 ruby /w/cow.rb</pre>
+        <p>手元で実行した例では、1 回目は <code>child:fork</code> で RSS が親とほぼ同じ 188MB なのに PSS は半分の 94MB、Private_Dirty は 0MB だった（親子 2 プロセスで共有しているので PSS は半分になる）。<code>child:GC</code> では Private_Dirty が 159MB に増え、何も書き換えていないのに大半がコピーされた。2 回目は <code>child:GC</code> の Private_Dirty が 27MB で止まり、共有が保たれた。数値は環境で変わるが、この差の傾向は観察できるはずだ。</p>
+      </div>
+
+      <div class="misconceptions">
+        <div class="box-title">🙅 よくある誤解</div>
+        <ul>
+          <li><span class="wrong">fork すると親のメモリが丸ごとコピーされる</span> — 複製されるのはページテーブルで、データ本体は書き込まれたページだけがその時点でコピーされる。</li>
+          <li><span class="wrong">ワーカーの RSS を足せば実使用量になる</span> — RSS は共有ページを各プロセスに重複計上する。按分した PSS を足す方が実際の物理使用量に近い。</li>
+          <li><span class="wrong">コードを書き換えないなら共有は崩れない</span> — Ruby の GC や Python の参照カウントのように、ランタイム自身がオブジェクトのあるページに書き込むため、アプリが値を変えなくてもコピーは起きる。</li>
+        </ul>
+      </div>
+
+      <div class="glossary">
+        <div class="box-title">📖 用語ミニ辞典</div>
+        <dl>
+          <dt>fork</dt><dd>呼び出したプロセスと同じ内容の子プロセスを作る Unix のシステムコール。</dd>
+          <dt>Copy-on-Write</dt><dd>共有したページを、書き込まれた瞬間にだけ複製する遅延コピーの仕組み。</dd>
+          <dt>ページテーブル</dt><dd>仮想アドレスとページ単位の物理メモリの対応を記録した表。</dd>
+          <dt>RSS</dt><dd>プロセスが物理メモリに載せている量。共有ページも丸ごと数える。</dd>
+          <dt>PSS</dt><dd>共有ページを共有プロセス数で按分して数えたメモリ量。</dd>
+          <dt>preload_app!</dt><dd>Puma で、アプリを fork 前に master で読み込み CoW で共有させる設定。</dd>
+        </dl>
+      </div>
+
+      <div class="further-reading">
+        <div class="box-title">🔗 もっと深く</div>
+        <ul>
+          <li><a href="https://man7.org/linux/man-pages/man2/fork.2.html">fork(2) — Linux manual page</a> — fork が CoW で実装され、コストがページテーブルの複製であることの一次資料。</li>
+          <li><a href="https://docs.kernel.org/filesystems/proc.html">The /proc Filesystem — Linux Kernel documentation</a> — smaps / smaps_rollup の RSS・PSS・private/shared の定義を確かめられる。</li>
+          <li><a href="https://docs.ruby-lang.org/en/3.3/Process.html">Process — Ruby 3.3 documentation</a> — <code>Process.warmup</code> が fork 前に何をするかの公式説明。</li>
+          <li><a href="https://github.com/puma/puma/blob/master/README.md">Puma README</a> — preload_app! と CoW、phased restart との非互換、ワーカー数による preload の既定。</li>
+          <li><a href="https://instagram-engineering.com/copy-on-write-friendly-python-garbage-collection-ad6ed5233ddf">Copy-on-write friendly Python garbage collection — Instagram Engineering</a> — ランタイムの書き込みが CoW を壊す実例と gc.freeze() の経緯。</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- recent:start -->
+    <!-- recent:end -->
+
+    <footer>
+      <p>Generated by Claude Code (GitHub Actions)</p>
+      <a href="./" class="archive-link">過去の記事</a>
+    </footer>
+  </div>
+</body>
+</html>

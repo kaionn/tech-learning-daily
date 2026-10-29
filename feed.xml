@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-10-28T09:35:23+09:00</updated>
+  <updated>2026-10-29T10:07:06+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>Puma のワーカーを 4 つ fork したのに、なぜメモリは 4 倍にならないのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-10-29.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-10-29.html</id>
+    <updated>2026-10-29T10:07:06+09:00</updated>
+    <summary>fork は物理ページを親子で共有し書き込まれたページだけを複製する Copy-on-Write。RSS は共有分を重複計上するので PSS で測る。Ruby は GC の書き込みで共有が剥がれるため preload_app! と Process.warmup で抑える。</summary>
+  </entry>
   <entry>
     <title>ping も TCP 接続も通るのに、なぜ大きなレスポンスだけが返ってこないのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-10-28.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-10-16.html</id>
     <updated>2026-10-16T08:45:54+09:00</updated>
     <summary>LSM-tree は書き込みを memtable に溜めて不変の SSTable として追記するため速いが、読み取りは複数ファイルを探し、古い版や tombstone は compaction が後から掃除する。</summary>
-  </entry>
-  <entry>
-    <title>メモリ確保は成功したのに、なぜプロセスは後から OOM killer に殺されるのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-10-15.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-10-15.html</id>
-    <updated>2026-10-15T09:01:00+09:00</updated>
-    <summary>malloc が返すのは仮想アドレスの予約で物理メモリは書き込み時に割り当てられるため、Linux のオーバーコミット下では不足が書き込み時に表面化し、OOM killer がスコア最大のプロセスを SIGKILL する。</summary>
   </entry>
 </feed>

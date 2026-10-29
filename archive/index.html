@@ -33,8 +33,8 @@
         <button class="chip" data-cat="container">Container <span class="chip-count">16</span></button>
         <button class="chip" data-cat="network">Network <span class="chip-count">15</span></button>
         <button class="chip" data-cat="db">DB <span class="chip-count">13</span></button>
+        <button class="chip" data-cat="lang">Lang <span class="chip-count">10</span></button>
         <button class="chip" data-cat="arch">Arch <span class="chip-count">9</span></button>
-        <button class="chip" data-cat="lang">Lang <span class="chip-count">9</span></button>
         <button class="chip" data-cat="infra">Infra <span class="chip-count">8</span></button>
         <button class="chip" data-cat="security">Security <span class="chip-count">8</span></button>
         <button class="chip" data-cat="ai">AI <span class="chip-count">7</span></button>
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-10">
       <div class="section-title">2026 年 10 月 <span class="count"></span></div>
+      <div class="card" data-cat="lang" data-diff="基礎"
+           data-search="puma のワーカーを 4 つ fork したのに、なぜメモリは 4 倍にならないのか？ fork は親のメモリを即座に複製せず、物理ページを親子で共有して書き込まれたページだけをその時点でコピーする（copy-on-write）。rss は共有ページを重複計上するため pss と private_dirty で測る理由、ruby 2.0 の bitmap marking gc と、それでも子の gc で共有が剥がれる現象、puma の preload_app! と phased restart の非互換、fork 前の process.warmup、python の参照カウントと gc.freeze() も扱う。" data-terms="fork / Copy-on-Write / ページテーブル / RSS / PSS / preload_app!">
+        <h3><a href="2026-10-29.html">Puma のワーカーを 4 つ fork したのに、なぜメモリは 4 倍にならないのか？</a></h3>
+        <div class="summary">fork は親のメモリを即座に複製せず、物理ページを親子で共有して書き込まれたページだけをその時点でコピーする（Copy-on-Write）。RSS は共有ページを重複計上するため PSS と Private_Dirty で測る理由、Ruby 2.0 の Bitmap Marking GC と、それでも子の GC で共有が剥がれる現象、Puma の preload_app! と phased restart の非互換、fork 前の Process.warmup、Python の参照カウントと gc.freeze() も扱う。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-lang">Lang</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-29</span></div>
+      </div>
       <div class="card" data-cat="network" data-diff="基礎"
            data-search="ping も tcp 接続も通るのに、なぜ大きなレスポンスだけが返ってこないのか？ 経路上のトンネルで mtu が縮むと、df 付きの大きなパケットは icmp で「大きすぎる」と知らされて送り直される。その icmp をファイアウォールが捨てると、ping や syn は通るのに大きな応答だけが消える仕組みと防ぎ方を解説する。" data-terms="MTU / MSS / DF ビット / PMTUD（Path MTU Discovery） / PMTUD ブラックホール / MSS クランプ">
         <h3><a href="2026-10-28.html">ping も TCP 接続も通るのに、なぜ大きなレスポンスだけが返ってこないのか？</a></h3>
