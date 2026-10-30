@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-10-29T10:07:06+09:00</updated>
+  <updated>2026-10-30T10:10:32+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>http:// と打ったのに、なぜブラウザはサーバーに聞く前に https:// へ書き換えるのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-10-30.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-10-30.html</id>
+    <updated>2026-10-30T10:10:32+09:00</updated>
+    <summary>HTTP→HTTPS の 301 は平文の初回リクエストを中間者に横取りされうる。HSTS はブラウザに HTTPS 専用と記憶させ送信前に書き換えさせ、max-age・includeSubDomains・プリロードで範囲と期間が決まる。</summary>
+  </entry>
   <entry>
     <title>Puma のワーカーを 4 つ fork したのに、なぜメモリは 4 倍にならないのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-10-29.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-10-17.html</id>
     <updated>2026-10-17T08:43:43+09:00</updated>
     <summary>TCP は経路の空きを知らないため輻輳ウィンドウを約 14.6KB から往復ごとに倍へ増やすので、短い転送の速さは帯域ではなく RTT と往復回数で決まる。ロスで減らす CUBIC と測って決める BBR の違いも見る。</summary>
-  </entry>
-  <entry>
-    <title>同じ「DB に書く」なのに、なぜ Cassandra や RocksDB は書き込みがあれほど速いのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-10-16.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-10-16.html</id>
-    <updated>2026-10-16T08:45:54+09:00</updated>
-    <summary>LSM-tree は書き込みを memtable に溜めて不変の SSTable として追記するため速いが、読み取りは複数ファイルを探し、古い版や tombstone は compaction が後から掃除する。</summary>
   </entry>
 </feed>

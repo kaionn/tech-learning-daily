@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-10-30.html",
+    "date": "2026-10-30",
+    "title": "http:// と打ったのに、なぜブラウザはサーバーに聞く前に https:// へ書き換えるのか？",
+    "summary": "HTTP→HTTPS のリダイレクトは平文の初回リクエストを SSL ストリッピングで横取りされうる。HSTS はブラウザに HTTPS 専用と記憶させ送信前に URL を書き換えさせる。max-age の解除の難しさ、Rails force_ssl 既定の includeSubDomains、プリロードリストの取り消しの重さを解説。",
+    "category": "security",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": ["HSTS", "中間者攻撃（MITM）", "SSL ストリッピング", "max-age", "includeSubDomains", "HSTS プリロードリスト"]
+  },
+  {
     "file": "2026-10-29.html",
     "date": "2026-10-29",
     "title": "Puma のワーカーを 4 つ fork したのに、なぜメモリは 4 倍にならないのか？",

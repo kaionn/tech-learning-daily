@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tech Learning Daily — http:// と打ったのに、なぜブラウザはサーバーに聞く前に https:// へ書き換えるのか？</title>
+  <link rel="stylesheet" href="../style.css">
+  <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="../feed.xml">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Tech Learning Daily</h1>
+      <div class="date">2026-10-30 (Fri) — 第 105 号</div>
+      <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
+    </header>
+
+    <article class="article">
+      <div class="meta-bar">
+        <span class="tag tag-security">Security</span>
+        <span class="difficulty">🌿 基礎</span>
+        <span class="read-time">⏱ 約 7 分</span>
+      </div>
+      <h2 class="article-title">http:// と打ったのに、なぜブラウザはサーバーに聞く前に https:// へ書き換えるのか？</h2>
+      <p class="lead">Rails の本番設定で <code>config.force_ssl = true</code> を見たことがあるはずだ。HTTP で来たリクエストを HTTPS へリダイレクトする設定だと理解していると、DevTools の Network タブに出る「<code>307 Internal Redirect</code>」が説明できない。サーバーは 301 を返す設定なのに、ブラウザは通信すらせずに URL を書き換えている。リダイレクトがあれば十分なはずなのに、なぜブラウザ側にもう一段の仕組みが要るのだろうか。</p>
+
+      <div class="tldr">
+        <div class="box-title">🎯 3 行まとめ</div>
+        <ul>
+          <li>HTTP→HTTPS のリダイレクトだけでは、最初の平文リクエストが中間者に横取りされ、HTTPS に上がる機会そのものを潰される。</li>
+          <li>HSTS は「このホストには HTTPS でしか接続するな」という約束をブラウザに記憶させ、以後は送信前に URL を https:// へ書き換えさせる仕組みだ。</li>
+          <li>約束は max-age の期間ブラウザ側に残り、サーバーから簡単には取り消せない。includeSubDomains と preload は効果が大きいぶん、入れる前の確認が要る。</li>
+        </ul>
+      </div>
+
+      <section class="body-section">
+        <h3>301 リダイレクトでは最初の 1 回が守れない</h3>
+        <p>ユーザーがアドレスバーに <code>example.com</code> とだけ打つか、古い <code>http://</code> のリンクを踏むと、最初のリクエストは暗号化されていない HTTP で飛ぶ。サーバーはそこで <code>301 Moved Permanently</code> と <code>Location: https://example.com/</code> を返し、ブラウザは HTTPS で入り直す。普段はこれで問題なく動く。</p>
+        <p>問題は、その 301 自体が平文で運ばれることだ。<strong>中間者攻撃（MITM）</strong>とは、通信経路の途中に入り込んだ攻撃者が通信を盗み見たり書き換えたりする攻撃を指す。公衆 Wi-Fi のアクセスポイントを攻撃者が握っていれば、301 をユーザーに渡さず、自分はサーバーと HTTPS で話しながらユーザーとは HTTP のまま中継し続けられる。この手口を <strong>SSL ストリッピング</strong>と呼ぶ。ユーザーの画面には見慣れたログインページが出るが、URL は <code>http://</code> のままで、入力したパスワードは攻撃者に平文で届く。</p>
+        <p>サーバー側でいくら HTTPS を強制しても、この攻撃は防げない。サーバーが 301 を返す前の段階、つまりブラウザが最初の平文リクエストを送った時点で勝負が決まるからだ。守るには、ブラウザ自身が「このホストに平文を送ってはいけない」と最初から知っている必要がある。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>HSTS ヘッダーがブラウザに覚えさせること</h3>
+        <p><strong>HSTS（HTTP Strict Transport Security）</strong>は、サーバーが HTTPS のレスポンスに付けるヘッダーで、ブラウザに「このホストは HTTPS 専用だ」と記憶させる仕組みだ。RFC 6797 で標準化されている。</p>
+<pre class="code">Strict-Transport-Security: max-age=31536000; includeSubDomains</pre>
+        <p>ヘッダーを受け取ったブラウザは、ホスト名と有効期限を手元に保存する。以後そのホストへの <code>http://</code> の URL は、ネットワークに出る前に <code>https://</code> へ書き換えられる（ポート 80 の明示は 443 に置き換わる）。Chrome の DevTools に出る <code>307 Internal Redirect</code> はこの書き換えの記録で、実際にはサーバーと一切通信していない。レスポンスに付く <code>Non-Authoritative-Reason: HSTS</code> も、サーバーではなくブラウザが付けたものだ。</p>
+<pre class="diagram">【初回】ブラウザはまだ何も知らない
+ブラウザ                  サーバー
+  │ GET http://example.com ────▶ │
+  │ ◀──── 301 Location: https:// │
+  │   ↑ ここが平文。横取りされうる
+  │ GET https://（TLS）────────▶ │
+  │ ◀──── 200 + Strict-Transport-│
+  │        Security: max-age=…   │
+  ▼ 保存: example.com は HTTPS 専用
+
+【2 回目以降】
+  │ http://example.com と入力
+  ├▶ 送信前に https:// へ書換え
+  │  （307 Internal Redirect）
+  │ GET https://（TLS）────────▶ │
+  ▼ 平文のリクエストは一度も出ない</pre>
+        <p>仕様には、攻撃者に悪用されないための制約が 2 つ組み込まれている。1 つ目は、HTTP で届いた HSTS ヘッダーをブラウザが無視することだ。平文のヘッダーを信じると、中間者が <code>max-age=0</code> を差し込んで約束を消したり、HTTPS に対応していないホストに HSTS を付けて閲覧不能にしたりできてしまう。2 つ目は、HSTS ホストで証明書エラーが起きたとき、ブラウザが「危険を承知で続行」のボタンを出さないことだ。ユーザーがクリックで突破できるなら、攻撃者は偽の証明書を見せて押させれば済む。</p>
+      </section>
+
+      <div class="analogy">
+        <div class="box-title">🍱 たとえるなら</div>
+        <p>取引先の銀行から書留で「今後、当行からの通知は必ず書留で送ります。普通郵便で届いたものは偽物です」という手紙が届き、それを手帳に書き写しておくようなものだ。以後は普通郵便で来た「銀行からの通知」を、中身を読む前に捨てられる。ただし、この約束を普通郵便で受け取っても信じてはいけない（偽物が「書留ルールは廃止しました」と送ってこられるため）。そして、初めて取引する前に届く手紙は守れない。この弱点を埋めるのが、手帳に最初から印刷されている取引先リスト、つまり次に扱うプリロードリストだ。</p>
+      </div>
+
+      <section class="body-section">
+        <h3>3 つのディレクティブ、変えるとどうなるか</h3>
+        <p><code>max-age</code> は約束を覚えておく秒数で、ブラウザはヘッダーを受け取るたびに「現在時刻 + max-age」で期限を更新する。毎日アクセスするユーザーにとっては期限が実質的に来ない。逆に言えば、一度長い値を配ると、ヘッダーを外しても既に記憶したブラウザは期限まで HTTPS を強制し続ける。解除するには HTTPS で <code>max-age=0</code> を返し、各ブラウザに再訪問してもらうしかない。HTTP 経由では解除できない設計なので、HTTPS を止めてから解除しようとしても遅い。</p>
+        <p><code>includeSubDomains</code> を付けると、約束がすべてのサブドメインに及ぶ。<code>example.com</code> に付けた場合、社内向けに HTTP だけで動かしていた <code>http://legacy.example.com</code> が、そのブラウザからは開けなくなる。ここで多くの人の予想を裏切るのが Rails の既定値だ。<code>config.force_ssl = true</code> だけで HSTS が有効になり、既定は有効期限 2 年・サブドメイン適用あり・preload なしになっている。</p>
+<pre class="code"># config/environments/production.rb
+config.force_ssl = true
+# 既定: HSTS 有効 / expires 2 年 / subdomains: true
+config.ssl_options = {
+  hsts: { expires: 1.day, subdomains: false }
+}
+# 導入初期は短い期限で様子を見て、問題なければ延ばす</pre>
+        <p>Rails で HSTS をやめたいときは <code>hsts: false</code> を使う。Rails のドキュメントによると、これはヘッダーを出さないのではなく <code>expires: 0</code>（つまり <code>max-age=0</code>）を送る指定だ。ヘッダーを消すだけでは、既に記憶したブラウザは元の期限まで約束を守り続けるからである。</p>
+        <p><code>preload</code> は、次のセクションで扱うプリロードリストへの登録を申請する意思表示だ。付けただけでは何も起きないが、付けた状態で申請すると取り消しに時間がかかる。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>初回の穴を埋めるプリロードリスト</h3>
+        <p>HSTS ヘッダーは、一度 HTTPS でアクセスしたあとにしか効かない。初めて訪れるユーザーや、記憶が期限切れになったユーザーの最初のリクエストは、相変わらず平文で飛ぶ。RFC 6797 もこの初回の弱点を認めており、対策として「事前に配布されたリスト」を挙げている。</p>
+        <p>その実装が <strong>HSTS プリロードリスト</strong>だ。ブラウザのバイナリに「HTTPS 専用のドメイン一覧」を焼き込んでおき、初回から書き換えを効かせる。Google が運営する hstspreload.org で申請でき、主な条件は、HTTPS で返すヘッダーが <code>max-age</code> 1 年（31536000 秒）以上で <code>includeSubDomains</code> と <code>preload</code> を含むこと、すべてのサブドメインが HTTPS で動いていることだ。リストはドメイン単位だけでなく TLD 単位でも登録でき、Google は 2017 年に <code>.dev</code> などの TLD を丸ごと登録した。<code>.dev</code> のドメインは、ヘッダーを一度も返していなくても最初から HTTPS 必須になる。</p>
+        <p>プリロードは強力なぶん、取り消しが重い。hstspreload.org 自身が、リストからの削除は可能だが Chrome のアップデートとしてユーザーに届くまで数か月かかると注意している。ブラウザに焼き込まれた情報なので、サーバー側で <code>max-age=0</code> を返しても消せない。</p>
+      </section>
+
+      <div class="practical">
+        <div class="box-title">💼 実務でどう出会うか</div>
+        <p>よくあるのは、本番ドメインで <code>force_ssl</code> を有効にした結果、同じ親ドメイン配下の HTTP しか話さない検証環境や社内ツールが「なぜか自分のブラウザだけ開けない」状態になるケースだ。原因は Rails 既定の <code>includeSubDomains</code> で、サーバーの設定をいくら見ても見つからない。Chrome なら <code>chrome://net-internals/#hsts</code> でドメインを入力すると、そのブラウザが記憶している HSTS の状態を照会・削除できる。新規に HSTS を導入するときは、短い <code>max-age</code> から始め、サブドメインの棚卸しを終えてから期限を延ばし、preload は最後に検討する順番が安全だ。</p>
+      </div>
+
+      <div class="hands-on">
+        <div class="box-title">⌨️ 手を動かす（5 分）</div>
+        <p>curl は既定では HSTS を記憶しないが、<code>--hsts</code> オプション（curl 7.77.0 以降で正式サポート）でキャッシュファイルを持たせると、ブラウザと同じ書き換えを観察できる。まず HTTP では 301 だけが返り、HSTS ヘッダーは HTTPS 側にしかないことを確かめ、次に記憶させてから <code>http://</code> を叩く。</p>
+<pre class="code">curl -sI http://github.com | grep -iE '^(HTTP|location|strict)'
+curl -sI https://github.com | grep -iE '^(HTTP|strict)'
+
+rm -f /tmp/hsts.txt
+curl -s -o /dev/null --hsts /tmp/hsts.txt https://github.com
+cat /tmp/hsts.txt
+
+curl -sv -o /dev/null --hsts /tmp/hsts.txt http://github.com 2&gt;&amp;1 \
+  | grep -iE 'hsts|Connected to|^&gt; GET'</pre>
+        <p>1 本目は <code>301</code> と <code>Location</code> だけで <code>strict-transport-security</code> は出ず、2 本目に初めて現れるはずだ。<code>/tmp/hsts.txt</code> にはホスト名と有効期限が書かれ、先頭のドット（<code>.github.com</code>）は includeSubDomains の印になる。最後のコマンドでは <code>Switched from HTTP to HTTPS due to HSTS</code> と表示され、接続先がポート 443 になる。<code>http://</code> と書いたのに、平文のリクエストは一度も送られていない。</p>
+      </div>
+
+      <div class="misconceptions">
+        <div class="box-title">🙅 よくある誤解</div>
+        <ul>
+          <li><span class="wrong">HTTP→HTTPS の 301 リダイレクトがあれば HSTS は不要</span> — 301 は平文の最初のリクエストに対する応答なので、中間者に横取りされればユーザーは HTTPS に上がれない。HSTS は 2 回目以降、プリロードは初回から、平文のリクエスト自体を出させない。</li>
+          <li><span class="wrong">HSTS ヘッダーを設定から外せば HSTS は止まる</span> — 既に記憶したブラウザは max-age の期限まで約束を守り続ける。止めるには HTTPS で <code>max-age=0</code> を返す必要がある。</li>
+          <li><span class="wrong">HSTS は HTTP のレスポンスに付けても効く</span> — ブラウザは HTTP で届いた HSTS ヘッダーを無視する。偽のヘッダーで約束を消されたり付けられたりしないための仕様だ。</li>
+        </ul>
+      </div>
+
+      <div class="glossary">
+        <div class="box-title">📖 用語ミニ辞典</div>
+        <dl>
+          <dt>HSTS</dt><dd>HTTPS のレスポンスヘッダーで、ホストを HTTPS 専用としてブラウザに一定期間記憶させる仕組み（RFC 6797）。</dd>
+          <dt>中間者攻撃（MITM）</dt><dd>通信経路の途中に入り込み、通信を盗み見たり書き換えたりする攻撃。</dd>
+          <dt>SSL ストリッピング</dt><dd>HTTPS へのリダイレクトを横取りし、ユーザーを HTTP のまま中継し続ける中間者攻撃。</dd>
+          <dt>max-age</dt><dd>HSTS の約束を記憶する秒数。ヘッダーを受け取るたびに期限が延びる。0 で記憶を削除する。</dd>
+          <dt>includeSubDomains</dt><dd>HSTS の約束をすべてのサブドメインにも適用させるディレクティブ。</dd>
+          <dt>HSTS プリロードリスト</dt><dd>ブラウザに最初から組み込まれた HTTPS 専用ドメインの一覧。初回アクセスから HTTPS を強制する。</dd>
+        </dl>
+      </div>
+
+      <div class="further-reading">
+        <div class="box-title">🔗 もっと深く</div>
+        <ul>
+          <li><a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Strict-Transport-Security">Strict-Transport-Security header | MDN</a> — 各ディレクティブの意味、初回アクセスの流れ、解除方法が短くまとまっている。</li>
+          <li><a href="https://www.rfc-editor.org/rfc/rfc6797.html">RFC 6797: HTTP Strict Transport Security (HSTS)</a> — HTTP 経由のヘッダーを無視する理由や初回の弱点（14.6 節）など、設計判断の根拠が読める。</li>
+          <li><a href="https://api.rubyonrails.org/classes/ActionDispatch/SSL.html">ActionDispatch::SSL | Rails API</a> — <code>force_ssl</code> の HSTS 既定値と、<code>hsts: false</code> が <code>max-age=0</code> を送る理由が書かれている。</li>
+          <li><a href="https://security.googleblog.com/2017/09/broadening-hsts-to-secure-more-of-web.html">Broadening HSTS to secure more of the Web | Google Security Blog</a> — TLD 単位でプリロードリストに登録する狙いを Google 自身が説明している。</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- recent:start -->
+    <!-- recent:end -->
+
+    <footer>
+      <p>Generated by Claude Code (GitHub Actions)</p>
+      <a href="./" class="archive-link">過去の記事</a>
+    </footer>
+  </div>
+</body>
+</html>
