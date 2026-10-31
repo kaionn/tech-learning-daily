@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tech Learning Daily — 同じ長いプロンプトを送っただけなのに、なぜ 2 回目の LLM 呼び出しは速く安くなるのか？</title>
+  <link rel="stylesheet" href="../style.css">
+  <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="../feed.xml">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Tech Learning Daily</h1>
+      <div class="date">2026-10-31 (Sat) — 第 106 号</div>
+      <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
+    </header>
+
+    <article class="article">
+      <div class="meta-bar">
+        <span class="tag tag-ai">AI</span>
+        <span class="difficulty">🌿 基礎</span>
+        <span class="read-time">⏱ 約 7 分</span>
+      </div>
+      <h2 class="article-title">同じ長いプロンプトを送っただけなのに、なぜ 2 回目の LLM 呼び出しは速く安くなるのか？</h2>
+      <p class="lead">社内規程を丸ごとシステムプロンプトに入れた Q&amp;A ボットを作ると、API のレスポンスの <code>usage</code> に <code>cache_read_input_tokens</code> という見慣れない数字が出てくる。課金明細でも、同じ数のトークンを送っているのに安い呼び出しと高い呼び出しが混ざる。LLM は毎回プロンプトを一から読んでいるはずなのに、いったい何を「キャッシュ」しているのだろうか。</p>
+
+      <div class="tldr">
+        <div class="box-title">🎯 3 行まとめ</div>
+        <ul>
+          <li>LLM は入力の各トークンから Key と Value というベクトルを作り、過去のトークンのそれは後ろに何が続いても変わらないため、計算結果を保存して使い回せる（KV キャッシュ）。</li>
+          <li>プロンプトキャッシュはこの KV キャッシュをリクエストをまたいで保存する仕組みで、先頭から完全一致した範囲だけが再利用される。キャッシュされるのは答えではなく、入力を読んだ途中結果だ。</li>
+          <li>Anthropic API では <code>cache_control</code> で区切りを指定し、既定 5 分の寿命の間に再利用されると入力料金が大きく下がる。変わらない部分を前、変わる部分を後ろに置く設計が効く。</li>
+        </ul>
+      </div>
+
+      <section class="body-section">
+        <h3>LLM は 1 トークン書くたびに、全文を振り返っている</h3>
+        <p>LLM は文章を 1 トークンずつ生成する。<strong>自己回帰生成</strong>とは、それまでの全トークンを入力にして次の 1 トークンを予測し、出力したトークンを入力の末尾に足してまた次を予測する、という繰り返しのことだ。1000 番目のトークンを予測するには 999 個分の文脈が、1001 番目にはそれに 1000 番目を加えた文脈が要る。</p>
+        <p>文脈を参照する部品が <strong>Attention（注意機構）</strong>だ。各トークンは層ごとに 3 種類のベクトルに変換される。「何を探しているか」を表す Query、「自分はどんな情報か」という見出しにあたる Key、「中身」にあたる Value である。新しいトークンの Query を過去の全トークンの Key と照らし合わせ、似ているものほど重く Value を混ぜ合わせることで、文脈を取り込んだ表現を作る。</p>
+        <p>素朴に実装すると、1 トークン生成するたびに過去の全トークンの Key と Value を計算し直すことになる。2,000 トークンの回答を書くなら、プロンプト全体を 2,000 回読み直す計算だ。これがそのまま毎回行われていたら、長いプロンプトは実用にならない。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>過去の Key と Value は、未来が何であっても変わらない</h3>
+        <p>ここで LLM の設計上の制約が効いてくる。生成型の LLM は<strong>因果マスク</strong>、つまり各トークンが自分より前のトークンしか参照できない制限をかけて動く。3 番目のトークンの Key と Value は 1〜3 番目だけから決まり、4 番目以降に何が来ても変わらない。変わらないのだから、一度計算したら保存しておけばよい。これが <strong>KV キャッシュ</strong>で、層ごとに過去トークンの Key と Value を溜めておき、新しいトークンの分だけ計算して末尾に追加する。</p>
+        <p>KV キャッシュがあると、1 回の API 呼び出しは 2 段階に分かれる。最初の <strong>prefill</strong> では、入力プロンプトの全トークンの Key と Value をまとめて計算する。入力は最初から全部そろっているので並列に計算できるが、プロンプトが長いほど時間がかかり、最初の 1 トークンが返るまでの時間（TTFT）の大半を占める。続く <strong>decode</strong> では、キャッシュを参照しながら 1 トークンずつ生成する。</p>
+        <p>ここまでは 1 回のリクエストの中の話だ。しかし同じ理屈はリクエストをまたいでも成り立つ。昨日も今日も同じ社内規程から始まるプロンプトなら、規程部分の Key と Value はまったく同じになる。prefill の結果をサーバー側に残しておけば、次のリクエストはそこから計算を再開できる。これが<strong>プロンプトキャッシュ</strong>（実装の文脈ではプレフィックスキャッシュとも呼ぶ）である。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>一致を判定するのは「先頭からの連なり」</h3>
+        <p>同じ文章がプロンプトのどこかに含まれていればキャッシュが効くように思える。しかし実際は、先頭から完全に一致した範囲しか再利用できない。3 番目のトークンの Key と Value は 1〜2 番目に依存するので、前に 1 文字でも違うものが挟まれば、後ろが同じ文章でも計算結果は別物になるからだ。</p>
+        <p>推論サーバー vLLM の実装はこの性質をそのまま形にしている。KV キャッシュを一定トークン数のブロックに分け、各ブロックを「直前のブロックのハッシュ＋ブロック内のトークン」でハッシュ化する。ハッシュが鎖状につながるため、途中のブロックが一致するのは、そこまでの全ブロックが一致しているときだけになる。また、トークンで埋まりきったブロックだけがキャッシュされる。</p>
+<pre class="diagram">ブロック = トークン数個ずつの塊
+hash(n) = H( hash(n-1) + ブロックnの中身 )
+
+1回目 ┌─────┬─────┬─────┬─────┐
+      │規程A│規程B│規程C│質問1│
+      └──┬──┴──┬──┴──┬──┴─────┘
+         ▼     ▼     ▼  保存
+2回目 ┌─────┬─────┬─────┬─────┐
+      │規程A│規程B│規程C│質問2│
+      └─────┴─────┴─────┴─────┘
+       ◀─── 一致: 再利用 ──▶ 計算
+
+先頭に日時を入れた場合
+      ┌─────┬─────┬─────┬─────┐
+      │10:01│規程A│規程B│規程C│
+      └─────┴─────┴─────┴─────┘
+       ▲ ここが違う → 以降すべて再計算</pre>
+        <p>図の下段が典型的な落とし穴だ。システムプロンプトの先頭に「現在時刻: 10:01」を入れると、後ろの規程が一字一句同じでも、毎回すべてが再計算になる。同じ情報を末尾のユーザーメッセージに移すだけで、規程部分は再利用できるようになる。</p>
+      </section>
+
+      <div class="analogy">
+        <div class="box-title">🍱 たとえるなら</div>
+        <p>長い伝票の束を上から順に電卓で足していき、10 枚ごとに小計をメモしておく作業に近い。翌日、最後の 1 枚だけ差し替えた束を渡されたら、最後の小計から足し直せばよい。しかし 1 枚目の金額が変わっていたら、メモした小計はすべて使えない。同じ伝票が束の後半に並んでいても、小計は「そこまでの全部」の結果だからだ。小計にあたるのが Key と Value で、プロンプトキャッシュはこのメモを翌日まで（実際には数分間）取っておく仕組みである。</p>
+      </div>
+
+      <section class="body-section">
+        <h3>API ではどう指定し、どう課金されるか</h3>
+        <p>Anthropic の API では、どこまでをキャッシュするかの区切り（<strong>キャッシュブレークポイント</strong>）を <code>cache_control</code> で指定する。プレフィックスは <code>tools</code> → <code>system</code> → <code>messages</code> の順に組み立てられ、ブレークポイントより前の全体がキャッシュの対象になる。ブレークポイントは 1 リクエストに最大 4 つ置ける。</p>
+<pre class="code">"system": [
+  {
+    "type": "text",
+    "text": "（長い社内規程）",
+    "cache_control": {"type": "ephemeral"}
+  }
+]</pre>
+        <p>寿命は既定で 5 分で、ヒットするたびに追加料金なしで延長される。数分おきに問い合わせが来るボットなら規程部分は温まったままになるが、問い合わせが 5 分以上途切れれば次の 1 回は書き込み直しになる。<code>"ttl": "1h"</code> を指定すれば 1 時間に延ばせるが、書き込み料金は通常の入力の 2 倍になる。5 分版の書き込みは 1.25 倍、読み出しは多くのモデルで 0.1 倍（新しいモデルではさらに安い）だ。つまり 1 回しか使わない内容をキャッシュすると割高になり、2 回目以降の再利用で元が取れる。</p>
+        <p>キャッシュの効き具合はレスポンスの <code>usage</code> で確認できる。<code>cache_creation_input_tokens</code> が書き込んだ量、<code>cache_read_input_tokens</code> が再利用できた量、<code>input_tokens</code> が最後のブレークポイントより後ろの通常課金分で、3 つの合計が入力全体になる。ブレークポイントの手前がモデルごとの最小長（512〜4,096 トークン）に満たないと、エラーにならずにキャッシュだけが黙ってスキップされる点にも注意したい。また、ツール定義を変えると <code>tools</code> 以降のすべてが無効になる。並び順の上流ほど変更の影響が大きい。</p>
+        <p>OpenAI の API は既定で自動的にキャッシュする方式で、指定しなくても一致する先頭部分が再利用され、ヒット量は <code>usage.input_tokens_details.cached_tokens</code> に出る。指定の仕方は違っても、先頭からの完全一致が条件である点は同じで、どちらのドキュメントも「静的な内容を前、動的な内容を後ろ」を推奨している。</p>
+      </section>
+
+      <div class="practical">
+        <div class="box-title">💼 実務でどう出会うか</div>
+        <p>RAG やエージェントのコストを見積もるとき、プロンプトの並び順がそのまま請求額に効く。システムプロンプトにユーザー名・日時・リクエスト ID を埋め込むテンプレートはよくあるが、先頭付近に置くとキャッシュがほぼ効かない。会話が続くチャットやエージェントでは、過去のやり取りが毎ターン先頭から同じ順で再送されるため、履歴の末尾にブレークポイントを置いておくと直前ターンまでが再利用できる。ツール呼び出しを何十往復も繰り返すエージェントでは、毎ターン送る履歴が長くなるぶん差が大きく出る。コストが想定より高いときは、まず <code>cache_read_input_tokens</code> が 0 になっていないか、プロンプトの前の方に毎回変わる値が混じっていないかを確かめる。</p>
+      </div>
+
+      <div class="hands-on">
+        <div class="box-title">⌨️ 手を動かす（5 分）</div>
+        <p>Anthropic の API キー（<code>ANTHROPIC_API_KEY</code>）があれば、同じ長いシステムプロンプトを 2 回送り、<code>usage</code> の変化を観察できる。最小長を余裕をもって超えるよう、300 条の架空の規程を生成している。</p>
+<pre class="code">python3 -c '
+import json
+rules = "".join(f"第{i}条: 経費は月末締めで申請し、領収書を添付する。\n" for i in range(1, 301))
+print(json.dumps({
+  "model": "claude-haiku-5-5", "max_tokens": 50,
+  "system": [{"type": "text", "text": "社内規程に答えるアシスタントだ。\n" + rules,
+              "cache_control": {"type": "ephemeral"}}],
+  "messages": [{"role": "user", "content": "第120条を一言で"}]}))
+' &gt; /tmp/body.json
+
+for i in 1 2; do
+  curl -s https://api.anthropic.com/v1/messages \
+    -H "x-api-key: $ANTHROPIC_API_KEY" \
+    -H "anthropic-version: 2023-06-01" \
+    -H "content-type: application/json" \
+    -d @/tmp/body.json \
+  | python3 -c 'import json,sys; print(json.load(sys.stdin)["usage"])'
+done</pre>
+        <p>1 回目は <code>cache_creation_input_tokens</code> に数千トークンが計上され、<code>cache_read_input_tokens</code> は 0 になるはずだ。5 分以内の 2 回目では数字が入れ替わり、同じ量が <code>cache_read_input_tokens</code> に移る。続けて、スクリプト中の「社内規程に答える」を「社内規定に答える」と 1 文字だけ変えて再実行すると、規程本文は同じなのに再び全量が書き込みになり、先頭の違いが後ろ全体を無効にすることが確かめられる。</p>
+      </div>
+
+      <div class="misconceptions">
+        <div class="box-title">🙅 よくある誤解</div>
+        <ul>
+          <li><span class="wrong">プロンプトキャッシュは過去の回答を保存して返している</span> — 保存されるのは入力を読んだ途中結果（Key と Value）で、回答は毎回新しく生成される。<code>temperature</code> などのサンプリング設定もそのまま効く。</li>
+          <li><span class="wrong">同じ文章がプロンプトのどこかにあればキャッシュが効く</span> — 再利用できるのは先頭から完全一致した範囲だけだ。前に 1 トークンでも違うものがあれば、後ろの Key と Value は別物になる。</li>
+          <li><span class="wrong">キャッシュを有効にすれば必ず安くなる</span> — Anthropic の API では書き込みが通常の入力より高く、寿命内に再利用されなければ割高になる。呼び出し間隔と寿命の関係で損得が決まる。</li>
+        </ul>
+      </div>
+
+      <div class="glossary">
+        <div class="box-title">📖 用語ミニ辞典</div>
+        <dl>
+          <dt>自己回帰生成</dt><dd>それまでの全トークンから次の 1 トークンを予測し、出力を入力に足して繰り返す生成方式。</dd>
+          <dt>KV キャッシュ</dt><dd>Attention で使う過去トークンの Key と Value を層ごとに保存し、再計算を省く仕組み。</dd>
+          <dt>prefill</dt><dd>入力プロンプト全体の Key と Value をまとめて計算する段階。長いプロンプトほど最初の応答が遅れる原因になる。</dd>
+          <dt>プロンプトキャッシュ</dt><dd>prefill の結果をリクエストをまたいで保存し、先頭が一致する次のリクエストで再利用する仕組み。</dd>
+          <dt>キャッシュブレークポイント</dt><dd>どこまでをキャッシュ対象にするかの区切り。Anthropic API では <code>cache_control</code> で指定する。</dd>
+        </dl>
+      </div>
+
+      <div class="further-reading">
+        <div class="box-title">🔗 もっと深く</div>
+        <ul>
+          <li><a href="https://platform.claude.com/docs/en/docs/build-with-claude/prompt-caching">Prompt caching | Claude Docs</a> — 寿命・料金倍率・モデル別の最小長・何を変えるとどこまで無効になるかの一覧がそろっている。</li>
+          <li><a href="https://developers.openai.com/api/docs/guides/prompt-caching">Prompt caching | OpenAI API</a> — 自動キャッシュ方式の挙動と、先頭のハッシュでルーティングされる仕組みが書かれている。</li>
+          <li><a href="https://huggingface.co/docs/transformers/main/en/cache_explanation">How caching works | Hugging Face Transformers</a> — 因果マスクのおかげで過去の Key と Value を保存できる理由を、数式とコードで確認できる。</li>
+          <li><a href="https://docs.vllm.ai/en/latest/design/prefix_caching.html">Automatic Prefix Caching | vLLM</a> — ブロック単位のハッシュ鎖と LRU による追い出しなど、推論サーバー側の実装が読める。</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- recent:start -->
+    <!-- recent:end -->
+
+    <footer>
+      <p>Generated by Claude Code (GitHub Actions)</p>
+      <a href="./" class="archive-link">過去の記事</a>
+    </footer>
+  </div>
+</body>
+</html>

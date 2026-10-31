@@ -36,8 +36,8 @@
         <button class="chip" data-cat="lang">Lang <span class="chip-count">10</span></button>
         <button class="chip" data-cat="arch">Arch <span class="chip-count">9</span></button>
         <button class="chip" data-cat="security">Security <span class="chip-count">9</span></button>
+        <button class="chip" data-cat="ai">AI <span class="chip-count">8</span></button>
         <button class="chip" data-cat="infra">Infra <span class="chip-count">8</span></button>
-        <button class="chip" data-cat="ai">AI <span class="chip-count">7</span></button>
         <button class="chip" data-cat="dev" data-overflow="1" hidden>Dev <span class="chip-count">5</span></button>
         <button class="chip" data-cat="perf" data-overflow="1" hidden>Perf <span class="chip-count">5</span></button>
         <button class="chip" data-cat="frontend" data-overflow="1" hidden>Frontend <span class="chip-count">4</span></button>
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-10">
       <div class="section-title">2026 年 10 月 <span class="count"></span></div>
+      <div class="card" data-cat="ai" data-diff="基礎"
+           data-search="同じ長いプロンプトを送っただけなのに、なぜ 2 回目の llm 呼び出しは速く安くなるのか？ llm は因果マスクのおかげで過去トークンの key と value を保存して使い回せる（kv キャッシュ）。プロンプトキャッシュはそれをリクエストをまたいで保存し、先頭から完全一致した範囲だけを再利用する。anthropic api の cache_control と寿命・料金倍率、動的な値を後ろに置く設計を解説。" data-terms="自己回帰生成 / KV キャッシュ / prefill / プロンプトキャッシュ / キャッシュブレークポイント">
+        <h3><a href="2026-10-31.html">同じ長いプロンプトを送っただけなのに、なぜ 2 回目の LLM 呼び出しは速く安くなるのか？</a></h3>
+        <div class="summary">LLM は因果マスクのおかげで過去トークンの Key と Value を保存して使い回せる（KV キャッシュ）。プロンプトキャッシュはそれをリクエストをまたいで保存し、先頭から完全一致した範囲だけを再利用する。Anthropic API の cache_control と寿命・料金倍率、動的な値を後ろに置く設計を解説。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-ai">AI</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-31</span></div>
+      </div>
       <div class="card" data-cat="security" data-diff="基礎"
            data-search="http:// と打ったのに、なぜブラウザはサーバーに聞く前に https:// へ書き換えるのか？ http→https のリダイレクトは平文の初回リクエストを ssl ストリッピングで横取りされうる。hsts はブラウザに https 専用と記憶させ送信前に url を書き換えさせる。max-age の解除の難しさ、rails force_ssl 既定の includesubdomains、プリロードリストの取り消しの重さを解説。" data-terms="HSTS / 中間者攻撃（MITM） / SSL ストリッピング / max-age / includeSubDomains / HSTS プリロードリスト">
         <h3><a href="2026-10-30.html">http:// と打ったのに、なぜブラウザはサーバーに聞く前に https:// へ書き換えるのか？</a></h3>
