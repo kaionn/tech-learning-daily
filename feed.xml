@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-10-31T09:54:51+09:00</updated>
+  <updated>2026-11-01T09:13:03+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>終了時刻から開始時刻を引いただけなのに、なぜ処理時間がマイナスになるのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-11-01.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-11-01.html</id>
+    <updated>2026-11-01T09:13:03+09:00</updated>
+    <summary>壁時計は NTP や手動設定で後ろへ飛びうるため、時刻の引き算は負になる。経過時間はモノトニッククロックで測り、Go では UTC() や JSON 化でモノトニック時刻が消える点に注意する。</summary>
+  </entry>
   <entry>
     <title>同じ長いプロンプトを送っただけなのに、なぜ 2 回目の LLM 呼び出しは速く安くなるのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-10-31.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-10-19.html</id>
     <updated>2026-10-19T08:23:28+09:00</updated>
     <summary>アプリが公開するのは累計カウンタと「何秒以下が何件」の累積バケットだけで、秒間値は rate() が差分から、p99 は histogram_quantile() がバケット内の線形補間で推定する。集計は rate が先、sum が後。</summary>
-  </entry>
-  <entry>
-    <title>同じイメージからコンテナを 10 個起動したのに、なぜディスクは 10 倍にならないのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-10-18.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-10-18.html</id>
-    <updated>2026-10-18T08:13:41+09:00</updated>
-    <summary>コンテナは共有の読み取り専用レイヤーに薄い書き込み層を OverlayFS で重ねるだけなのでディスクが増えず、書き込みは copy-up、削除は whiteout になるため後のレイヤーで消してもイメージは縮まない。</summary>
   </entry>
 </feed>

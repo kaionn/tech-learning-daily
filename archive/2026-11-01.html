@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tech Learning Daily — 終了時刻から開始時刻を引いただけなのに、なぜ処理時間がマイナスになるのか？</title>
+  <link rel="stylesheet" href="../style.css">
+  <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="../feed.xml">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Tech Learning Daily</h1>
+      <div class="date">2026-11-01 (Sun) — 第 107 号</div>
+      <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
+    </header>
+
+    <article class="article">
+      <div class="meta-bar">
+        <span class="tag tag-lang">Lang</span>
+        <span class="difficulty">🌿 基礎</span>
+        <span class="read-time">⏱ 約 7 分</span>
+      </div>
+      <h2 class="article-title">終了時刻から開始時刻を引いただけなのに、なぜ処理時間がマイナスになるのか？</h2>
+      <p class="lead">処理時間を測るとき、<code>start = Time.now</code> と書いて最後に <code>Time.now - start</code> を引く。誰もが一度は書いたコードだ。ところがある日、ログに <code>duration=-0.8s</code> が出たり、5 秒のはずのタイムアウトが一瞬で発火したりする。時計は前にしか進まないはずなのに、なぜ引き算が負になるのだろうか。</p>
+
+      <div class="tldr">
+        <div class="box-title">🎯 3 行まとめ</div>
+        <ul>
+          <li>OS には「今が何時か」を表す壁時計（<code>CLOCK_REALTIME</code>）と、「どれだけ経ったか」だけを表すモノトニッククロック（<code>CLOCK_MONOTONIC</code>）の 2 種類がある。</li>
+          <li>壁時計は NTP や手動設定で後ろへ飛びうるため、2 つの時刻の差は負にも巨大にもなる。モノトニッククロックは飛ばないが、値そのものに日時としての意味はない。</li>
+          <li>経過時間・タイムアウト・レート計算はモノトニック、ログやDBに残す「いつ」は壁時計、と使い分ける。Go は <code>time.Now()</code> が両方を持つが、<code>UTC()</code> や JSON 化で片方が消える点に注意する。</li>
+        </ul>
+      </div>
+
+      <section class="body-section">
+        <h3>コンピュータの「時計」は 1 つではない</h3>
+        <p>Linux の <code>clock_gettime(2)</code> は、引数で読む時計を選ばせる。代表が 2 つある。<code>CLOCK_REALTIME</code> は「壁時計」、つまり 1970-01-01 からの経過として表した現在時刻で、man ページは「設定可能な」時計であり、時刻の不連続なジャンプの影響を受けると明記している。<code>CLOCK_MONOTONIC</code> は「過去のある不定の時点からの経過時間」で、設定不可能であり、そうしたジャンプの影響を受けない。</p>
+        <p>モノトニッククロック（monotonic clock）とは、値が決して減らないことを保証する時計だ。代わりに、値の起点は「過去のどこか」でしかなく、Linux ではおおむね起動時刻に近いが仕様上は決まっていない。そのため <code>CLOCK_MONOTONIC</code> の値を見ても「何時何分か」は分からないし、別のマシンの値と比べても意味がない。</p>
+        <p>多くの言語の「現在時刻を返す関数」は壁時計を読んでいる。Ruby の <code>Time.now</code>、JavaScript の <code>Date.now()</code>、Python の <code>time.time()</code> がそうだ。つまり冒頭の <code>Time.now - start</code> は「2 回読んだ壁時計の差」であり、その間に壁時計が動かされればそのぶん結果がずれる。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>壁時計はなぜ後ろへ飛ぶのか</h3>
+        <p>マシンの水晶発振器は少しずつ進んだり遅れたりするため、OS は NTP（Network Time Protocol: ネットワーク越しに正確な時刻源と照合して時計を合わせるプロトコル）で補正し続けている。補正のやり方は 2 つある。ずれの分だけ時計を一気に書き換える<strong>ステップ</strong>と、時計の進む速さをわずかに変えて徐々に追いつかせる<strong>スルー（slew）</strong>だ。ステップで時計が遅れ側に直されると、壁時計は過去へ戻る。</p>
+        <p>chrony（Linux で広く使われる NTP 実装）の設定では、この振る舞いを <code>makestep</code> で決める。ドキュメントの例 <code>makestep 0.1 3</code> は「ずれが 0.1 秒を超えていれば、起動後最初の 3 回の更新に限ってステップする」という意味で、それ以降はスルーだけで補正する。起動直後に大きくずれた時計を素早く直しつつ、稼働中のアプリの足元で時計が飛ぶのを避けるための折衷だ。</p>
+<pre class="code"># /etc/chrony.conf
+# 起動直後の 3 回だけ、0.1 秒超のずれを一気に修正
+makestep 0.1 3
+# 3 回目以降の大きなずれはスルーで少しずつ直す</pre>
+        <p>ただし、この設定で守られるのは chrony 自身の補正だけだ。管理者の <code>date -s</code>、VM のスナップショット復元やライブマイグレーション後の時刻同期、手で入れた設定ミスなど、壁時計を動かす経路はほかにもある。アプリ側で「壁時計は飛ばない」と仮定できる場面は思ったより少ない。</p>
+<pre class="diagram">start ─(実際の経過は 0.2 秒)─▶ end
+
+REALTIME（壁時計）
+  10:00:00.0 ──┐
+               │ 途中で NTP が 1 秒戻す
+               └──▶ 09:59:59.2
+  end - start = -0.8 秒 ✗
+
+MONOTONIC
+  5000.0 ──────────▶ 5000.2
+  end - start = +0.2 秒 ✓</pre>
+      </section>
+
+      <div class="analogy">
+        <div class="box-title">🍱 たとえるなら</div>
+        <p>壁時計は駅のホームの時計、モノトニッククロックはキッチンタイマーだ。ホームの時計は正確な時刻を示すために係員がときどき針を合わせ直すので、針を戻した瞬間をまたいで「何分待ったか」を引き算すると狂う。キッチンタイマーは今が何時かは教えてくれないが、押してからの経過だけは誰にも触られずに数え続ける。電車の発車時刻を記録するならホームの時計、ラーメンの 3 分を測るならタイマーを使う。</p>
+      </div>
+
+      <section class="body-section">
+        <h3>実際に起きた事故: うるう秒と負の RTT</h3>
+        <p>これは机上の話ではない。Cloudflare は 2017 年 1 月 1 日 0 時（UTC）のうるう秒で DNS 障害を起こし、その原因を公開している。自社 DNS サーバー RRDNS が上流リゾルバまでの往復時間を <code>rtt := time.Now().Sub(start)</code> で測っていたところ、うるう秒の処理で時計が戻った瞬間に <code>rtt</code> が負になった。その値が乱数関数 <code>rand.Int63n()</code> に渡り、負の引数で panic したことで、ピーク時に DNS クエリのおよそ 0.2% が影響を受けた。</p>
+        <p>当時の Go の <code>time.Now()</code> は壁時計しか持っていなかった（Cloudflare の報告もこの欠如を議論する Go の issue 12914 に触れている）。その後 Go 1.9 で <code>time</code> パッケージは各 <code>Time</code> 値の中でモノトニック時刻を透過的に追跡するようになった。リリースノートは、これで壁時計の調整があっても 2 つの <code>Time</code> 間の差の計算が安全になったと説明している。</p>
+        <p>なお、うるう秒で時計を戻さない対策として「スミア（smear）」がある。Google の公開 NTP は、うるう秒の 1 秒を正午から翌日正午までの 24 時間に線形に溶かし込み、時計の進む速さを約 11.6 ppm だけ変えてやり過ごす。ステップの代わりに長いスルーを使う発想だ。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>Go は自動で守ってくれる、ただし条件付きで</h3>
+        <p>Go 1.9 以降の <code>time.Now()</code> は壁時計とモノトニック時刻の両方を読み、1 つの <code>Time</code> に詰めて返す。両方の値がモノトニック時刻を持っていれば、<code>Sub</code>・<code>Before</code>・<code>After</code>・<code>Equal</code> はモノトニック側だけで計算する。だから <code>time.Since(start)</code> と書けば、途中で壁時計が戻っても経過時間は負にならない。</p>
+        <p>これで一件落着に思える。しかし実際は、モノトニック時刻は思いのほか簡単に剥がれ落ちる。パッケージドキュメントによれば、<code>t.UTC()</code>・<code>t.In()</code>・<code>t.Local()</code>・<code>t.Round()</code>・<code>t.Truncate()</code> は結果からモノトニック時刻を取り除き、<code>MarshalJSON</code> などのシリアライズでも省かれる。<code>time.Parse</code> や <code>time.Unix</code> で作った値にはもともと無い。片方でもモノトニック時刻を持たない値との <code>Sub</code> は、黙って壁時計同士の引き算に戻る。</p>
+<pre class="code">start := time.Now().UTC() // ✗ ここでモノトニック時刻が消える
+doWork()
+d := time.Since(start)    // 壁時計の差。負になりうる
+
+start := time.Now()       // ✓ そのまま持つ
+doWork()
+d := time.Since(start)    // モノトニックの差</pre>
+        <p>典型的な落とし穴は「ジョブの開始時刻を UTC に揃えて構造体に入れ、後で <code>time.Since</code> する」パターンや、開始時刻を Redis や DB に保存して別プロセスで差を取るパターンだ。後者はそもそもモノトニック時刻がプロセス（起動）をまたいで意味を持たないので、壁時計で測るしかない。その場合は負の値や異常に大きい値が来る前提で、ゼロに丸める・捨てるといった防御を入れておく。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>Ruby・JavaScript・Python では明示的に選ぶ</h3>
+        <p>Go 以外の主要言語は、壁時計とモノトニッククロックを別の API として提供している。経過時間を測るときはモノトニック側を自分で呼ぶ必要がある。</p>
+<pre class="code"># Ruby（単位の既定は :float_second）
+t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+work
+elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0
+
+// JavaScript
+const t0 = performance.now();
+work();
+const elapsedMs = performance.now() - t0;
+
+# Python
+t0 = time.monotonic()
+work()
+elapsed = time.monotonic() - t0</pre>
+        <p>Ruby の <code>Process.clock_gettime</code> は第 2 引数で単位を選べ、整数ナノ秒が欲しいときは <code>:nanosecond</code> を渡す。JavaScript の <code>performance.now()</code> は MDN によれば <code>timeOrigin</code> 起点のモノトニックな値で、システム時計の調整を受けない。一方で、タイミング攻撃対策のため分解能は意図的に粗くされている（クロスオリジン分離されていない文書では 100 マイクロ秒）。</p>
+        <p>もう 1 つの注意点は、モノトニッククロックも「正確」とは限らないことだ。man ページによれば <code>CLOCK_MONOTONIC</code> は飛ばない代わりに NTP の周波数調整（スルー）の影響は受け、またシステムのサスペンド中は進まない。サスペンド時間も含めたい場合は <code>CLOCK_BOOTTIME</code>、周波数調整すら受けない生のハードウェア時刻が欲しい場合は <code>CLOCK_MONOTONIC_RAW</code> がある。サーバーの処理時間計測なら、通常は <code>CLOCK_MONOTONIC</code> で十分だ。</p>
+      </section>
+
+      <div class="practical">
+        <div class="box-title">💼 実務でどう出会うか</div>
+        <p>最初に疑うべきは、自前で書いた計測・タイムアウトのコードだ。Rails のサービスオブジェクトで <code>Time.now</code> を引き算してメトリクスに送っていると、時刻補正のたびにヒストグラムへ負の値や外れ値が混ざる。リトライの待ち時間やレートリミッタのトークン補充を壁時計で計算していると、時計が進んだ瞬間に大量のトークンが補充され、戻った瞬間には補充が止まる。どれも「普段は正しく、まれに説明のつかない値が出る」形で現れるので、ログに負の duration を見つけたら時計の種類を確認するとよい。逆に、ログのタイムスタンプ・<code>created_at</code>・JWT の <code>exp</code> のように「いつ」を他のマシンや人と共有する値には壁時計を使う。こちらはモノトニッククロックでは代わりが利かない。</p>
+      </div>
+
+      <div class="hands-on">
+        <div class="box-title">⌨️ 手を動かす（5 分）</div>
+        <p>Go の <code>Time</code> がモノトニック時刻を持っていること、そして <code>UTC()</code> と JSON 往復でそれが消えることを、文字列表現の <code>m=+...</code> で確かめる。</p>
+<pre class="code">mkdir -p /tmp/monoclock &amp;&amp; cd /tmp/monoclock
+cat &gt; main.go &lt;&lt;'EOF'
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"time"
+)
+
+func main() {
+	t := time.Now()
+	fmt.Println("Now   :", t)
+	fmt.Println("UTC() :", t.UTC())
+	b, _ := json.Marshal(t)
+	var u time.Time
+	json.Unmarshal(b, &amp;u)
+	fmt.Println("JSON  :", u)
+}
+EOF
+go run main.go
+python3 -c "import time;print(time.get_clock_info('time'));print(time.get_clock_info('monotonic'))"</pre>
+        <p><code>Now</code> の行だけ末尾に <code>m=+0.000...</code> が付き、<code>UTC()</code> と JSON 往復後の行には付かないはずだ。付いていない値を使って <code>Sub</code> すると壁時計の差になる。Python の出力では、<code>time</code> 側が <code>adjustable=True</code>（外部から調整されうる）、<code>monotonic</code> 側が <code>adjustable=False</code> と表示され、2 つが別の時計だと分かる。</p>
+      </div>
+
+      <div class="misconceptions">
+        <div class="box-title">🙅 よくある誤解</div>
+        <ul>
+          <li><span class="wrong">NTP で同期していれば時刻は戻らない</span> — NTP 自体が時計を合わせる仕組みであり、設定次第でステップ補正をする。手動設定や VM の復元など NTP 以外の経路でも壁時計は動く。</li>
+          <li><span class="wrong">モノトニッククロックなら別サーバー間でも比較できる</span> — 起点は各マシン（各起動）で異なる「過去のどこか」なので、プロセスやホストをまたいだ差には使えない。サービス間で共有する時刻には壁時計を使い、ずれを許容する設計にする。</li>
+          <li><span class="wrong">Go の <code>time.Since</code> はどんな値を渡しても安全</span> — 安全なのは両方の値がモノトニック時刻を持つときだけだ。<code>UTC()</code> や <code>Round</code>、シリアライズを経た値では壁時計の差に戻る。</li>
+        </ul>
+      </div>
+
+      <div class="glossary">
+        <div class="box-title">📖 用語ミニ辞典</div>
+        <dl>
+          <dt>壁時計（CLOCK_REALTIME）</dt><dd>1970 年起点の現在時刻を表す OS の時計。設定や NTP によって前後に飛びうる。</dd>
+          <dt>モノトニッククロック（CLOCK_MONOTONIC）</dt><dd>値が決して減らない経過時間専用の時計。起点は不定で、日時としての意味はない。</dd>
+          <dt>NTP</dt><dd>ネットワーク越しの時刻源と照合してマシンの時計を合わせるプロトコル。</dd>
+          <dt>ステップ / スルー</dt><dd>時計の補正方法。ステップは一気に書き換え、スルーは進む速さを変えて徐々に合わせる。</dd>
+          <dt>うるう秒スミア</dt><dd>うるう秒の 1 秒を長時間に薄めて溶かし込み、時計を飛ばさずにやり過ごす手法。</dd>
+        </dl>
+      </div>
+
+      <div class="further-reading">
+        <div class="box-title">🔗 もっと深く</div>
+        <ul>
+          <li><a href="https://man7.org/linux/man-pages/man2/clock_gettime.2.html">clock_gettime(2) — Linux manual page</a> — REALTIME / MONOTONIC / BOOTTIME / MONOTONIC_RAW の違いが一次情報で並んでいる。</li>
+          <li><a href="https://pkg.go.dev/time#hdr-Monotonic_Clocks">Go time パッケージ: Monotonic Clocks</a> — どの操作がモノトニック時刻を使い、どの操作で剥がれるかの正確な一覧。</li>
+          <li><a href="https://blog.cloudflare.com/how-and-why-the-leap-second-affected-cloudflare-dns/">How and why the leap second affected Cloudflare DNS</a> — 壁時計の引き算が本番障害になった経緯を、コード片付きで追える事後報告。</li>
+          <li><a href="https://developers.google.com/time/smear">Google Public NTP: Leap Smear</a> — うるう秒を 24 時間に溶かす具体的な方式と、その副作用の説明。</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- recent:start -->
+    <!-- recent:end -->
+
+    <footer>
+      <p>Generated by Claude Code (GitHub Actions)</p>
+      <a href="./" class="archive-link">過去の記事</a>
+    </footer>
+  </div>
+</body>
+</html>
