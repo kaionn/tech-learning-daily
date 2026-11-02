@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-11-01T09:13:03+09:00</updated>
+  <updated>2026-11-02T09:54:46+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>同じサーバーに 200 バイト送るだけなのに、なぜ 2 回に分けて write すると 40ms 遅れるのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-11-02.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-11-02.html</id>
+    <updated>2026-11-02T09:54:46+09:00</updated>
+    <summary>送信側の Nagle は未 ACK 中の小片を溜め、受信側の delayed ACK は返事を待って ACK を遅らせる。write を分けると両者が待ち合い Linux では約 40ms 止まるため、1 回で書くか TCP_NODELAY を立てる。</summary>
+  </entry>
   <entry>
     <title>終了時刻から開始時刻を引いただけなのに、なぜ処理時間がマイナスになるのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-11-01.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-10-20.html</id>
     <updated>2026-10-20T09:28:52+09:00</updated>
     <summary>git は 2 つのブランチではなく共通祖先を加えた 3 版を比べ、片側だけの変更は採用、両側が同じ（隣接含む）領域を変えた所だけを衝突にする。衝突しなくても意味上の衝突は検出できない。</summary>
-  </entry>
-  <entry>
-    <title>Prometheus の p99 はどこから出てくるのか？ 生の数字は増え続けるカウンタだけなのに</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-10-19.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-10-19.html</id>
-    <updated>2026-10-19T08:23:28+09:00</updated>
-    <summary>アプリが公開するのは累計カウンタと「何秒以下が何件」の累積バケットだけで、秒間値は rate() が差分から、p99 は histogram_quantile() がバケット内の線形補間で推定する。集計は rate が先、sum が後。</summary>
   </entry>
 </feed>

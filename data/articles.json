@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-11-02.html",
+    "date": "2026-11-02",
+    "title": "同じサーバーに 200 バイト送るだけなのに、なぜ 2 回に分けて write すると 40ms 遅れるのか？",
+    "summary": "Nagle アルゴリズムと delayed ACK が互いを待ち合うと、2 回に分けた小さな write が Linux では約 40ms 止まる。仕組みと TCP_NODELAY・write の集約による対策、言語ごとの既定値を解説する。",
+    "category": "network",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": ["Nagle アルゴリズム", "delayed ACK", "TCP_NODELAY", "TCP_CORK", "MSS"]
+  },
+  {
     "file": "2026-11-01.html",
     "date": "2026-11-01",
     "title": "終了時刻から開始時刻を引いただけなのに、なぜ処理時間がマイナスになるのか？",
