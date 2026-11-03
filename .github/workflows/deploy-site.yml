@@ -1,6 +1,6 @@
 name: Deploy site (manual content push)
 
-# 手動 push（ローカルセッションからのサイトアセット変更）を Cloudflare Pages に反映する。
+# 手動 push（ローカルセッションからのサイトアセット変更）を選択済みの Cloudflare ホストに反映する。
 # 日次 run（daily-article.yml）は GITHUB_TOKEN で push するため本 workflow は発火せず、
 # 二重デプロイにはならない（日次 run は自前で Cloudflare へ deploy する）。
 
@@ -17,29 +17,14 @@ on:
       - favicon.ico
       - icon-192.png
       - apple-touch-icon.png
+      - wrangler.jsonc
 
 permissions:
   contents: read
 
-concurrency:
-  group: site-deploy
-  cancel-in-progress: true
-
 jobs:
   deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Deploy to Cloudflare Pages
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          set -euo pipefail
-          CLEAN=$(mktemp -d)
-          git archive HEAD | tar -x -C "$CLEAN"
-          # data/articles.json（一次ソース）からアーカイブ一覧を再生成してから deploy する。
-          # push 側の再生成漏れがあっても、公開される一覧は常に JSON と一致する
-          python3 "$CLEAN/scripts/build_archive.py"
-          python3 "$CLEAN/scripts/build_recent.py"
-          npx --yes wrangler@4 pages deploy "$CLEAN" --project-name=tech-learning-daily --branch=main
+    uses: ./.github/workflows/deploy-current-site.yml
+    secrets:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
