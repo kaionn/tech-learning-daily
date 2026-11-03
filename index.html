@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tech Learning Daily — 同じサーバーに 200 バイト送るだけなのに、なぜ 2 回に分けて write すると 40ms 遅れるのか？</title>
+  <title>Tech Learning Daily — Mac では動いたイメージなのに、なぜ本番サーバーでは exec format error で起動しないのか？</title>
   <link rel="stylesheet" href="style.css">
   <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="feed.xml">
   <link rel="icon" href="/favicon.ico" sizes="48x48">
@@ -14,154 +14,142 @@
   <div class="container">
     <header>
       <h1>Tech Learning Daily</h1>
-      <div class="date">2026-11-02 (Mon) — 第 108 号</div>
+      <div class="date">2026-11-03 (Tue) — 第 109 号</div>
       <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
     </header>
 
     <article class="article">
       <div class="meta-bar">
-        <span class="tag tag-network">Network</span>
+        <span class="tag tag-container">Container</span>
         <span class="difficulty">🌿 基礎</span>
         <span class="read-time">⏱ 約 7 分</span>
       </div>
-      <h2 class="article-title">同じサーバーに 200 バイト送るだけなのに、なぜ 2 回に分けて write すると 40ms 遅れるのか？</h2>
-      <p class="lead">自作のクライアントで、リクエストのヘッダとボディを別々に <code>write</code> したら、レスポンスが毎回きっちり 40ms ほど遅れた。ローカルホスト同士で、サーバーの処理は 1ms もかからないのに。CPU もネットワークも空いているのに時間だけが消えるこの現象は、TCP に組み込まれた 2 つの「親切」が互いを待ち合うことで起きる。</p>
+      <h2 class="article-title">Mac では動いたイメージなのに、なぜ本番サーバーでは exec format error で起動しないのか？</h2>
+      <p class="lead">Apple Silicon の Mac で <code>docker build</code> してレジストリに push し、本番の EC2 で起動したら、ログに <code>exec /usr/local/bin/app: exec format error</code> の 1 行だけを残してコンテナが落ちた。手元では何度も動作確認したイメージだ。「コンテナはどこでも同じように動く」はずなのに、なぜ同じイメージが場所によって起動すらしないのか。</p>
 
       <div class="tldr">
         <div class="box-title">🎯 3 行まとめ</div>
         <ul>
-          <li>送信側の Nagle アルゴリズムは「未 ACK のデータがある間は小さな断片を送らずに溜める」、受信側の delayed ACK は「ACK を返事に相乗りさせるため少し待つ」。</li>
-          <li>write → write → read の順で小さく書くと、送信側は ACK 待ち、受信側は残りのデータ待ちで膠着し、delayed ACK のタイマー（Linux では最短 40ms）が切れるまで止まる。</li>
-          <li>対策は 1 回の write にまとめるか <code>TCP_NODELAY</code> を立てること。Go・Node.js の http サーバー・curl は既定で Nagle を切っているが、生のソケットでは有効なことが多い。</li>
+          <li>コンテナはホストのカーネルと CPU をそのまま使うので、中のバイナリは CPU アーキテクチャ（arm64 / amd64）ごとに別物になる。合わない機械語をカーネルが実行できないと <code>exec format error</code> になる。</li>
+          <li>1 つのイメージ名に複数アーキテクチャを載せる仕組みが「イメージインデックス（マニフェストリスト）」で、pull するホストが自分の <code>os/architecture</code> に合う中身を選ぶ。Mac で普通に build するとアーキテクチャは arm64 だけになる。</li>
+          <li>Mac で amd64 イメージが動くのはエミュレーションが仕込まれているからで、本番サーバーには通常それが無い。<code>docker buildx build --platform linux/amd64,linux/arm64</code> で両方入りのイメージを作るか、本番に合わせて <code>--platform</code> を明示する。</li>
         </ul>
       </div>
 
       <section class="body-section">
-        <h3>小さなパケットを減らすための 2 つの仕組み</h3>
-        <p>TCP で 1 バイトを送ると、IP と TCP のヘッダ計 40 バイトが付いて 41 バイトのパケットになる。1984 年の RFC 896 で John Nagle はこれを「4000% のオーバーヘッド」と呼び、キー入力 1 文字ごとにパケットが飛ぶ端末通信が回線を詰まらせる問題を指摘した。この小さすぎるパケットは <code>tinygram</code> とも呼ばれる。</p>
-        <p>Nagle の解決策は単純だ。<strong>Nagle アルゴリズム</strong>とは、送信済みで ACK（受信確認）がまだ返っていないデータがある間、新しく書かれた小さなデータを送らずに送信バッファへ溜めておく規則である。ACK が戻るか、溜まった量が 1 セグメントの最大長（MSS）に達した時点でまとめて送る。往復が遅い回線ほど溜まる量が増えるので、タイマーを使わずに回線の状態へ自動で合わせられる。</p>
-        <p>受信側にも似た発想の仕組みがある。<strong>delayed ACK</strong>（遅延 ACK）とは、データを受け取ってもすぐには ACK を返さず、少し待つ規則である。待つ理由は、アプリがすぐに返事を書けば ACK をその返事のパケットに相乗りさせられ、ACK だけのパケットを 1 つ減らせるからだ。RFC 1122 は遅延を 0.5 秒未満に抑え、最大長のセグメントが続く場合は少なくとも 2 つに 1 回は ACK を返すよう定めている。</p>
+        <h3>コンテナは CPU までは隠してくれない</h3>
+        <p>コンテナは VM と違い、ゲスト OS を持たずにホストの Linux カーネル上で直接プロセスを動かす。名前空間と cgroup で「見える範囲」と「使える量」を区切るだけなので、プロセスが実行する機械語はホストの CPU がそのまま解釈する。つまりコンテナが隠すのはファイルシステムやプロセスの見え方までで、CPU の命令セットの違いは隠さない。</p>
+        <p>ここで出てくるのが <strong>CPU アーキテクチャ</strong>、つまり CPU が理解する命令セットの種類だ。Intel / AMD のサーバーは <code>amd64</code>（<code>x86_64</code> とも呼ぶ）、Apple Silicon の Mac や AWS Graviton は <code>arm64</code>（<code>aarch64</code>）である。Go のバイナリや Ruby の C 拡張（<code>nokogiri</code> など）は、コンパイル時にどちらか一方の機械語として出力される。</p>
+        <p>Linux の実行ファイル形式 ELF は、ファイル先頭のヘッダに「この機械語はどのアーキテクチャ向けか」を記録している。カーネルは <code>execve</code> でプログラムを起動するときにこのヘッダを確かめ、自分の CPU 向けでなければ読み込みを拒否してエラー <code>ENOEXEC</code> を返す。このエラーの説明文字列が「Exec format error」だ。冒頭のログは、コンテナランタイムがエントリポイントを起動しようとしてカーネルに断られたことを示している。</p>
       </section>
 
       <section class="body-section">
-        <h3>2 つが出会うと何が起きるか</h3>
-        <p>どちらも単独では無駄を省く良い仕組みに見える。しかし「送信側は ACK を待って送らない」「受信側は返事を待って ACK を返さない」が同時に成り立つと、お互いが相手の動きを待つ状態になる。その典型が、クライアントが 100 バイトのヘッダと 100 バイトのボディを 2 回の <code>write</code> で送り、サーバーが 200 バイト揃ってから応答する場面だ。</p>
+        <h3>1 つのタグに複数のイメージが入っている</h3>
+        <p>それなら <code>node:22</code> や <code>alpine</code> のような公式イメージは、なぜ Mac でもサーバーでも同じタグで動くのか。答えは、そのタグが指しているのが 1 つのイメージではなく「目次」だからだ。<strong>イメージインデックス</strong>（Docker の用語ではマニフェストリスト）とは、アーキテクチャごとのイメージマニフェストへの参照を並べた JSON で、OCI Image Spec では各要素に <code>platform.os</code>・<code>platform.architecture</code>（必須）と <code>platform.variant</code>（任意）を持つと定められている。</p>
 <pre class="diagram">
- Client(Nagle ON)  Server(delayed ACK)
-   │                         │
-   │ ① header 100B           │
-   │────────────────────────▶│
-   │                         │ need 200B
-   │ ② body 100B : HOLD      │ ACK : DELAY
-   │   (unACKed data exists) │
-   │                         │
-   │   ...... ~40 ms ......  │
-   │                         │
-   │◀────────────────────────│
-   │          ACK            │ (timer)
-   │ ② body 100B             │
-   │────────────────────────▶│
-   │◀────────────────────────│
-   │          "ok"           │
- HOLD : Nagle が未ACK中の小片を保留
- DELAY: 返事に相乗りさせるため ACK を待機
+ registry: myapp:1.0
+ ┌──────────────────────────────────┐
+ │ image index (manifest list)      │
+ │ ├ linux/amd64    ─▶ manifest A   │
+ │ └ linux/arm64/v8 ─▶ manifest B   │
+ └──────────────────────────────────┘
+        ▲                  ▲
+   pull │                  │ pull
+ ┌──────┴──────┐    ┌──────┴──────┐
+ │ EC2 (amd64) │    │ Mac (arm64) │
+ │ → A を取得  │    │ → B を取得  │
+ └─────────────┘    └─────────────┘
+
+ Mac で普通に build すると…
+ myapp:1.0 ─▶ manifest B (arm64) のみ
+ EC2 が pull → B を実行 → ENOEXEC
 </pre>
-        <p>1 回目の <code>write</code> は未 ACK のデータが無いので即座に送られる。2 回目は 1 回目の ACK がまだなので Nagle に止められる。サーバーはヘッダだけ受け取っても応答を作れないので返事を書かず、相乗り先が無いまま ACK を遅らせる。この膠着は delayed ACK のタイマーが切れて ACK 単体が送られた瞬間に解け、ボディが送られ、ようやく応答が返る。</p>
-        <p>Linux カーネルではこのタイマーの最小値 <code>TCP_DELACK_MIN</code> が <code>HZ/25</code>（40ms）、最大値 <code>TCP_DELACK_MAX</code> が <code>HZ/5</code>（200ms）と定義されている。冒頭の「きっちり 40ms」はこの最小値が見えている。帯域や CPU が原因ではなく、タイマーが原因なので、サーバーを速くしても遅延は減らない。</p>
+        <p><code>docker pull</code> はまずこの目次を受け取り、ホストのアーキテクチャに合う要素を選んで中身をダウンロードする。Docker のドキュメントは「ホストのアーキテクチャに基づいて正しい variant を自動で選ぶ」と説明している。合う要素が無ければ <code>no matching manifest for linux/amd64 in the manifest list entries</code> のようなエラーで pull 自体が失敗する。</p>
+        <p>問題は、目次を持たない単一アーキテクチャのイメージだ。<code>--platform</code> を付けずに <code>docker build</code> すると、イメージはビルドしたマシンのプラットフォーム向けに作られる。Apple Silicon なら <code>linux/arm64</code> だけになる。これを amd64 のサーバーで pull すると、選ぶ候補が 1 つしか無いので Docker は警告を出しつつそのまま取得し、起動した瞬間にカーネルに拒否される。pull は成功し、エラーは起動時にしか出ないので、デプロイの段階では気づきにくい。</p>
       </section>
 
       <div class="analogy">
         <div class="box-title">🍱 たとえるなら</div>
-        <p>注文票を 2 枚に分けて厨房へ渡す店員と、受け取ったら「了解」の合図を料理と一緒に返したい料理長だ。店員は「前の票に了解をもらうまで次の票は出さない」と決めており、料理長は「票が揃わないと料理を作れないし、料理が無いと了解を言う機会が無い」。料理長が 40ms 待って我慢できずに「了解」だけ言った瞬間、2 枚目の票がようやく出てくる。</p>
+        <p>イメージインデックスは、同じ本の日本語版と英語版を 1 つの ISBN でまとめた書店の棚札だ。客が「この本を」と頼むと、書店員は客の読める言語の版を棚札から選んで渡す。Mac で普通に build したイメージは、日本語版しか刷っていないのに同じ ISBN で出荷した状態で、英語しか読めない客の手にも日本語版がそのまま届き、開いた瞬間に読めないと分かる。</p>
       </div>
 
       <section class="body-section">
-        <h3>TCP_NODELAY を立てると何が変わるか</h3>
-        <p><code>TCP_NODELAY</code> はソケットごとに Nagle アルゴリズムを無効にするオプションである。Linux の tcp(7) は「設定すると、データが少量でもセグメントを可能な限りすぐ送る」と説明している。RFC 1122 も、アプリが接続ごとに Nagle を無効にできる手段を必ず用意するよう求めている。</p>
-<pre class="code"># Python（生のソケットは既定で Nagle が有効）
-sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-
-// Go（net.TCPConn は既定で true = 遅延なし）
-conn.(*net.TCPConn).SetNoDelay(false) // あえて Nagle を有効化する場合
-
-// Node.js（net.createServer / net.connect の既定は noDelay: false）
-net.createServer({ noDelay: true }, handler)</pre>
-        <p>既定値は言語やライブラリで揃っていない。Go の <code>TCPConn.SetNoDelay</code> は既定が true（遅延なし）とドキュメントに明記されている。Node.js は <code>net</code> モジュールの <code>noDelay</code> 既定が false だが、<code>http.createServer</code> の <code>noDelay</code> は v18.0.0 から既定 true に変わった。curl は 7.50.2 以降、既定で <code>TCP_NODELAY</code> を立てる。一方で Python の素の <code>socket</code> は何もしなければ Nagle が有効なままで、後述の実験もこれを利用する。</p>
-        <p>ただし <code>TCP_NODELAY</code> は無料ではない。Nagle を切ると、アプリが細かく 10 回 <code>write</code> すれば 10 個の小さなパケットがそのまま出ていき、ヘッダの比率と送信処理の回数が増える。Redis はこのトレードオフを設定として露出しており、<code>repl-disable-tcp-nodelay</code> を <code>yes</code> にするとレプリカへの送信パケットと帯域が減る代わりに、既定設定の Linux では最大 40ms ほどレプリカへの反映が遅れうると redis.conf に書かれている。既定は <code>no</code>（低遅延優先）だ。</p>
+        <h3>なぜ Mac では amd64 イメージが動いてしまうのか</h3>
+        <p>逆向き、つまり amd64 専用のイメージを Mac で動かすと、多くの場合は普通に動く。ここから「アーキテクチャの違いは Docker が吸収してくれる」と考えたくなる。しかし実際に吸収しているのは Docker Desktop が用意したエミュレーション環境で、Docker 一般の機能ではない。</p>
+        <p>その仕組みが Linux カーネルの <strong>binfmt_misc</strong> だ。これはファイル先頭のバイト列（マジックナンバー）のパターンと、それに一致したときに代わりに起動する「インタプリタ」を登録しておく機能で、登録先は <code>/proc/sys/fs/binfmt_misc/register</code> である。amd64 の ELF ヘッダのパターンに CPU エミュレータの QEMU を登録しておくと、カーネルは amd64 バイナリを直接実行する代わりに QEMU に渡し、QEMU が命令を 1 つずつ arm64 に翻訳しながら実行する。Docker Desktop にはこれに加えて Apple の Rosetta を使って amd64 を高速に動かす設定もある。</p>
+        <p>本番の素の Linux サーバーには、この登録が通常は入っていない。だから「Mac は arm64 も amd64 も動く」「サーバーは自分のアーキテクチャしか動かない」という非対称が生まれる。手元の動作確認が通ったことは、本番と同じアーキテクチャで動いた証拠にならない。なお QEMU によるエミュレーションは、Docker のドキュメントが「ネイティブより大幅に遅くなりうる」と注意しているとおり、コンパイルや圧縮のような計算の重い処理で特に遅い。</p>
       </section>
 
       <section class="body-section">
-        <h3>本当の対策は「write をまとめる」こと</h3>
-        <p><code>TCP_NODELAY</code> を立てれば膠着は消えるように思える。しかし根本原因は、1 つの論理メッセージを複数の <code>write</code> に分けているアプリ側の書き方にある。ヘッダとボディをアプリのバッファで連結して 1 回で書けば、Nagle が有効でも 2 回目の小片が生まれないので待ちは起きない。<code>bufio.Writer</code> のようなバッファ付き writer を挟んで最後に <code>Flush</code> するのも同じ効果になる。</p>
-        <p>まとめて書くと、パケット数も <code>write</code> システムコールの回数も減る。<code>TCP_NODELAY</code> だけで済ませると遅延は消えても細切れのパケットは残るので、両方を組み合わせるのが定石だ。「メッセージは 1 回で書く、そのうえで遅延に敏感な接続は NODELAY」という順番で考えるとよい。</p>
-        <p>Linux には逆向きの道具もある。<code>TCP_CORK</code> は「満杯でないセグメントを送らずに溜める」オプションで、解除した時点でまとめて送る。<code>sendfile</code> の前にヘッダを書くときなどに使う。tcp(7) によれば現在の実装では栓をしておける時間に 200ms の上限があり、それを超えると自動で送信される。受信側の delayed ACK を止める <code>TCP_QUICKACK</code> もあるが、一度立てても TCP の内部処理によって通常モードに戻るため恒久的な設定ではなく、どちらも移植性は無い。</p>
+        <h3>--platform で何が変わるか</h3>
+        <p>対策は、作るイメージのプラットフォームを明示することだ。<code>--platform</code> にカンマ区切りで複数指定すると、BuildKit はプラットフォームごとにビルドしてイメージインデックスにまとめる。複数プラットフォームのイメージはローカルの従来型イメージストアに載せられないため、レジストリへ直接 <code>--push</code> するのが基本になる（Docker Desktop と Docker Engine 29.0 以降は既定の containerd イメージストアがインデックスを扱える）。</p>
+<pre class="code"># 本番が amd64 だけなら、まずはこれで十分
+docker build --platform linux/amd64 -t myapp:1.0 .
+
+# amd64 と arm64 の両方を 1 つのタグに載せる
+docker buildx build --platform linux/amd64,linux/arm64 \
+  -t registry.example.com/myapp:1.0 --push .</pre>
+        <p>Mac で amd64 向けをビルドすると、Dockerfile の <code>RUN</code> は全部エミュレーション上で走るので遅い。Go のようにクロスコンパイルできる言語なら、ビルド用ステージだけをビルドマシンのネイティブ環境で動かし、出力するバイナリの種類だけを切り替えられる。BuildKit が自動で定義するビルド引数 <code>BUILDPLATFORM</code>（ビルドするマシン）と <code>TARGETOS</code> / <code>TARGETARCH</code>（作りたいイメージ）を使う。</p>
+<pre class="code">FROM --platform=$BUILDPLATFORM golang:1.23 AS build
+ARG TARGETOS TARGETARCH
+WORKDIR /src
+COPY . .
+RUN GOOS=$TARGETOS GOARCH=$TARGETARCH go build -o /app .
+
+FROM gcr.io/distroless/static
+COPY --from=build /app /app
+ENTRYPOINT ["/app"]</pre>
+        <p><code>FROM --platform=$BUILDPLATFORM</code> を外すと、ビルドステージ自体が対象アーキテクチャのイメージで動くため、arm64 の Mac で amd64 をビルドするときにコンパイラまでエミュレーションで走ることになる。最終ステージには <code>--platform</code> を書かないので、ターゲットごとのベースイメージが使われる。Ruby のネイティブ拡張のようにクロスコンパイルしにくいものは、エミュレーションを我慢するか、CI で各アーキテクチャのネイティブマシンにビルドを任せることになる。</p>
       </section>
 
       <div class="practical">
         <div class="box-title">💼 実務でどう出会うか</div>
-        <p>典型は「p50 レイテンシが 40ms か 200ms 付近に不自然に張り付く」グラフだ。自作の RPC クライアント、古いドライバ、プロキシを挟んだ構成、テストで書いた素のソケットサーバーなどで、ヘッダとボディを別 <code>write</code> にしているコードが原因になりやすい。<code>tcpdump</code> で見ると、小さなセグメントのあとに約 40ms の空白があり、ACK 単体のパケット直後に残りのデータが出ていく並びになっている。この形が見えたら、サーバー処理ではなく送信側の書き方とソケットオプションを疑う。逆に Go や Node.js の http サーバーで同じ症状が出た場合は既定で Nagle が切れているので、別の原因（コネクション確立、DNS、GC など）を探すほうが早い。</p>
+        <p>典型は「チームで自分だけ Apple Silicon の Mac から手元で build &amp; push した」「ECS や EKS のノードを安さで Graviton（arm64）に替えたら、amd64 だけで配っていた社内イメージが起動しない」の 2 パターンだ。Kubernetes では Pod が <code>CrashLoopBackOff</code> になり、<code>kubectl logs</code> に <code>exec format error</code> の 1 行だけが出る。アプリのバグを疑う前に、イメージの対応プラットフォームとノードのアーキテクチャ（<code>kubectl get node -L kubernetes.io/arch</code>）を突き合わせると早い。予防策としては、手元からの push をやめて CI でビルドし、<code>--platform</code> をワークフローに明記しておくのが確実性が高い。</p>
       </div>
 
       <div class="hands-on">
         <div class="box-title">⌨️ 手を動かす（5 分）</div>
-        <p>ローカルホスト上で「ヘッダ 100B とボディ 100B を 2 回に分けて write し、200B 揃うと応答するサーバー」を立て、Nagle 有効時と <code>TCP_NODELAY</code> 時の往復時間を比べる。Python 3 だけで動く。</p>
-<pre class="code">mkdir -p ~/nagle-test &amp;&amp; cat > ~/nagle-test/nagle.py &lt;&lt;'EOF'
-import socket, sys, threading, time
-NODELAY = len(sys.argv) > 1 and sys.argv[1] == "nodelay"
-srv = socket.socket(); srv.bind(("127.0.0.1", 0)); srv.listen()
-port = srv.getsockname()[1]
-def server():
-    c, _ = srv.accept()
-    while True:
-        buf = b""
-        while len(buf) < 200:
-            d = c.recv(4096)
-            if not d: return
-            buf += d
-        c.sendall(b"ok")
-threading.Thread(target=server, daemon=True).start()
-cli = socket.create_connection(("127.0.0.1", port))
-if NODELAY:
-    cli.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-for i in range(5):
-    t = time.perf_counter()
-    cli.send(b"h" * 100)
-    cli.send(b"b" * 100)
-    cli.recv(2)
-    print(f"{(time.perf_counter()-t)*1000:7.2f} ms")
-EOF
-python3 ~/nagle-test/nagle.py
-python3 ~/nagle-test/nagle.py nodelay</pre>
-        <p>Linux で実行すると、Nagle 有効時は 1 往復目だけ 0.1ms 台で、2 往復目以降が約 41ms に揃い、<code>nodelay</code> 付きでは全往復が 0.1ms 未満になった。1 往復目が速いのは、接続直後の ACK が遅延されずに返るためだ。macOS では delayed ACK の実装と値が Linux と異なるので遅れの大きさは変わりうるが、2 つの実行の差は観察できるはずだ。続けて 2 回の <code>send</code> を <code>cli.send(b"h"*100 + b"b"*100)</code> の 1 回にまとめると、Nagle 有効のままでも遅延が消えることも確かめてほしい。</p>
+        <p>Docker Desktop が入った Apple Silicon の Mac で、同じタグの中に複数アーキテクチャが入っていること、そして <code>--platform</code> で中身が入れ替わることを確かめる。</p>
+<pre class="code"># 1. alpine の目次（イメージインデックス）を見る
+docker buildx imagetools inspect alpine:3.20 | grep Platform
+
+# 2. 既定（ホストに合う版）と amd64 版で uname -m を比べる
+docker run --rm alpine:3.20 uname -m
+docker run --rm --platform linux/amd64 alpine:3.20 uname -m
+
+# 3. 取得したイメージの中身のアーキテクチャを確認する
+docker image inspect alpine:3.20 --format '{{.Os}}/{{.Architecture}}'</pre>
+        <p>1 では <code>linux/amd64</code>・<code>linux/arm64/v8</code> など複数の <code>Platform:</code> 行が並ぶはずだ。2 では 1 回目が <code>aarch64</code>、2 回目が <code>x86_64</code> と表示され、同じタグから別の機械語のイメージが選ばれたこと、そして amd64 版がエミュレーションで動いたことが分かる。amd64 の Linux マシンがあれば、Mac で <code>--platform</code> 無しに build したイメージを持っていって起動すると <code>exec format error</code> を再現できる。</p>
       </div>
 
       <div class="misconceptions">
         <div class="box-title">🙅 よくある誤解</div>
         <ul>
-          <li><span class="wrong">Nagle アルゴリズムは一定時間データを溜めるタイマーだ</span> — Nagle 自体はタイマーを持たず、「未 ACK のデータがあるか」だけで判断する。40ms という数字は受信側の delayed ACK のタイマーから来ている。</li>
-          <li><span class="wrong">遅いなら <code>TCP_NODELAY</code> を全ソケットに立てれば解決する</span> — 遅延は消えても、細かい write がそのまま細かいパケットになり、パケット数と送信処理が増える。まず 1 つのメッセージを 1 回で書くようにアプリを直すのが先である。</li>
-          <li><span class="wrong">ローカルホストなら TCP の待ちは関係ない</span> — Nagle と delayed ACK はループバックでも同じ規則で動く。実際、上の実験はローカルホストだけで 40ms の遅れを再現している。</li>
+          <li><span class="wrong">コンテナにすれば CPU の違いも吸収される</span> — コンテナはホストのカーネルと CPU を直接使う。吸収されているように見えるのは、Docker Desktop などが binfmt_misc でエミュレータを登録している環境に限られる。</li>
+          <li><span class="wrong">pull が成功したのだからそのホストで動くイメージだ</span> — 単一アーキテクチャのイメージは、ホストと合わなくても警告付きで pull できてしまう。失敗するのは起動時のカーネルの <code>execve</code> だ。</li>
+          <li><span class="wrong">exec format error は常にアーキテクチャ違いが原因だ</span> — 最も多い原因ではあるが、シェルスクリプトの先頭の <code>#!</code> 行が欠けている・壊れている場合も、カーネルが形式を認識できず同じエラーになる。</li>
         </ul>
       </div>
 
       <div class="glossary">
         <div class="box-title">📖 用語ミニ辞典</div>
         <dl>
-          <dt>Nagle アルゴリズム</dt><dd>未 ACK の送信データがある間、新しい小さなデータを溜めて送らない送信側の規則（RFC 896）。</dd>
-          <dt>delayed ACK</dt><dd>返事のパケットに相乗りさせるため、受信後すぐには ACK を返さず短時間待つ受信側の規則。</dd>
-          <dt>TCP_NODELAY</dt><dd>ソケット単位で Nagle アルゴリズムを無効にし、小さなデータもすぐ送らせるオプション。</dd>
-          <dt>TCP_CORK</dt><dd>満杯でないセグメントの送信を止めて溜め、解除時にまとめて送る Linux 固有のオプション。</dd>
-          <dt>MSS</dt><dd>1 つの TCP セグメントに載せられるデータの最大長。Nagle はこの長さに達すると ACK を待たずに送る。</dd>
+          <dt>CPU アーキテクチャ</dt><dd>CPU が理解する命令セットの種類。サーバーで主に使われるのは amd64（x86_64）と arm64（aarch64）。</dd>
+          <dt>ELF</dt><dd>Linux の実行ファイル形式。ヘッダに対象アーキテクチャが記録され、カーネルが起動時に確認する。</dd>
+          <dt>exec format error（ENOEXEC）</dt><dd>カーネルが実行ファイルの形式を認識できず起動を拒否したときのエラー。</dd>
+          <dt>イメージインデックス（マニフェストリスト）</dt><dd>1 つのタグの下に、os / architecture ごとのイメージマニフェストへの参照を並べた目次。</dd>
+          <dt>binfmt_misc</dt><dd>ファイル先頭のバイト列に応じて代わりのインタプリタ（QEMU など）を起動させる Linux カーネルの機能。</dd>
+          <dt>BUILDPLATFORM / TARGETPLATFORM</dt><dd>BuildKit が自動定義するビルド引数。前者はビルドするマシン、後者は作りたいイメージのプラットフォーム。</dd>
         </dl>
       </div>
 
       <div class="further-reading">
         <div class="box-title">🔗 もっと深く</div>
         <ul>
-          <li><a href="https://www.rfc-editor.org/rfc/rfc896.txt">RFC 896: Congestion Control in IP/TCP Internetworks</a> — Nagle 本人による原典。4000% のオーバーヘッドと「タイマー不要の解決策」の説明が短く読める。</li>
-          <li><a href="https://www.rfc-editor.org/rfc/rfc1122.txt">RFC 1122: Requirements for Internet Hosts</a> — 4.2.3.2 が delayed ACK の 0.5 秒未満・2 セグメントに 1 回、4.2.3.4 が Nagle の無効化手段の義務を定める。</li>
-          <li><a href="https://man7.org/linux/man-pages/man7/tcp.7.html">tcp(7) — Linux manual page</a> — <code>TCP_NODELAY</code>・<code>TCP_CORK</code>（200ms 上限）・<code>TCP_QUICKACK</code> の正確な挙動。</li>
-          <li><a href="https://pkg.go.dev/net#TCPConn.SetNoDelay">Go net package: TCPConn.SetNoDelay</a> — Go が既定で Nagle を切っていることの一次ソース。</li>
+          <li><a href="https://docs.docker.com/build/building/multi-platform/">Docker Docs: Multi-platform builds</a> — QEMU・複数ネイティブノード・クロスコンパイルの 3 戦略と Go の Dockerfile 例が公式に整理されている。</li>
+          <li><a href="https://github.com/opencontainers/image-spec/blob/main/image-index.md">OCI Image Spec: Image Index</a> — <code>manifests[].platform</code> の各フィールドと、複数一致したときは最初の要素を使うという選択規則の一次仕様。</li>
+          <li><a href="https://docs.kernel.org/admin-guide/binfmt-misc.html">Linux Kernel Docs: Kernel Support for miscellaneous Binary Formats (binfmt_misc)</a> — Mac で amd64 イメージが動く裏側の、マジックナンバー照合とインタプリタ登録の書式。</li>
+          <li><a href="https://docs.docker.com/reference/cli/docker/buildx/imagetools/inspect/">Docker Docs: docker buildx imagetools inspect</a> — レジストリ上のイメージがどのプラットフォームを持つかを確かめるコマンドの使い方と出力例。</li>
         </ul>
       </div>
     </article>
@@ -169,6 +157,11 @@ python3 ~/nagle-test/nagle.py nodelay</pre>
     <!-- recent:start -->
     <section class="section recent-articles">
       <div class="section-title">最近の記事</div>
+      <div class="card">
+        <h3><a href="archive/2026-11-02.html">同じサーバーに 200 バイト送るだけなのに、なぜ 2 回に分けて write すると 40ms 遅れるのか？</a></h3>
+        <div class="summary">Nagle アルゴリズムと delayed ACK が互いを待ち合うと、2 回に分けた小さな write が Linux では約 40ms 止まる。仕組みと TCP_NODELAY・write の集約による対策、言語ごとの既定値を解説する。</div>
+        <div class="meta"><span class="tag tag-network">Network</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-02</span></div>
+      </div>
       <div class="card">
         <h3><a href="archive/2026-11-01.html">終了時刻から開始時刻を引いただけなのに、なぜ処理時間がマイナスになるのか？</a></h3>
         <div class="summary">OS には現在時刻を表す壁時計（CLOCK_REALTIME）と経過時間専用のモノトニッククロックがあり、壁時計は NTP のステップ補正や手動設定で後ろへ飛ぶため時刻の引き算は負になりうる。Cloudflare のうるう秒障害、Go 1.9 の透過的モノトニック時刻と UTC()・JSON 化で剥がれる落とし穴、Ruby/JS/Python の使い分けを解説。</div>
@@ -183,11 +176,6 @@ python3 ~/nagle-test/nagle.py nodelay</pre>
         <h3><a href="archive/2026-10-30.html">http:// と打ったのに、なぜブラウザはサーバーに聞く前に https:// へ書き換えるのか？</a></h3>
         <div class="summary">HTTP→HTTPS のリダイレクトは平文の初回リクエストを SSL ストリッピングで横取りされうる。HSTS はブラウザに HTTPS 専用と記憶させ送信前に URL を書き換えさせる。max-age の解除の難しさ、Rails force_ssl 既定の includeSubDomains、プリロードリストの取り消しの重さを解説。</div>
         <div class="meta"><span class="tag tag-security">Security</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-30</span></div>
-      </div>
-      <div class="card">
-        <h3><a href="archive/2026-10-29.html">Puma のワーカーを 4 つ fork したのに、なぜメモリは 4 倍にならないのか？</a></h3>
-        <div class="summary">fork は親のメモリを即座に複製せず、物理ページを親子で共有して書き込まれたページだけをその時点でコピーする（Copy-on-Write）。RSS は共有ページを重複計上するため PSS と Private_Dirty で測る理由、Ruby 2.0 の Bitmap Marking GC と、それでも子の GC で共有が剥がれる現象、Puma の preload_app! と phased restart の非互換、fork 前の Process.warmup、Python の参照カウントと gc.freeze() も扱う。</div>
-        <div class="meta"><span class="tag tag-lang">Lang</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-29</span></div>
       </div>
       <div class="recent-more"><a href="archive/">アーカイブですべて見る →</a></div>
     </section>

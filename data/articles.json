@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-11-03.html",
+    "date": "2026-11-03",
+    "title": "Mac では動いたイメージなのに、なぜ本番サーバーでは exec format error で起動しないのか？",
+    "summary": "Apple Silicon で普通に build したイメージは arm64 専用になり、amd64 サーバーではカーネルが機械語を拒否して exec format error になる。イメージインデックスの仕組み、Mac で amd64 が動く binfmt_misc/QEMU の裏側、--platform と BUILDPLATFORM/TARGETARCH での対策を解説。",
+    "category": "container",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": ["CPU アーキテクチャ", "ELF", "exec format error（ENOEXEC）", "イメージインデックス（マニフェストリスト）", "binfmt_misc", "BUILDPLATFORM / TARGETPLATFORM"]
+  },
+  {
     "file": "2026-11-02.html",
     "date": "2026-11-02",
     "title": "同じサーバーに 200 バイト送るだけなのに、なぜ 2 回に分けて write すると 40ms 遅れるのか？",

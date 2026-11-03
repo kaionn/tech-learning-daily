@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tech Learning Daily — Mac では動いたイメージなのに、なぜ本番サーバーでは exec format error で起動しないのか？</title>
+  <link rel="stylesheet" href="../style.css">
+  <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="../feed.xml">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Tech Learning Daily</h1>
+      <div class="date">2026-11-03 (Tue) — 第 109 号</div>
+      <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
+    </header>
+
+    <article class="article">
+      <div class="meta-bar">
+        <span class="tag tag-container">Container</span>
+        <span class="difficulty">🌿 基礎</span>
+        <span class="read-time">⏱ 約 7 分</span>
+      </div>
+      <h2 class="article-title">Mac では動いたイメージなのに、なぜ本番サーバーでは exec format error で起動しないのか？</h2>
+      <p class="lead">Apple Silicon の Mac で <code>docker build</code> してレジストリに push し、本番の EC2 で起動したら、ログに <code>exec /usr/local/bin/app: exec format error</code> の 1 行だけを残してコンテナが落ちた。手元では何度も動作確認したイメージだ。「コンテナはどこでも同じように動く」はずなのに、なぜ同じイメージが場所によって起動すらしないのか。</p>
+
+      <div class="tldr">
+        <div class="box-title">🎯 3 行まとめ</div>
+        <ul>
+          <li>コンテナはホストのカーネルと CPU をそのまま使うので、中のバイナリは CPU アーキテクチャ（arm64 / amd64）ごとに別物になる。合わない機械語をカーネルが実行できないと <code>exec format error</code> になる。</li>
+          <li>1 つのイメージ名に複数アーキテクチャを載せる仕組みが「イメージインデックス（マニフェストリスト）」で、pull するホストが自分の <code>os/architecture</code> に合う中身を選ぶ。Mac で普通に build するとアーキテクチャは arm64 だけになる。</li>
+          <li>Mac で amd64 イメージが動くのはエミュレーションが仕込まれているからで、本番サーバーには通常それが無い。<code>docker buildx build --platform linux/amd64,linux/arm64</code> で両方入りのイメージを作るか、本番に合わせて <code>--platform</code> を明示する。</li>
+        </ul>
+      </div>
+
+      <section class="body-section">
+        <h3>コンテナは CPU までは隠してくれない</h3>
+        <p>コンテナは VM と違い、ゲスト OS を持たずにホストの Linux カーネル上で直接プロセスを動かす。名前空間と cgroup で「見える範囲」と「使える量」を区切るだけなので、プロセスが実行する機械語はホストの CPU がそのまま解釈する。つまりコンテナが隠すのはファイルシステムやプロセスの見え方までで、CPU の命令セットの違いは隠さない。</p>
+        <p>ここで出てくるのが <strong>CPU アーキテクチャ</strong>、つまり CPU が理解する命令セットの種類だ。Intel / AMD のサーバーは <code>amd64</code>（<code>x86_64</code> とも呼ぶ）、Apple Silicon の Mac や AWS Graviton は <code>arm64</code>（<code>aarch64</code>）である。Go のバイナリや Ruby の C 拡張（<code>nokogiri</code> など）は、コンパイル時にどちらか一方の機械語として出力される。</p>
+        <p>Linux の実行ファイル形式 ELF は、ファイル先頭のヘッダに「この機械語はどのアーキテクチャ向けか」を記録している。カーネルは <code>execve</code> でプログラムを起動するときにこのヘッダを確かめ、自分の CPU 向けでなければ読み込みを拒否してエラー <code>ENOEXEC</code> を返す。このエラーの説明文字列が「Exec format error」だ。冒頭のログは、コンテナランタイムがエントリポイントを起動しようとしてカーネルに断られたことを示している。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>1 つのタグに複数のイメージが入っている</h3>
+        <p>それなら <code>node:22</code> や <code>alpine</code> のような公式イメージは、なぜ Mac でもサーバーでも同じタグで動くのか。答えは、そのタグが指しているのが 1 つのイメージではなく「目次」だからだ。<strong>イメージインデックス</strong>（Docker の用語ではマニフェストリスト）とは、アーキテクチャごとのイメージマニフェストへの参照を並べた JSON で、OCI Image Spec では各要素に <code>platform.os</code>・<code>platform.architecture</code>（必須）と <code>platform.variant</code>（任意）を持つと定められている。</p>
+<pre class="diagram">
+ registry: myapp:1.0
+ ┌──────────────────────────────────┐
+ │ image index (manifest list)      │
+ │ ├ linux/amd64    ─▶ manifest A   │
+ │ └ linux/arm64/v8 ─▶ manifest B   │
+ └──────────────────────────────────┘
+        ▲                  ▲
+   pull │                  │ pull
+ ┌──────┴──────┐    ┌──────┴──────┐
+ │ EC2 (amd64) │    │ Mac (arm64) │
+ │ → A を取得  │    │ → B を取得  │
+ └─────────────┘    └─────────────┘
+
+ Mac で普通に build すると…
+ myapp:1.0 ─▶ manifest B (arm64) のみ
+ EC2 が pull → B を実行 → ENOEXEC
+</pre>
+        <p><code>docker pull</code> はまずこの目次を受け取り、ホストのアーキテクチャに合う要素を選んで中身をダウンロードする。Docker のドキュメントは「ホストのアーキテクチャに基づいて正しい variant を自動で選ぶ」と説明している。合う要素が無ければ <code>no matching manifest for linux/amd64 in the manifest list entries</code> のようなエラーで pull 自体が失敗する。</p>
+        <p>問題は、目次を持たない単一アーキテクチャのイメージだ。<code>--platform</code> を付けずに <code>docker build</code> すると、イメージはビルドしたマシンのプラットフォーム向けに作られる。Apple Silicon なら <code>linux/arm64</code> だけになる。これを amd64 のサーバーで pull すると、選ぶ候補が 1 つしか無いので Docker は警告を出しつつそのまま取得し、起動した瞬間にカーネルに拒否される。pull は成功し、エラーは起動時にしか出ないので、デプロイの段階では気づきにくい。</p>
+      </section>
+
+      <div class="analogy">
+        <div class="box-title">🍱 たとえるなら</div>
+        <p>イメージインデックスは、同じ本の日本語版と英語版を 1 つの ISBN でまとめた書店の棚札だ。客が「この本を」と頼むと、書店員は客の読める言語の版を棚札から選んで渡す。Mac で普通に build したイメージは、日本語版しか刷っていないのに同じ ISBN で出荷した状態で、英語しか読めない客の手にも日本語版がそのまま届き、開いた瞬間に読めないと分かる。</p>
+      </div>
+
+      <section class="body-section">
+        <h3>なぜ Mac では amd64 イメージが動いてしまうのか</h3>
+        <p>逆向き、つまり amd64 専用のイメージを Mac で動かすと、多くの場合は普通に動く。ここから「アーキテクチャの違いは Docker が吸収してくれる」と考えたくなる。しかし実際に吸収しているのは Docker Desktop が用意したエミュレーション環境で、Docker 一般の機能ではない。</p>
+        <p>その仕組みが Linux カーネルの <strong>binfmt_misc</strong> だ。これはファイル先頭のバイト列（マジックナンバー）のパターンと、それに一致したときに代わりに起動する「インタプリタ」を登録しておく機能で、登録先は <code>/proc/sys/fs/binfmt_misc/register</code> である。amd64 の ELF ヘッダのパターンに CPU エミュレータの QEMU を登録しておくと、カーネルは amd64 バイナリを直接実行する代わりに QEMU に渡し、QEMU が命令を 1 つずつ arm64 に翻訳しながら実行する。Docker Desktop にはこれに加えて Apple の Rosetta を使って amd64 を高速に動かす設定もある。</p>
+        <p>本番の素の Linux サーバーには、この登録が通常は入っていない。だから「Mac は arm64 も amd64 も動く」「サーバーは自分のアーキテクチャしか動かない」という非対称が生まれる。手元の動作確認が通ったことは、本番と同じアーキテクチャで動いた証拠にならない。なお QEMU によるエミュレーションは、Docker のドキュメントが「ネイティブより大幅に遅くなりうる」と注意しているとおり、コンパイルや圧縮のような計算の重い処理で特に遅い。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>--platform で何が変わるか</h3>
+        <p>対策は、作るイメージのプラットフォームを明示することだ。<code>--platform</code> にカンマ区切りで複数指定すると、BuildKit はプラットフォームごとにビルドしてイメージインデックスにまとめる。複数プラットフォームのイメージはローカルの従来型イメージストアに載せられないため、レジストリへ直接 <code>--push</code> するのが基本になる（Docker Desktop と Docker Engine 29.0 以降は既定の containerd イメージストアがインデックスを扱える）。</p>
+<pre class="code"># 本番が amd64 だけなら、まずはこれで十分
+docker build --platform linux/amd64 -t myapp:1.0 .
+
+# amd64 と arm64 の両方を 1 つのタグに載せる
+docker buildx build --platform linux/amd64,linux/arm64 \
+  -t registry.example.com/myapp:1.0 --push .</pre>
+        <p>Mac で amd64 向けをビルドすると、Dockerfile の <code>RUN</code> は全部エミュレーション上で走るので遅い。Go のようにクロスコンパイルできる言語なら、ビルド用ステージだけをビルドマシンのネイティブ環境で動かし、出力するバイナリの種類だけを切り替えられる。BuildKit が自動で定義するビルド引数 <code>BUILDPLATFORM</code>（ビルドするマシン）と <code>TARGETOS</code> / <code>TARGETARCH</code>（作りたいイメージ）を使う。</p>
+<pre class="code">FROM --platform=$BUILDPLATFORM golang:1.23 AS build
+ARG TARGETOS TARGETARCH
+WORKDIR /src
+COPY . .
+RUN GOOS=$TARGETOS GOARCH=$TARGETARCH go build -o /app .
+
+FROM gcr.io/distroless/static
+COPY --from=build /app /app
+ENTRYPOINT ["/app"]</pre>
+        <p><code>FROM --platform=$BUILDPLATFORM</code> を外すと、ビルドステージ自体が対象アーキテクチャのイメージで動くため、arm64 の Mac で amd64 をビルドするときにコンパイラまでエミュレーションで走ることになる。最終ステージには <code>--platform</code> を書かないので、ターゲットごとのベースイメージが使われる。Ruby のネイティブ拡張のようにクロスコンパイルしにくいものは、エミュレーションを我慢するか、CI で各アーキテクチャのネイティブマシンにビルドを任せることになる。</p>
+      </section>
+
+      <div class="practical">
+        <div class="box-title">💼 実務でどう出会うか</div>
+        <p>典型は「チームで自分だけ Apple Silicon の Mac から手元で build &amp; push した」「ECS や EKS のノードを安さで Graviton（arm64）に替えたら、amd64 だけで配っていた社内イメージが起動しない」の 2 パターンだ。Kubernetes では Pod が <code>CrashLoopBackOff</code> になり、<code>kubectl logs</code> に <code>exec format error</code> の 1 行だけが出る。アプリのバグを疑う前に、イメージの対応プラットフォームとノードのアーキテクチャ（<code>kubectl get node -L kubernetes.io/arch</code>）を突き合わせると早い。予防策としては、手元からの push をやめて CI でビルドし、<code>--platform</code> をワークフローに明記しておくのが確実性が高い。</p>
+      </div>
+
+      <div class="hands-on">
+        <div class="box-title">⌨️ 手を動かす（5 分）</div>
+        <p>Docker Desktop が入った Apple Silicon の Mac で、同じタグの中に複数アーキテクチャが入っていること、そして <code>--platform</code> で中身が入れ替わることを確かめる。</p>
+<pre class="code"># 1. alpine の目次（イメージインデックス）を見る
+docker buildx imagetools inspect alpine:3.20 | grep Platform
+
+# 2. 既定（ホストに合う版）と amd64 版で uname -m を比べる
+docker run --rm alpine:3.20 uname -m
+docker run --rm --platform linux/amd64 alpine:3.20 uname -m
+
+# 3. 取得したイメージの中身のアーキテクチャを確認する
+docker image inspect alpine:3.20 --format '{{.Os}}/{{.Architecture}}'</pre>
+        <p>1 では <code>linux/amd64</code>・<code>linux/arm64/v8</code> など複数の <code>Platform:</code> 行が並ぶはずだ。2 では 1 回目が <code>aarch64</code>、2 回目が <code>x86_64</code> と表示され、同じタグから別の機械語のイメージが選ばれたこと、そして amd64 版がエミュレーションで動いたことが分かる。amd64 の Linux マシンがあれば、Mac で <code>--platform</code> 無しに build したイメージを持っていって起動すると <code>exec format error</code> を再現できる。</p>
+      </div>
+
+      <div class="misconceptions">
+        <div class="box-title">🙅 よくある誤解</div>
+        <ul>
+          <li><span class="wrong">コンテナにすれば CPU の違いも吸収される</span> — コンテナはホストのカーネルと CPU を直接使う。吸収されているように見えるのは、Docker Desktop などが binfmt_misc でエミュレータを登録している環境に限られる。</li>
+          <li><span class="wrong">pull が成功したのだからそのホストで動くイメージだ</span> — 単一アーキテクチャのイメージは、ホストと合わなくても警告付きで pull できてしまう。失敗するのは起動時のカーネルの <code>execve</code> だ。</li>
+          <li><span class="wrong">exec format error は常にアーキテクチャ違いが原因だ</span> — 最も多い原因ではあるが、シェルスクリプトの先頭の <code>#!</code> 行が欠けている・壊れている場合も、カーネルが形式を認識できず同じエラーになる。</li>
+        </ul>
+      </div>
+
+      <div class="glossary">
+        <div class="box-title">📖 用語ミニ辞典</div>
+        <dl>
+          <dt>CPU アーキテクチャ</dt><dd>CPU が理解する命令セットの種類。サーバーで主に使われるのは amd64（x86_64）と arm64（aarch64）。</dd>
+          <dt>ELF</dt><dd>Linux の実行ファイル形式。ヘッダに対象アーキテクチャが記録され、カーネルが起動時に確認する。</dd>
+          <dt>exec format error（ENOEXEC）</dt><dd>カーネルが実行ファイルの形式を認識できず起動を拒否したときのエラー。</dd>
+          <dt>イメージインデックス（マニフェストリスト）</dt><dd>1 つのタグの下に、os / architecture ごとのイメージマニフェストへの参照を並べた目次。</dd>
+          <dt>binfmt_misc</dt><dd>ファイル先頭のバイト列に応じて代わりのインタプリタ（QEMU など）を起動させる Linux カーネルの機能。</dd>
+          <dt>BUILDPLATFORM / TARGETPLATFORM</dt><dd>BuildKit が自動定義するビルド引数。前者はビルドするマシン、後者は作りたいイメージのプラットフォーム。</dd>
+        </dl>
+      </div>
+
+      <div class="further-reading">
+        <div class="box-title">🔗 もっと深く</div>
+        <ul>
+          <li><a href="https://docs.docker.com/build/building/multi-platform/">Docker Docs: Multi-platform builds</a> — QEMU・複数ネイティブノード・クロスコンパイルの 3 戦略と Go の Dockerfile 例が公式に整理されている。</li>
+          <li><a href="https://github.com/opencontainers/image-spec/blob/main/image-index.md">OCI Image Spec: Image Index</a> — <code>manifests[].platform</code> の各フィールドと、複数一致したときは最初の要素を使うという選択規則の一次仕様。</li>
+          <li><a href="https://docs.kernel.org/admin-guide/binfmt-misc.html">Linux Kernel Docs: Kernel Support for miscellaneous Binary Formats (binfmt_misc)</a> — Mac で amd64 イメージが動く裏側の、マジックナンバー照合とインタプリタ登録の書式。</li>
+          <li><a href="https://docs.docker.com/reference/cli/docker/buildx/imagetools/inspect/">Docker Docs: docker buildx imagetools inspect</a> — レジストリ上のイメージがどのプラットフォームを持つかを確かめるコマンドの使い方と出力例。</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- recent:start -->
+    <!-- recent:end -->
+
+    <footer>
+      <p>Generated by Claude Code (GitHub Actions)</p>
+      <a href="./" class="archive-link">過去の記事</a>
+    </footer>
+  </div>
+</body>
+</html>

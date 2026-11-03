@@ -30,7 +30,7 @@
       <div class="chip-row" id="cat-chips">
         <span class="row-label">カテゴリ</span>
         <button class="chip on" data-cat="">すべて</button>
-        <button class="chip" data-cat="container">Container <span class="chip-count">16</span></button>
+        <button class="chip" data-cat="container">Container <span class="chip-count">17</span></button>
         <button class="chip" data-cat="network">Network <span class="chip-count">16</span></button>
         <button class="chip" data-cat="db">DB <span class="chip-count">13</span></button>
         <button class="chip" data-cat="lang">Lang <span class="chip-count">11</span></button>
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-11">
       <div class="section-title">2026 年 11 月 <span class="count"></span></div>
+      <div class="card" data-cat="container" data-diff="基礎"
+           data-search="mac では動いたイメージなのに、なぜ本番サーバーでは exec format error で起動しないのか？ apple silicon で普通に build したイメージは arm64 専用になり、amd64 サーバーではカーネルが機械語を拒否して exec format error になる。イメージインデックスの仕組み、mac で amd64 が動く binfmt_misc/qemu の裏側、--platform と buildplatform/targetarch での対策を解説。" data-terms="CPU アーキテクチャ / ELF / exec format error（ENOEXEC） / イメージインデックス（マニフェストリスト） / binfmt_misc / BUILDPLATFORM / TARGETPLATFORM">
+        <h3><a href="2026-11-03.html">Mac では動いたイメージなのに、なぜ本番サーバーでは exec format error で起動しないのか？</a></h3>
+        <div class="summary">Apple Silicon で普通に build したイメージは arm64 専用になり、amd64 サーバーではカーネルが機械語を拒否して exec format error になる。イメージインデックスの仕組み、Mac で amd64 が動く binfmt_misc/QEMU の裏側、--platform と BUILDPLATFORM/TARGETARCH での対策を解説。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-container">Container</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-03</span></div>
+      </div>
       <div class="card" data-cat="network" data-diff="基礎"
            data-search="同じサーバーに 200 バイト送るだけなのに、なぜ 2 回に分けて write すると 40ms 遅れるのか？ nagle アルゴリズムと delayed ack が互いを待ち合うと、2 回に分けた小さな write が linux では約 40ms 止まる。仕組みと tcp_nodelay・write の集約による対策、言語ごとの既定値を解説する。" data-terms="Nagle アルゴリズム / delayed ACK / TCP_NODELAY / TCP_CORK / MSS">
         <h3><a href="2026-11-02.html">同じサーバーに 200 バイト送るだけなのに、なぜ 2 回に分けて write すると 40ms 遅れるのか？</a></h3>

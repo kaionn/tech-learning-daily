@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-11-02T09:54:46+09:00</updated>
+  <updated>2026-11-03T12:00:00+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>Mac では動いたイメージなのに、なぜ本番サーバーでは exec format error で起動しないのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-11-03.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-11-03.html</id>
+    <updated>2026-11-03T12:00:00+09:00</updated>
+    <summary>コンテナはホストの CPU をそのまま使うため、Mac で build した arm64 のみのイメージは amd64 サーバーで起動を拒否される。イメージインデックスと --platform で複数アーキテクチャを載せて防ぐ。</summary>
+  </entry>
   <entry>
     <title>同じサーバーに 200 バイト送るだけなのに、なぜ 2 回に分けて write すると 40ms 遅れるのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-11-02.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-10-21.html</id>
     <updated>2026-10-21T09:00:33+09:00</updated>
     <summary>多くの正規表現エンジンは失敗したら戻って別の道を試すため、(a+)+ のような曖昧なパターンは失敗する入力で区切り方を全通り試し 1 文字ごとに時間が倍になる。Go/RE2 は後方参照を捨てて線形時間を保証する。</summary>
-  </entry>
-  <entry>
-    <title>同じファイルを 2 人で編集したのに、なぜ git はほとんど自動でマージできるのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-10-20.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-10-20.html</id>
-    <updated>2026-10-20T09:28:52+09:00</updated>
-    <summary>git は 2 つのブランチではなく共通祖先を加えた 3 版を比べ、片側だけの変更は採用、両側が同じ（隣接含む）領域を変えた所だけを衝突にする。衝突しなくても意味上の衝突は検出できない。</summary>
   </entry>
 </feed>
