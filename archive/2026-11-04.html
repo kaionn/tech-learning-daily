@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tech Learning Daily — 同じ 20 件を取るだけなのに、なぜ 5 万ページ目は 1 ページ目より何百倍も遅いのか？</title>
+  <link rel="stylesheet" href="../style.css">
+  <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="../feed.xml">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Tech Learning Daily</h1>
+      <div class="date">2026-11-04 (Wed) — 第 110 号</div>
+      <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
+    </header>
+
+    <article class="article">
+      <div class="meta-bar">
+        <span class="tag tag-db">DB</span>
+        <span class="difficulty">🌿 基礎</span>
+        <span class="read-time">⏱ 約 7 分</span>
+      </div>
+      <h2 class="article-title">同じ 20 件を取るだけなのに、なぜ 5 万ページ目は 1 ページ目より何百倍も遅いのか？</h2>
+      <p class="lead">一覧 API を <code>Post.order(:id).limit(20).offset((page - 1) * 20)</code> で書いた。1 ページ目は数ミリ秒で返るのに、クローラーが深いページを叩き始めた途端にスロークエリログが埋まる。返す行数はどのページでも 20 件のはずだ。インデックスも <code>id</code> に貼ってある。それでも遅くなるのはなぜだろうか。</p>
+
+      <div class="tldr">
+        <div class="box-title">🎯 3 行まとめ</div>
+        <ul>
+          <li><code>OFFSET N</code> は「N 行読み飛ばす」ではなく「N 行を実際に読んで捨てる」命令だ。PostgreSQL の公式ドキュメントも、読み飛ばされる行はサーバー内で計算されるため大きな OFFSET は非効率になりうると明記している。</li>
+          <li>インデックスは「ある値の位置」へは一気に飛べるが、「先頭から N 番目」へは飛べない。だから <code>WHERE id &gt; 前ページ最後の id</code> と書き換える keyset ページネーションなら、深さに関係なく 20 行読むだけで済む。</li>
+          <li>keyset は速いだけでなく、ページ送り中に行が追加・削除されても重複や取りこぼしが起きにくい。代わりに「いきなり 5 万ページ目へ飛ぶ」ことはできない。</li>
+        </ul>
+      </div>
+
+      <section class="body-section">
+        <h3>OFFSET は「読み飛ばす」のではなく「読んで捨てる」</h3>
+        <p><code>LIMIT 20 OFFSET 999980</code> は、日本語にすると「並べた結果の先頭 999,980 行を捨て、その次の 20 行を返せ」という意味だ。<strong>OFFSET</strong>（結果の先頭から何行を除くかを指定する句）は行の「個数」しか受け取らない。捨てる行がどれかを知るには、DB は先頭から順に行を数えるしかない。</p>
+        <p>PostgreSQL のドキュメントはこれをはっきり書いている。「OFFSET で読み飛ばされる行もサーバー内部で計算されなければならない。したがって大きな OFFSET は非効率になりうる」。つまり 5 万ページ目（1 ページ 20 件）を返すクエリは、内部では約 100 万行を読み、そのほぼ全部を捨てている。返す行数は 20 でも、仕事量はページの深さに比例して増える。</p>
+        <p>ここで「<code>id</code> にインデックスがあるのだから、999,981 番目にすぐ飛べるのでは」と考えたくなる。しかし実際は飛べない。B+Tree インデックスの各ノードは「この範囲のキーはこの子ノードにある」という値の境界を持つが、「この子ノードの下に何行あるか」という件数は持っていない。値で探す道しるべはあっても、順番で探す道しるべが無いのだ。</p>
+        <pre class="diagram">OFFSET 999980 LIMIT 20
+┌──────────────────────────────┐
+│ id=1 ▶ 2 ▶ 3 ▶ … ▶ 999980    │
+│  読む・数える・捨てる        │
+│  （99.99% は無駄な仕事）     │
+└──────────────┬───────────────┘
+               ▼
+        id=999981〜1000000 を返す
+
+WHERE id &gt; 999980 LIMIT 20
+┌──────────────────────────────┐
+│ B+Tree を根から辿る          │
+│ 根 ▶ 枝 ▶ 葉(id=999981)      │
+└──────────────┬───────────────┘
+               ▼
+        葉から 20 行だけ読んで返す</pre>
+      </section>
+
+      <div class="analogy">
+        <div class="box-title">🍱 たとえるなら</div>
+        <p>分厚い辞書で「先頭から 3,000 番目の単語」を探せと言われたら、1 語ずつ数えながらめくるしかない。しかし「『とけい』の次の単語」を探せと言われたら、背の爪見出し（インデックス）で「と」の位置へ一気に開ける。OFFSET は前者、keyset は後者の頼み方だ。辞書の作りは同じでも、問いの立て方で仕事量が変わる。</p>
+      </div>
+
+      <section class="body-section">
+        <h3>keyset ページネーション: 「何番目から」ではなく「どの値の次から」</h3>
+        <p><strong>keyset ページネーション</strong>（seek 法、カーソルページネーションとも呼ばれる）は、前ページの最後の行が持っていたソートキーの値を覚えておき、次のページを「その値より後ろ」という条件で取る方式だ。条件が値なので、DB はインデックスでその位置へ直接降り、そこから 20 行読んで止まれる。</p>
+        <pre class="code">-- OFFSET 方式: 深いほど遅い
+SELECT * FROM posts
+ORDER BY id
+LIMIT 20 OFFSET 999980;
+
+-- keyset 方式: 深さに関係なくほぼ一定
+SELECT * FROM posts
+WHERE id &gt; 999980   -- 前ページ最後の id
+ORDER BY id
+LIMIT 20;</pre>
+        <p>実務でよくある「新着順」は <code>created_at</code> で並べるが、作成時刻は重複しうる。重複したキーで <code>WHERE created_at &lt; 前ページ最後の値</code> とすると、同じ時刻の行がページ境界をまたいだときに取りこぼす。そこで一意な列を末尾に足して並び順を一意にし、<strong>行値比較</strong>（複数列を組にして左から順に比較する構文）で条件を書く。</p>
+        <pre class="code">-- インデックス: (created_at, id)
+CREATE INDEX ON posts (created_at, id);
+
+SELECT * FROM posts
+WHERE (created_at, id) &lt; ($1, $2)  -- 前ページ最後の行
+ORDER BY created_at DESC, id DESC
+LIMIT 20;</pre>
+        <p>PostgreSQL の行値比較 <code>(a, b) &lt; (x, y)</code> は、左の要素から比べて最初に等しくなかった組で結果を決める。つまり <code>a &lt; x OR (a = x AND b &lt; y)</code> と同じ意味になる。<code>ORDER BY</code> とインデックスの列順をこの条件と揃えておくと、インデックス上の 1 点から読み始められる。並び順が一意でないと、PostgreSQL のドキュメントが警告する通り LIMIT の結果そのものが「予測不能な部分集合」になるので、OFFSET 方式でも一意な列を末尾に足すべきだ。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>速さだけではない: ページ送り中にデータが動くと OFFSET はずれる</h3>
+        <p>OFFSET の問題は速度だけに思える。しかし実はもう一つ、正しさの問題がある。ユーザーが 1 ページ目（新着 20 件）を見ている間に新しい投稿が 1 件入ると、全行が 1 つ後ろにずれる。そこで 2 ページ目（<code>OFFSET 20</code>）を取ると、1 ページ目の最後にあった投稿がもう一度先頭に現れる。逆に削除が起きると、1 件が誰にも見られないまま飛ばされる。</p>
+        <p>keyset では起点が「この投稿の次」という値なので、手前に行が増えても減っても起点は動かない。無限スクロールで同じ投稿が 2 回出る現象は、この仕組みで防げることが多い。ただし keyset にも制約がある。ページ番号という概念が無いため「5 万ページ目へジャンプ」はできず、総ページ数を出すための <code>COUNT(*)</code> も別途必要になる（そしてその COUNT も大きなテーブルでは安くない）。</p>
+        <p>外部 API がページ番号ではなく不透明な文字列を返すのはこのためだ。Slack の Web API は応答の <code>response_metadata.next_cursor</code> を次のリクエストの <code>cursor</code> に渡す方式を取っている。クライアントには文字列にしか見えないが、サーバー側はそこに「どの値の次から読むか」を詰めておける。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>Rails の <code>find_each</code> はすでに keyset を使っている</h3>
+        <p>全件をバッチ処理するとき、<code>Post.all.each</code> ではなく <code>find_each</code> を使えと教わったはずだ。<code>find_each</code> はバッチサイズ（デフォルト 1000）ずつ主キー昇順で読む。Rails の実装を見ると、次のバッチは前バッチ最後の主キーより大きい行という条件で取っており、OFFSET でページを送ってはいない。だから 1 億行のテーブルでも後半のバッチが遅くならない。</p>
+        <p>この設計の副作用として、<code>Post.order(:created_at).find_each</code> のように独自の並び順を付けても、そのスコープの order は無視される（Rails のドキュメントに明記されている）。主キー以外で順に処理したいなら <code>cursor:</code> と <code>order:</code> オプションで keyset に使う列を指定する。<code>error_on_ignore: true</code> オプションを渡すと、無視される order が付いていた場合に例外を投げて気付けるようになる。</p>
+      </section>
+
+      <div class="practical">
+        <div class="box-title">💼 実務でどう出会うか</div>
+        <p>典型は「管理画面やサイトマップの深いページをクローラーが巡回し、OFFSET の大きいクエリがスロークエリログを占める」パターンだ。ユーザー向けの無限スクロールやモバイルアプリの API は、ページ番号が不要なので keyset に置き換えやすい。ページ番号付き UI を残す必要がある管理画面では、到達できるページ数に上限を設けて深い OFFSET 自体を出させない対策も取られる。バッチ処理で <code>limit/offset</code> のループを手書きしている箇所は、<code>find_each</code> / <code>in_batches</code> に置き換えるだけで改善することが多い。</p>
+      </div>
+
+      <div class="hands-on">
+        <div class="box-title">⌨️ 手を動かす（5 分）</div>
+        <p>Docker で PostgreSQL を立て、100 万行のテーブルで OFFSET と keyset の実行計画を比べる。</p>
+        <pre class="code">docker run --rm -d --name pg -e POSTGRES_PASSWORD=pw postgres:17
+sleep 5
+docker exec pg psql -U postgres -c "
+CREATE TABLE posts AS
+  SELECT g AS id, md5(g::text) AS body
+  FROM generate_series(1, 1000000) g;
+ALTER TABLE posts ADD PRIMARY KEY (id);
+ANALYZE posts;"
+
+docker exec pg psql -U postgres -c "
+EXPLAIN ANALYZE SELECT * FROM posts
+ORDER BY id LIMIT 20 OFFSET 999980;"
+
+docker exec pg psql -U postgres -c "
+EXPLAIN ANALYZE SELECT * FROM posts
+WHERE id &gt; 999980 ORDER BY id LIMIT 20;"
+
+docker stop pg</pre>
+        <p>OFFSET 版では、<code>Limit</code> の下にあるスキャンノードの <code>actual ... rows=</code> が 100 万行近くになり、Execution Time も大きい。keyset 版では <code>Index Scan using posts_pkey</code> の <code>Index Cond: (id &gt; 999980)</code> が付き、rows=20 で桁違いに速く終わるはずだ。<code>OFFSET 0</code> や <code>id &gt; 0</code> でも試し、OFFSET 版だけが深さで時間が変わることを確かめるとよい。</p>
+      </div>
+
+      <div class="misconceptions">
+        <div class="box-title">🙅 よくある誤解</div>
+        <ul>
+          <li><span class="wrong">返す行数が同じなら、どのページも同じ速さで返る</span> — OFFSET で捨てる行も DB は読んで数えている。仕事量は「返す行数」ではなく「OFFSET + LIMIT」で決まる。</li>
+          <li><span class="wrong">ソート列にインデックスを貼れば、深い OFFSET も速くなる</span> — インデックスは値の位置へは飛べるが、N 番目の位置へは飛べない。速くなるのはソートの手間までで、読み捨ての行数は減らない。</li>
+          <li><span class="wrong">keyset は <code>WHERE created_at &lt; ?</code> と書けば十分</span> — ソートキーが重複すると、同じ値の行がページ境界をまたいだときに取りこぼす。<code>id</code> など一意な列を足し、<code>(created_at, id)</code> の組で比較する。</li>
+        </ul>
+      </div>
+
+      <div class="glossary">
+        <div class="box-title">📖 用語ミニ辞典</div>
+        <dl>
+          <dt>OFFSET</dt><dd>結果の先頭から指定した行数を除いて返す SQL の句。除かれる行も DB 内部では読まれる。</dd>
+          <dt>keyset ページネーション</dt><dd>前ページ最後の行のソートキーの値を起点に「その値より後ろ」を取るページ送り方式。seek 法・カーソル方式とも呼ばれる。</dd>
+          <dt>行値比較</dt><dd><code>(a, b) &lt; (x, y)</code> のように複数列を組で比較する構文。左の要素から比べ、最初に異なった組で結果が決まる。</dd>
+          <dt>B+Tree インデックス</dt><dd>キーの値の境界をたどって目的の値へ数段で到達できる木構造の索引。順番（N 番目）での検索には使えない。</dd>
+          <dt>find_each</dt><dd>Rails でレコードを主キー順にバッチ（デフォルト 1000 件）で読み出すメソッド。内部は keyset 方式。</dd>
+        </dl>
+      </div>
+
+      <div class="further-reading">
+        <div class="box-title">🔗 もっと深く</div>
+        <ul>
+          <li><a href="https://www.postgresql.org/docs/current/queries-limit.html">PostgreSQL: LIMIT and OFFSET</a> — 大きな OFFSET が非効率な理由と、ORDER BY で一意な順序を固定すべき理由が短くまとまった一次資料。</li>
+          <li><a href="https://use-the-index-luke.com/no-offset">Use The Index, Luke: No Offset</a> — OFFSET の遅さと結果のずれを図で示し、seek 法への移行を勧める解説。</li>
+          <li><a href="https://www.postgresql.org/docs/current/functions-comparisons.html">PostgreSQL: Row and Array Comparisons</a> — 複合キーの keyset で使う行値比較の厳密な評価規則（NULL の扱い含む）。</li>
+          <li><a href="https://api.rubyonrails.org/classes/ActiveRecord/Batches.html">Rails API: ActiveRecord::Batches</a> — <code>find_each</code> の batch_size・cursor・order・error_on_ignore オプションの仕様。</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- recent:start -->
+    <!-- recent:end -->
+
+    <footer>
+      <p>Generated by Claude Code (GitHub Actions)</p>
+      <a href="./" class="archive-link">過去の記事</a>
+    </footer>
+  </div>
+</body>
+</html>

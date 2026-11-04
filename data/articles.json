@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-11-04.html",
+    "date": "2026-11-04",
+    "title": "同じ 20 件を取るだけなのに、なぜ 5 万ページ目は 1 ページ目より何百倍も遅いのか？",
+    "summary": "OFFSET は捨てる行も読むため深いページほど遅くなる。前ページ最後のキー値から読む keyset ページネーションの仕組みと、行値比較・find_each・結果のずれまで解説。",
+    "category": "db",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": ["OFFSET", "keyset ページネーション", "行値比較", "B+Tree インデックス", "find_each"]
+  },
+  {
     "file": "2026-11-03.html",
     "date": "2026-11-03",
     "title": "Mac では動いたイメージなのに、なぜ本番サーバーでは exec format error で起動しないのか？",

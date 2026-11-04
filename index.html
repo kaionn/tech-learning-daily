@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tech Learning Daily — Mac では動いたイメージなのに、なぜ本番サーバーでは exec format error で起動しないのか？</title>
+  <title>Tech Learning Daily — 同じ 20 件を取るだけなのに、なぜ 5 万ページ目は 1 ページ目より何百倍も遅いのか？</title>
   <link rel="stylesheet" href="style.css">
   <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="feed.xml">
   <link rel="icon" href="/favicon.ico" sizes="48x48">
@@ -14,142 +14,149 @@
   <div class="container">
     <header>
       <h1>Tech Learning Daily</h1>
-      <div class="date">2026-11-03 (Tue) — 第 109 号</div>
+      <div class="date">2026-11-04 (Wed) — 第 110 号</div>
       <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
     </header>
 
     <article class="article">
       <div class="meta-bar">
-        <span class="tag tag-container">Container</span>
+        <span class="tag tag-db">DB</span>
         <span class="difficulty">🌿 基礎</span>
         <span class="read-time">⏱ 約 7 分</span>
       </div>
-      <h2 class="article-title">Mac では動いたイメージなのに、なぜ本番サーバーでは exec format error で起動しないのか？</h2>
-      <p class="lead">Apple Silicon の Mac で <code>docker build</code> してレジストリに push し、本番の EC2 で起動したら、ログに <code>exec /usr/local/bin/app: exec format error</code> の 1 行だけを残してコンテナが落ちた。手元では何度も動作確認したイメージだ。「コンテナはどこでも同じように動く」はずなのに、なぜ同じイメージが場所によって起動すらしないのか。</p>
+      <h2 class="article-title">同じ 20 件を取るだけなのに、なぜ 5 万ページ目は 1 ページ目より何百倍も遅いのか？</h2>
+      <p class="lead">一覧 API を <code>Post.order(:id).limit(20).offset((page - 1) * 20)</code> で書いた。1 ページ目は数ミリ秒で返るのに、クローラーが深いページを叩き始めた途端にスロークエリログが埋まる。返す行数はどのページでも 20 件のはずだ。インデックスも <code>id</code> に貼ってある。それでも遅くなるのはなぜだろうか。</p>
 
       <div class="tldr">
         <div class="box-title">🎯 3 行まとめ</div>
         <ul>
-          <li>コンテナはホストのカーネルと CPU をそのまま使うので、中のバイナリは CPU アーキテクチャ（arm64 / amd64）ごとに別物になる。合わない機械語をカーネルが実行できないと <code>exec format error</code> になる。</li>
-          <li>1 つのイメージ名に複数アーキテクチャを載せる仕組みが「イメージインデックス（マニフェストリスト）」で、pull するホストが自分の <code>os/architecture</code> に合う中身を選ぶ。Mac で普通に build するとアーキテクチャは arm64 だけになる。</li>
-          <li>Mac で amd64 イメージが動くのはエミュレーションが仕込まれているからで、本番サーバーには通常それが無い。<code>docker buildx build --platform linux/amd64,linux/arm64</code> で両方入りのイメージを作るか、本番に合わせて <code>--platform</code> を明示する。</li>
+          <li><code>OFFSET N</code> は「N 行読み飛ばす」ではなく「N 行を実際に読んで捨てる」命令だ。PostgreSQL の公式ドキュメントも、読み飛ばされる行はサーバー内で計算されるため大きな OFFSET は非効率になりうると明記している。</li>
+          <li>インデックスは「ある値の位置」へは一気に飛べるが、「先頭から N 番目」へは飛べない。だから <code>WHERE id &gt; 前ページ最後の id</code> と書き換える keyset ページネーションなら、深さに関係なく 20 行読むだけで済む。</li>
+          <li>keyset は速いだけでなく、ページ送り中に行が追加・削除されても重複や取りこぼしが起きにくい。代わりに「いきなり 5 万ページ目へ飛ぶ」ことはできない。</li>
         </ul>
       </div>
 
       <section class="body-section">
-        <h3>コンテナは CPU までは隠してくれない</h3>
-        <p>コンテナは VM と違い、ゲスト OS を持たずにホストの Linux カーネル上で直接プロセスを動かす。名前空間と cgroup で「見える範囲」と「使える量」を区切るだけなので、プロセスが実行する機械語はホストの CPU がそのまま解釈する。つまりコンテナが隠すのはファイルシステムやプロセスの見え方までで、CPU の命令セットの違いは隠さない。</p>
-        <p>ここで出てくるのが <strong>CPU アーキテクチャ</strong>、つまり CPU が理解する命令セットの種類だ。Intel / AMD のサーバーは <code>amd64</code>（<code>x86_64</code> とも呼ぶ）、Apple Silicon の Mac や AWS Graviton は <code>arm64</code>（<code>aarch64</code>）である。Go のバイナリや Ruby の C 拡張（<code>nokogiri</code> など）は、コンパイル時にどちらか一方の機械語として出力される。</p>
-        <p>Linux の実行ファイル形式 ELF は、ファイル先頭のヘッダに「この機械語はどのアーキテクチャ向けか」を記録している。カーネルは <code>execve</code> でプログラムを起動するときにこのヘッダを確かめ、自分の CPU 向けでなければ読み込みを拒否してエラー <code>ENOEXEC</code> を返す。このエラーの説明文字列が「Exec format error」だ。冒頭のログは、コンテナランタイムがエントリポイントを起動しようとしてカーネルに断られたことを示している。</p>
-      </section>
+        <h3>OFFSET は「読み飛ばす」のではなく「読んで捨てる」</h3>
+        <p><code>LIMIT 20 OFFSET 999980</code> は、日本語にすると「並べた結果の先頭 999,980 行を捨て、その次の 20 行を返せ」という意味だ。<strong>OFFSET</strong>（結果の先頭から何行を除くかを指定する句）は行の「個数」しか受け取らない。捨てる行がどれかを知るには、DB は先頭から順に行を数えるしかない。</p>
+        <p>PostgreSQL のドキュメントはこれをはっきり書いている。「OFFSET で読み飛ばされる行もサーバー内部で計算されなければならない。したがって大きな OFFSET は非効率になりうる」。つまり 5 万ページ目（1 ページ 20 件）を返すクエリは、内部では約 100 万行を読み、そのほぼ全部を捨てている。返す行数は 20 でも、仕事量はページの深さに比例して増える。</p>
+        <p>ここで「<code>id</code> にインデックスがあるのだから、999,981 番目にすぐ飛べるのでは」と考えたくなる。しかし実際は飛べない。B+Tree インデックスの各ノードは「この範囲のキーはこの子ノードにある」という値の境界を持つが、「この子ノードの下に何行あるか」という件数は持っていない。値で探す道しるべはあっても、順番で探す道しるべが無いのだ。</p>
+        <pre class="diagram">OFFSET 999980 LIMIT 20
+┌──────────────────────────────┐
+│ id=1 ▶ 2 ▶ 3 ▶ … ▶ 999980    │
+│  読む・数える・捨てる        │
+│  （99.99% は無駄な仕事）     │
+└──────────────┬───────────────┘
+               ▼
+        id=999981〜1000000 を返す
 
-      <section class="body-section">
-        <h3>1 つのタグに複数のイメージが入っている</h3>
-        <p>それなら <code>node:22</code> や <code>alpine</code> のような公式イメージは、なぜ Mac でもサーバーでも同じタグで動くのか。答えは、そのタグが指しているのが 1 つのイメージではなく「目次」だからだ。<strong>イメージインデックス</strong>（Docker の用語ではマニフェストリスト）とは、アーキテクチャごとのイメージマニフェストへの参照を並べた JSON で、OCI Image Spec では各要素に <code>platform.os</code>・<code>platform.architecture</code>（必須）と <code>platform.variant</code>（任意）を持つと定められている。</p>
-<pre class="diagram">
- registry: myapp:1.0
- ┌──────────────────────────────────┐
- │ image index (manifest list)      │
- │ ├ linux/amd64    ─▶ manifest A   │
- │ └ linux/arm64/v8 ─▶ manifest B   │
- └──────────────────────────────────┘
-        ▲                  ▲
-   pull │                  │ pull
- ┌──────┴──────┐    ┌──────┴──────┐
- │ EC2 (amd64) │    │ Mac (arm64) │
- │ → A を取得  │    │ → B を取得  │
- └─────────────┘    └─────────────┘
-
- Mac で普通に build すると…
- myapp:1.0 ─▶ manifest B (arm64) のみ
- EC2 が pull → B を実行 → ENOEXEC
-</pre>
-        <p><code>docker pull</code> はまずこの目次を受け取り、ホストのアーキテクチャに合う要素を選んで中身をダウンロードする。Docker のドキュメントは「ホストのアーキテクチャに基づいて正しい variant を自動で選ぶ」と説明している。合う要素が無ければ <code>no matching manifest for linux/amd64 in the manifest list entries</code> のようなエラーで pull 自体が失敗する。</p>
-        <p>問題は、目次を持たない単一アーキテクチャのイメージだ。<code>--platform</code> を付けずに <code>docker build</code> すると、イメージはビルドしたマシンのプラットフォーム向けに作られる。Apple Silicon なら <code>linux/arm64</code> だけになる。これを amd64 のサーバーで pull すると、選ぶ候補が 1 つしか無いので Docker は警告を出しつつそのまま取得し、起動した瞬間にカーネルに拒否される。pull は成功し、エラーは起動時にしか出ないので、デプロイの段階では気づきにくい。</p>
+WHERE id &gt; 999980 LIMIT 20
+┌──────────────────────────────┐
+│ B+Tree を根から辿る          │
+│ 根 ▶ 枝 ▶ 葉(id=999981)      │
+└──────────────┬───────────────┘
+               ▼
+        葉から 20 行だけ読んで返す</pre>
       </section>
 
       <div class="analogy">
         <div class="box-title">🍱 たとえるなら</div>
-        <p>イメージインデックスは、同じ本の日本語版と英語版を 1 つの ISBN でまとめた書店の棚札だ。客が「この本を」と頼むと、書店員は客の読める言語の版を棚札から選んで渡す。Mac で普通に build したイメージは、日本語版しか刷っていないのに同じ ISBN で出荷した状態で、英語しか読めない客の手にも日本語版がそのまま届き、開いた瞬間に読めないと分かる。</p>
+        <p>分厚い辞書で「先頭から 3,000 番目の単語」を探せと言われたら、1 語ずつ数えながらめくるしかない。しかし「『とけい』の次の単語」を探せと言われたら、背の爪見出し（インデックス）で「と」の位置へ一気に開ける。OFFSET は前者、keyset は後者の頼み方だ。辞書の作りは同じでも、問いの立て方で仕事量が変わる。</p>
       </div>
 
       <section class="body-section">
-        <h3>なぜ Mac では amd64 イメージが動いてしまうのか</h3>
-        <p>逆向き、つまり amd64 専用のイメージを Mac で動かすと、多くの場合は普通に動く。ここから「アーキテクチャの違いは Docker が吸収してくれる」と考えたくなる。しかし実際に吸収しているのは Docker Desktop が用意したエミュレーション環境で、Docker 一般の機能ではない。</p>
-        <p>その仕組みが Linux カーネルの <strong>binfmt_misc</strong> だ。これはファイル先頭のバイト列（マジックナンバー）のパターンと、それに一致したときに代わりに起動する「インタプリタ」を登録しておく機能で、登録先は <code>/proc/sys/fs/binfmt_misc/register</code> である。amd64 の ELF ヘッダのパターンに CPU エミュレータの QEMU を登録しておくと、カーネルは amd64 バイナリを直接実行する代わりに QEMU に渡し、QEMU が命令を 1 つずつ arm64 に翻訳しながら実行する。Docker Desktop にはこれに加えて Apple の Rosetta を使って amd64 を高速に動かす設定もある。</p>
-        <p>本番の素の Linux サーバーには、この登録が通常は入っていない。だから「Mac は arm64 も amd64 も動く」「サーバーは自分のアーキテクチャしか動かない」という非対称が生まれる。手元の動作確認が通ったことは、本番と同じアーキテクチャで動いた証拠にならない。なお QEMU によるエミュレーションは、Docker のドキュメントが「ネイティブより大幅に遅くなりうる」と注意しているとおり、コンパイルや圧縮のような計算の重い処理で特に遅い。</p>
+        <h3>keyset ページネーション: 「何番目から」ではなく「どの値の次から」</h3>
+        <p><strong>keyset ページネーション</strong>（seek 法、カーソルページネーションとも呼ばれる）は、前ページの最後の行が持っていたソートキーの値を覚えておき、次のページを「その値より後ろ」という条件で取る方式だ。条件が値なので、DB はインデックスでその位置へ直接降り、そこから 20 行読んで止まれる。</p>
+        <pre class="code">-- OFFSET 方式: 深いほど遅い
+SELECT * FROM posts
+ORDER BY id
+LIMIT 20 OFFSET 999980;
+
+-- keyset 方式: 深さに関係なくほぼ一定
+SELECT * FROM posts
+WHERE id &gt; 999980   -- 前ページ最後の id
+ORDER BY id
+LIMIT 20;</pre>
+        <p>実務でよくある「新着順」は <code>created_at</code> で並べるが、作成時刻は重複しうる。重複したキーで <code>WHERE created_at &lt; 前ページ最後の値</code> とすると、同じ時刻の行がページ境界をまたいだときに取りこぼす。そこで一意な列を末尾に足して並び順を一意にし、<strong>行値比較</strong>（複数列を組にして左から順に比較する構文）で条件を書く。</p>
+        <pre class="code">-- インデックス: (created_at, id)
+CREATE INDEX ON posts (created_at, id);
+
+SELECT * FROM posts
+WHERE (created_at, id) &lt; ($1, $2)  -- 前ページ最後の行
+ORDER BY created_at DESC, id DESC
+LIMIT 20;</pre>
+        <p>PostgreSQL の行値比較 <code>(a, b) &lt; (x, y)</code> は、左の要素から比べて最初に等しくなかった組で結果を決める。つまり <code>a &lt; x OR (a = x AND b &lt; y)</code> と同じ意味になる。<code>ORDER BY</code> とインデックスの列順をこの条件と揃えておくと、インデックス上の 1 点から読み始められる。並び順が一意でないと、PostgreSQL のドキュメントが警告する通り LIMIT の結果そのものが「予測不能な部分集合」になるので、OFFSET 方式でも一意な列を末尾に足すべきだ。</p>
       </section>
 
       <section class="body-section">
-        <h3>--platform で何が変わるか</h3>
-        <p>対策は、作るイメージのプラットフォームを明示することだ。<code>--platform</code> にカンマ区切りで複数指定すると、BuildKit はプラットフォームごとにビルドしてイメージインデックスにまとめる。複数プラットフォームのイメージはローカルの従来型イメージストアに載せられないため、レジストリへ直接 <code>--push</code> するのが基本になる（Docker Desktop と Docker Engine 29.0 以降は既定の containerd イメージストアがインデックスを扱える）。</p>
-<pre class="code"># 本番が amd64 だけなら、まずはこれで十分
-docker build --platform linux/amd64 -t myapp:1.0 .
+        <h3>速さだけではない: ページ送り中にデータが動くと OFFSET はずれる</h3>
+        <p>OFFSET の問題は速度だけに思える。しかし実はもう一つ、正しさの問題がある。ユーザーが 1 ページ目（新着 20 件）を見ている間に新しい投稿が 1 件入ると、全行が 1 つ後ろにずれる。そこで 2 ページ目（<code>OFFSET 20</code>）を取ると、1 ページ目の最後にあった投稿がもう一度先頭に現れる。逆に削除が起きると、1 件が誰にも見られないまま飛ばされる。</p>
+        <p>keyset では起点が「この投稿の次」という値なので、手前に行が増えても減っても起点は動かない。無限スクロールで同じ投稿が 2 回出る現象は、この仕組みで防げることが多い。ただし keyset にも制約がある。ページ番号という概念が無いため「5 万ページ目へジャンプ」はできず、総ページ数を出すための <code>COUNT(*)</code> も別途必要になる（そしてその COUNT も大きなテーブルでは安くない）。</p>
+        <p>外部 API がページ番号ではなく不透明な文字列を返すのはこのためだ。Slack の Web API は応答の <code>response_metadata.next_cursor</code> を次のリクエストの <code>cursor</code> に渡す方式を取っている。クライアントには文字列にしか見えないが、サーバー側はそこに「どの値の次から読むか」を詰めておける。</p>
+      </section>
 
-# amd64 と arm64 の両方を 1 つのタグに載せる
-docker buildx build --platform linux/amd64,linux/arm64 \
-  -t registry.example.com/myapp:1.0 --push .</pre>
-        <p>Mac で amd64 向けをビルドすると、Dockerfile の <code>RUN</code> は全部エミュレーション上で走るので遅い。Go のようにクロスコンパイルできる言語なら、ビルド用ステージだけをビルドマシンのネイティブ環境で動かし、出力するバイナリの種類だけを切り替えられる。BuildKit が自動で定義するビルド引数 <code>BUILDPLATFORM</code>（ビルドするマシン）と <code>TARGETOS</code> / <code>TARGETARCH</code>（作りたいイメージ）を使う。</p>
-<pre class="code">FROM --platform=$BUILDPLATFORM golang:1.23 AS build
-ARG TARGETOS TARGETARCH
-WORKDIR /src
-COPY . .
-RUN GOOS=$TARGETOS GOARCH=$TARGETARCH go build -o /app .
-
-FROM gcr.io/distroless/static
-COPY --from=build /app /app
-ENTRYPOINT ["/app"]</pre>
-        <p><code>FROM --platform=$BUILDPLATFORM</code> を外すと、ビルドステージ自体が対象アーキテクチャのイメージで動くため、arm64 の Mac で amd64 をビルドするときにコンパイラまでエミュレーションで走ることになる。最終ステージには <code>--platform</code> を書かないので、ターゲットごとのベースイメージが使われる。Ruby のネイティブ拡張のようにクロスコンパイルしにくいものは、エミュレーションを我慢するか、CI で各アーキテクチャのネイティブマシンにビルドを任せることになる。</p>
+      <section class="body-section">
+        <h3>Rails の <code>find_each</code> はすでに keyset を使っている</h3>
+        <p>全件をバッチ処理するとき、<code>Post.all.each</code> ではなく <code>find_each</code> を使えと教わったはずだ。<code>find_each</code> はバッチサイズ（デフォルト 1000）ずつ主キー昇順で読む。Rails の実装を見ると、次のバッチは前バッチ最後の主キーより大きい行という条件で取っており、OFFSET でページを送ってはいない。だから 1 億行のテーブルでも後半のバッチが遅くならない。</p>
+        <p>この設計の副作用として、<code>Post.order(:created_at).find_each</code> のように独自の並び順を付けても、そのスコープの order は無視される（Rails のドキュメントに明記されている）。主キー以外で順に処理したいなら <code>cursor:</code> と <code>order:</code> オプションで keyset に使う列を指定する。<code>error_on_ignore: true</code> オプションを渡すと、無視される order が付いていた場合に例外を投げて気付けるようになる。</p>
       </section>
 
       <div class="practical">
         <div class="box-title">💼 実務でどう出会うか</div>
-        <p>典型は「チームで自分だけ Apple Silicon の Mac から手元で build &amp; push した」「ECS や EKS のノードを安さで Graviton（arm64）に替えたら、amd64 だけで配っていた社内イメージが起動しない」の 2 パターンだ。Kubernetes では Pod が <code>CrashLoopBackOff</code> になり、<code>kubectl logs</code> に <code>exec format error</code> の 1 行だけが出る。アプリのバグを疑う前に、イメージの対応プラットフォームとノードのアーキテクチャ（<code>kubectl get node -L kubernetes.io/arch</code>）を突き合わせると早い。予防策としては、手元からの push をやめて CI でビルドし、<code>--platform</code> をワークフローに明記しておくのが確実性が高い。</p>
+        <p>典型は「管理画面やサイトマップの深いページをクローラーが巡回し、OFFSET の大きいクエリがスロークエリログを占める」パターンだ。ユーザー向けの無限スクロールやモバイルアプリの API は、ページ番号が不要なので keyset に置き換えやすい。ページ番号付き UI を残す必要がある管理画面では、到達できるページ数に上限を設けて深い OFFSET 自体を出させない対策も取られる。バッチ処理で <code>limit/offset</code> のループを手書きしている箇所は、<code>find_each</code> / <code>in_batches</code> に置き換えるだけで改善することが多い。</p>
       </div>
 
       <div class="hands-on">
         <div class="box-title">⌨️ 手を動かす（5 分）</div>
-        <p>Docker Desktop が入った Apple Silicon の Mac で、同じタグの中に複数アーキテクチャが入っていること、そして <code>--platform</code> で中身が入れ替わることを確かめる。</p>
-<pre class="code"># 1. alpine の目次（イメージインデックス）を見る
-docker buildx imagetools inspect alpine:3.20 | grep Platform
+        <p>Docker で PostgreSQL を立て、100 万行のテーブルで OFFSET と keyset の実行計画を比べる。</p>
+        <pre class="code">docker run --rm -d --name pg -e POSTGRES_PASSWORD=pw postgres:17
+sleep 5
+docker exec pg psql -U postgres -c "
+CREATE TABLE posts AS
+  SELECT g AS id, md5(g::text) AS body
+  FROM generate_series(1, 1000000) g;
+ALTER TABLE posts ADD PRIMARY KEY (id);
+ANALYZE posts;"
 
-# 2. 既定（ホストに合う版）と amd64 版で uname -m を比べる
-docker run --rm alpine:3.20 uname -m
-docker run --rm --platform linux/amd64 alpine:3.20 uname -m
+docker exec pg psql -U postgres -c "
+EXPLAIN ANALYZE SELECT * FROM posts
+ORDER BY id LIMIT 20 OFFSET 999980;"
 
-# 3. 取得したイメージの中身のアーキテクチャを確認する
-docker image inspect alpine:3.20 --format '{{.Os}}/{{.Architecture}}'</pre>
-        <p>1 では <code>linux/amd64</code>・<code>linux/arm64/v8</code> など複数の <code>Platform:</code> 行が並ぶはずだ。2 では 1 回目が <code>aarch64</code>、2 回目が <code>x86_64</code> と表示され、同じタグから別の機械語のイメージが選ばれたこと、そして amd64 版がエミュレーションで動いたことが分かる。amd64 の Linux マシンがあれば、Mac で <code>--platform</code> 無しに build したイメージを持っていって起動すると <code>exec format error</code> を再現できる。</p>
+docker exec pg psql -U postgres -c "
+EXPLAIN ANALYZE SELECT * FROM posts
+WHERE id &gt; 999980 ORDER BY id LIMIT 20;"
+
+docker stop pg</pre>
+        <p>OFFSET 版では、<code>Limit</code> の下にあるスキャンノードの <code>actual ... rows=</code> が 100 万行近くになり、Execution Time も大きい。keyset 版では <code>Index Scan using posts_pkey</code> の <code>Index Cond: (id &gt; 999980)</code> が付き、rows=20 で桁違いに速く終わるはずだ。<code>OFFSET 0</code> や <code>id &gt; 0</code> でも試し、OFFSET 版だけが深さで時間が変わることを確かめるとよい。</p>
       </div>
 
       <div class="misconceptions">
         <div class="box-title">🙅 よくある誤解</div>
         <ul>
-          <li><span class="wrong">コンテナにすれば CPU の違いも吸収される</span> — コンテナはホストのカーネルと CPU を直接使う。吸収されているように見えるのは、Docker Desktop などが binfmt_misc でエミュレータを登録している環境に限られる。</li>
-          <li><span class="wrong">pull が成功したのだからそのホストで動くイメージだ</span> — 単一アーキテクチャのイメージは、ホストと合わなくても警告付きで pull できてしまう。失敗するのは起動時のカーネルの <code>execve</code> だ。</li>
-          <li><span class="wrong">exec format error は常にアーキテクチャ違いが原因だ</span> — 最も多い原因ではあるが、シェルスクリプトの先頭の <code>#!</code> 行が欠けている・壊れている場合も、カーネルが形式を認識できず同じエラーになる。</li>
+          <li><span class="wrong">返す行数が同じなら、どのページも同じ速さで返る</span> — OFFSET で捨てる行も DB は読んで数えている。仕事量は「返す行数」ではなく「OFFSET + LIMIT」で決まる。</li>
+          <li><span class="wrong">ソート列にインデックスを貼れば、深い OFFSET も速くなる</span> — インデックスは値の位置へは飛べるが、N 番目の位置へは飛べない。速くなるのはソートの手間までで、読み捨ての行数は減らない。</li>
+          <li><span class="wrong">keyset は <code>WHERE created_at &lt; ?</code> と書けば十分</span> — ソートキーが重複すると、同じ値の行がページ境界をまたいだときに取りこぼす。<code>id</code> など一意な列を足し、<code>(created_at, id)</code> の組で比較する。</li>
         </ul>
       </div>
 
       <div class="glossary">
         <div class="box-title">📖 用語ミニ辞典</div>
         <dl>
-          <dt>CPU アーキテクチャ</dt><dd>CPU が理解する命令セットの種類。サーバーで主に使われるのは amd64（x86_64）と arm64（aarch64）。</dd>
-          <dt>ELF</dt><dd>Linux の実行ファイル形式。ヘッダに対象アーキテクチャが記録され、カーネルが起動時に確認する。</dd>
-          <dt>exec format error（ENOEXEC）</dt><dd>カーネルが実行ファイルの形式を認識できず起動を拒否したときのエラー。</dd>
-          <dt>イメージインデックス（マニフェストリスト）</dt><dd>1 つのタグの下に、os / architecture ごとのイメージマニフェストへの参照を並べた目次。</dd>
-          <dt>binfmt_misc</dt><dd>ファイル先頭のバイト列に応じて代わりのインタプリタ（QEMU など）を起動させる Linux カーネルの機能。</dd>
-          <dt>BUILDPLATFORM / TARGETPLATFORM</dt><dd>BuildKit が自動定義するビルド引数。前者はビルドするマシン、後者は作りたいイメージのプラットフォーム。</dd>
+          <dt>OFFSET</dt><dd>結果の先頭から指定した行数を除いて返す SQL の句。除かれる行も DB 内部では読まれる。</dd>
+          <dt>keyset ページネーション</dt><dd>前ページ最後の行のソートキーの値を起点に「その値より後ろ」を取るページ送り方式。seek 法・カーソル方式とも呼ばれる。</dd>
+          <dt>行値比較</dt><dd><code>(a, b) &lt; (x, y)</code> のように複数列を組で比較する構文。左の要素から比べ、最初に異なった組で結果が決まる。</dd>
+          <dt>B+Tree インデックス</dt><dd>キーの値の境界をたどって目的の値へ数段で到達できる木構造の索引。順番（N 番目）での検索には使えない。</dd>
+          <dt>find_each</dt><dd>Rails でレコードを主キー順にバッチ（デフォルト 1000 件）で読み出すメソッド。内部は keyset 方式。</dd>
         </dl>
       </div>
 
       <div class="further-reading">
         <div class="box-title">🔗 もっと深く</div>
         <ul>
-          <li><a href="https://docs.docker.com/build/building/multi-platform/">Docker Docs: Multi-platform builds</a> — QEMU・複数ネイティブノード・クロスコンパイルの 3 戦略と Go の Dockerfile 例が公式に整理されている。</li>
-          <li><a href="https://github.com/opencontainers/image-spec/blob/main/image-index.md">OCI Image Spec: Image Index</a> — <code>manifests[].platform</code> の各フィールドと、複数一致したときは最初の要素を使うという選択規則の一次仕様。</li>
-          <li><a href="https://docs.kernel.org/admin-guide/binfmt-misc.html">Linux Kernel Docs: Kernel Support for miscellaneous Binary Formats (binfmt_misc)</a> — Mac で amd64 イメージが動く裏側の、マジックナンバー照合とインタプリタ登録の書式。</li>
-          <li><a href="https://docs.docker.com/reference/cli/docker/buildx/imagetools/inspect/">Docker Docs: docker buildx imagetools inspect</a> — レジストリ上のイメージがどのプラットフォームを持つかを確かめるコマンドの使い方と出力例。</li>
+          <li><a href="https://www.postgresql.org/docs/current/queries-limit.html">PostgreSQL: LIMIT and OFFSET</a> — 大きな OFFSET が非効率な理由と、ORDER BY で一意な順序を固定すべき理由が短くまとまった一次資料。</li>
+          <li><a href="https://use-the-index-luke.com/no-offset">Use The Index, Luke: No Offset</a> — OFFSET の遅さと結果のずれを図で示し、seek 法への移行を勧める解説。</li>
+          <li><a href="https://www.postgresql.org/docs/current/functions-comparisons.html">PostgreSQL: Row and Array Comparisons</a> — 複合キーの keyset で使う行値比較の厳密な評価規則（NULL の扱い含む）。</li>
+          <li><a href="https://api.rubyonrails.org/classes/ActiveRecord/Batches.html">Rails API: ActiveRecord::Batches</a> — <code>find_each</code> の batch_size・cursor・order・error_on_ignore オプションの仕様。</li>
         </ul>
       </div>
     </article>
@@ -157,6 +164,11 @@ docker image inspect alpine:3.20 --format '{{.Os}}/{{.Architecture}}'</pre>
     <!-- recent:start -->
     <section class="section recent-articles">
       <div class="section-title">最近の記事</div>
+      <div class="card">
+        <h3><a href="archive/2026-11-03.html">Mac では動いたイメージなのに、なぜ本番サーバーでは exec format error で起動しないのか？</a></h3>
+        <div class="summary">Apple Silicon で普通に build したイメージは arm64 専用になり、amd64 サーバーではカーネルが機械語を拒否して exec format error になる。イメージインデックスの仕組み、Mac で amd64 が動く binfmt_misc/QEMU の裏側、--platform と BUILDPLATFORM/TARGETARCH での対策を解説。</div>
+        <div class="meta"><span class="tag tag-container">Container</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-03</span></div>
+      </div>
       <div class="card">
         <h3><a href="archive/2026-11-02.html">同じサーバーに 200 バイト送るだけなのに、なぜ 2 回に分けて write すると 40ms 遅れるのか？</a></h3>
         <div class="summary">Nagle アルゴリズムと delayed ACK が互いを待ち合うと、2 回に分けた小さな write が Linux では約 40ms 止まる。仕組みと TCP_NODELAY・write の集約による対策、言語ごとの既定値を解説する。</div>
@@ -171,11 +183,6 @@ docker image inspect alpine:3.20 --format '{{.Os}}/{{.Architecture}}'</pre>
         <h3><a href="archive/2026-10-31.html">同じ長いプロンプトを送っただけなのに、なぜ 2 回目の LLM 呼び出しは速く安くなるのか？</a></h3>
         <div class="summary">LLM は因果マスクのおかげで過去トークンの Key と Value を保存して使い回せる（KV キャッシュ）。プロンプトキャッシュはそれをリクエストをまたいで保存し、先頭から完全一致した範囲だけを再利用する。Anthropic API の cache_control と寿命・料金倍率、動的な値を後ろに置く設計を解説。</div>
         <div class="meta"><span class="tag tag-ai">AI</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-31</span></div>
-      </div>
-      <div class="card">
-        <h3><a href="archive/2026-10-30.html">http:// と打ったのに、なぜブラウザはサーバーに聞く前に https:// へ書き換えるのか？</a></h3>
-        <div class="summary">HTTP→HTTPS のリダイレクトは平文の初回リクエストを SSL ストリッピングで横取りされうる。HSTS はブラウザに HTTPS 専用と記憶させ送信前に URL を書き換えさせる。max-age の解除の難しさ、Rails force_ssl 既定の includeSubDomains、プリロードリストの取り消しの重さを解説。</div>
-        <div class="meta"><span class="tag tag-security">Security</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-10-30</span></div>
       </div>
       <div class="recent-more"><a href="archive/">アーカイブですべて見る →</a></div>
     </section>
