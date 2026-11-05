@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-11-05.html",
+    "date": "2026-11-05",
+    "title": "アプリは一度も落ちていないのに、なぜ ALB はたまに 502 を返すのか？",
+    "summary": "ALB とアプリはそれぞれ別の idle timeout で keep-alive 接続を閉じる。アプリ側が短いと閉じる合図と次のリクエストがすれ違い、アプリに届かないまま ALB が 502 を返す。Node.js 既定 5 秒・Puma・Go の IdleTimeout の落とし穴と、受ける側を長くする設定ルール。",
+    "category": "network",
+    "difficulty": "基礎",
+    "readTime": 8,
+    "terms": ["HTTP keep-alive（持続的接続）", "idle timeout", "FIN", "RST", "502 Bad Gateway", "コネクションプール"]
+  },
+  {
     "file": "2026-11-04.html",
     "date": "2026-11-04",
     "title": "同じ 20 件を取るだけなのに、なぜ 5 万ページ目は 1 ページ目より何百倍も遅いのか？",

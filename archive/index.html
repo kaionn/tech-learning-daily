@@ -31,7 +31,7 @@
         <span class="row-label">カテゴリ</span>
         <button class="chip on" data-cat="">すべて</button>
         <button class="chip" data-cat="container">Container <span class="chip-count">17</span></button>
-        <button class="chip" data-cat="network">Network <span class="chip-count">16</span></button>
+        <button class="chip" data-cat="network">Network <span class="chip-count">17</span></button>
         <button class="chip" data-cat="db">DB <span class="chip-count">14</span></button>
         <button class="chip" data-cat="lang">Lang <span class="chip-count">11</span></button>
         <button class="chip" data-cat="arch">Arch <span class="chip-count">9</span></button>
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-11">
       <div class="section-title">2026 年 11 月 <span class="count"></span></div>
+      <div class="card" data-cat="network" data-diff="基礎"
+           data-search="アプリは一度も落ちていないのに、なぜ alb はたまに 502 を返すのか？ alb とアプリはそれぞれ別の idle timeout で keep-alive 接続を閉じる。アプリ側が短いと閉じる合図と次のリクエストがすれ違い、アプリに届かないまま alb が 502 を返す。node.js 既定 5 秒・puma・go の idletimeout の落とし穴と、受ける側を長くする設定ルール。" data-terms="HTTP keep-alive（持続的接続） / idle timeout / FIN / RST / 502 Bad Gateway / コネクションプール">
+        <h3><a href="2026-11-05.html">アプリは一度も落ちていないのに、なぜ ALB はたまに 502 を返すのか？</a></h3>
+        <div class="summary">ALB とアプリはそれぞれ別の idle timeout で keep-alive 接続を閉じる。アプリ側が短いと閉じる合図と次のリクエストがすれ違い、アプリに届かないまま ALB が 502 を返す。Node.js 既定 5 秒・Puma・Go の IdleTimeout の落とし穴と、受ける側を長くする設定ルール。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-network">Network</span><span>🌿 基礎</span><span>⏱ 約 8 分</span><span>2026-11-05</span></div>
+      </div>
       <div class="card" data-cat="db" data-diff="基礎"
            data-search="同じ 20 件を取るだけなのに、なぜ 5 万ページ目は 1 ページ目より何百倍も遅いのか？ offset は捨てる行も読むため深いページほど遅くなる。前ページ最後のキー値から読む keyset ページネーションの仕組みと、行値比較・find_each・結果のずれまで解説。" data-terms="OFFSET / keyset ページネーション / 行値比較 / B+Tree インデックス / find_each">
         <h3><a href="2026-11-04.html">同じ 20 件を取るだけなのに、なぜ 5 万ページ目は 1 ページ目より何百倍も遅いのか？</a></h3>

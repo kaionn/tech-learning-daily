@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tech Learning Daily — アプリは一度も落ちていないのに、なぜ ALB はたまに 502 を返すのか？</title>
+  <link rel="stylesheet" href="../style.css">
+  <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="../feed.xml">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Tech Learning Daily</h1>
+      <div class="date">2026-11-05 (Thu) — 第 111 号</div>
+      <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
+    </header>
+
+    <article class="article">
+      <div class="meta-bar">
+        <span class="tag tag-network">Network</span>
+        <span class="difficulty">🌿 基礎</span>
+        <span class="read-time">⏱ 約 8 分</span>
+      </div>
+      <h2 class="article-title">アプリは一度も落ちていないのに、なぜ ALB はたまに 502 を返すのか？</h2>
+      <p class="lead">Node.js の API を ALB の後ろに置いた。負荷は軽く、エラーログは空、プロセスも再起動していない。それなのに CloudWatch の 502 が 1 時間に数件ずつ、思い出したように増える。再現しようとしても手元では一度も出ない。アプリが何も記録していない 502 は、いったい誰が返しているのだろうか。</p>
+
+      <div class="tldr">
+        <div class="box-title">🎯 3 行まとめ</div>
+        <ul>
+          <li>ALB はバックエンドへの TCP 接続を使い回す（HTTP keep-alive）。無通信の接続をいつ閉じるかは、ALB とアプリがそれぞれ別のタイマー（idle timeout）で決めている。</li>
+          <li>アプリ側のタイマーが短いと、アプリが接続を閉じた瞬間に ALB が同じ接続へ次のリクエストを送る「すれ違い」が起き、ALB は 502 を返す。アプリにはそのリクエストが届いていないのでログにも残らない。</li>
+          <li>対策は「接続を使い回す側より、受ける側のタイマーを長くする」こと。ALB の既定 60 秒に対し、Node.js の既定は 5 秒なので、何もしなければこの条件を満たさない。</li>
+        </ul>
+      </div>
+
+      <section class="body-section">
+        <h3>ALB はリクエストごとに接続を張り直していない</h3>
+        <p>ALB はクライアントからリクエストを受けると、ターゲット（バックエンドのサーバー）へ別の TCP 接続で転送する。毎回 3-way ハンドシェイクからやり直すと遅いので、一度張った接続を次のリクエストにも使い回す。これが <strong>HTTP keep-alive</strong>（持続的接続）で、1 本の TCP 接続の上でリクエストとレスポンスを何往復もさせる HTTP/1.1 の標準的な動作だ。</p>
+        <p>使い回すということは、リクエストの合間に「何も流れていない接続」が開いたまま残るということだ。開きっぱなしの接続はメモリやファイルディスクリプタを消費するので、両端はそれぞれ「この時間だけ無通信なら閉じる」というタイマーを持つ。これを <strong>idle timeout</strong> と呼ぶ。ALB の idle timeout は既定 60 秒（1〜4000 秒で変更可）だ。</p>
+        <p>問題は、このタイマーが接続の両端で独立していることだ。HTTP/1.1 の仕様（RFC 9112 §9.5）も、持続的接続のタイムアウトの長さについてクライアントにもサーバーにも何も要求していない。つまり「どちらが先に切るか」は、設定の組み合わせ次第で決まる。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>閉じる合図とリクエストがすれ違う</h3>
+        <p>アプリが idle timeout を迎えると、OS は相手に <strong>FIN</strong>（「こちらからはもう送らない」という TCP の終了合図）を送る。ALB は FIN を受け取ればその接続を使わなくなるので、普通は何も起きないように思える。しかし FIN はネットワークを渡って届くまでに時間がかかる。その短い隙間に ALB がちょうどその接続を選んでリクエストを送り出すと、両者が線路の上ですれ違う。</p>
+        <pre class="diagram">  ALB                       App
+   │                         │
+   │──── GET /a ────────────▶│
+   │◀─────────── 200 ────────│
+   │                         │
+   │                         │ 5 秒 無通信
+   │                         │ → 接続を閉じる
+   │──── GET /b ──▶ ◀── FIN ─│
+   │                         │
+   │◀─────────────── RST ────│ /b は届かず
+   ▼
+ クライアントに 502</pre>
+        <p>すでに閉じたソケットにデータが届くと、アプリ側の OS は <strong>RST</strong>（「その接続は存在しない」という強制切断の合図）を返す。<code>GET /b</code> はアプリのコードに一度も渡らないので、アプリのログには何も残らない。ALB は応答を受け取れないまま接続を失ったので、自分で 502 Bad Gateway を作ってクライアントに返す。AWS のトラブルシューティング文書も 502 の原因として「ALB がリクエストを送っている最中にターゲットが RST か FIN で接続を閉じた」を挙げ、ターゲットの keep-alive 時間が ALB の idle timeout より短くないか確認せよと書いている。</p>
+        <p>「たまに」しか起きないのは、すれ違いの窓が狭いからだ。トラフィックが多いと接続は 5 秒も黙らないのでタイマーが満了しない。逆に誰も来なければ送るリクエストが無い。ちょうど 5 秒前後の間隔でリクエストがぽつぽつ来る、夜間や低負荷時間帯に一番起きやすい。</p>
+      </section>
+
+      <div class="analogy">
+        <div class="box-title">🍱 たとえるなら</div>
+        <p>駅のタクシー乗り場で、配車係（ALB）は「60 分待っても客が付かない車は帰していい」というルールで車を並べている。ところが運転手（アプリ）は自分の判断で「5 分客が来なければ帰る」と決めていて、黙って発車する。配車係が発車に気づく前に客を案内すると、客の目の前には空のスペースしかない。運転手が配車係より長く待つと決めておけば、帰る判断は常に配車係が先に下すので、この事故は起きない。</p>
+      </div>
+
+      <section class="body-section">
+        <h3>ルールは「受ける側のタイマーを長く」</h3>
+        <p>すれ違いを防ぐには、接続を閉じる判断を、使い回す側（ALB）に先にさせればよい。ALB は自分で閉じる接続には次のリクエストを送らないので、アプリ側のタイマーが ALB より長ければ、アプリが黙って閉じる場面がそもそも来ない。AWS も、アプリの idle timeout を ALB より大きく設定するよう推奨している。主なサーバーの既定値は次のとおりで、ALB の 60 秒を下回るものがある。</p>
+        <pre class="code">サーバー                既定値      ALB 60 秒より
+Node.js keepAliveTimeout   5 秒        短い ✗
+Puma persistent_timeout    65 秒(7.0+) 長い ✓
+                           20 秒(6.x)  短い ✗
+nginx keepalive_timeout    75 秒       長い ✓</pre>
+        <p>Node.js は既定のままだと 5 秒で切るので、明示的に延ばす。値は新しい接続にだけ効くので、サーバー起動前に設定する。</p>
+        <pre class="code">const server = http.createServer(app);
+server.keepAliveTimeout = 65_000; // ms。ALB の 60 秒より長く
+server.listen(3000);</pre>
+        <p>Puma は 7.0.0 で既定が 65 秒に引き上げられたが、6 系の既定は 20 秒だ。古い Puma を使っているなら <code>config/puma.rb</code> に <code>persistent_timeout 65</code> を書く。Go の <code>http.Server</code> は <code>IdleTimeout</code> が 0 なら <code>ReadTimeout</code> の値を使い、両方 0 なら無期限になる。何も設定しなければ問題は起きないが、遅いクライアント対策で <code>ReadTimeout: 30 * time.Second</code> だけを入れると、idle も 30 秒になって 502 の条件を満たしてしまう。<code>IdleTimeout</code> も明示しておくのが安全だ。</p>
+        <pre class="code">srv := &amp;http.Server{
+    ReadTimeout: 30 * time.Second,
+    IdleTimeout: 120 * time.Second, // 明示しないと 30 秒になる
+}</pre>
+        <p>逆方向の変更にも注意がいる。長時間のアップロード対策で ALB の <code>idle_timeout.timeout_seconds</code> を 300 に上げたなら、アプリ側も 300 秒より長くしないと、今まで安全だった組み合わせが崩れる。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>同じ構図はアプリの外向き通信にもある</h3>
+        <p>このすれ違いは ALB 固有の話ではない。接続を使い回すクライアントと、黙って閉じるサーバーの組み合わせならどこでも起きる。アプリが HTTP クライアントのコネクションプール（張った接続を貯めて再利用する仕組み）で外部 API を呼ぶときは、立場が入れ替わってアプリが「使い回す側」になる。Go の標準 <code>http.DefaultTransport</code> はアイドル接続を 90 秒保持するので、相手のサーバーがそれより短く切ると、たまに <code>ECONNRESET</code> を受け取る。</p>
+        <p>この方向では相手の設定を変えられないことが多いので、クライアント側のアイドル保持時間を相手より短くするか、再試行で吸収する。Node.js の公式ドキュメントも、再利用した接続が切られて失敗したリクエストを <code>request.reusedSocket</code> で見分け、冪等なリクエストだけ再試行する例を載せている。冪等（何度送っても結果が同じ）でない POST を無条件に再試行すると、サーバーが実は処理していた場合に二重実行になるので、再試行は GET などに限るのが原則だ。</p>
+      </section>
+
+      <div class="practical">
+        <div class="box-title">💼 実務でどう出会うか</div>
+        <p>CloudWatch で <code>HTTPCode_ELB_5XX_Count</code>（ALB 自身が生成したエラー）だけが増え、<code>HTTPCode_Target_5XX_Count</code>（アプリが返したエラー）は増えていない。ALB のアクセスログを見ると、<code>elb_status_code</code> が 502 で、<code>target_status_code</code> が <code>-</code>（ターゲットから応答を受け取れなかった）になっている。この組み合わせが見えたら、アプリのコードを疑う前にアプリサーバーの keep-alive 設定と ALB の idle timeout を並べて比べる。デプロイ直後や Pod の終了時に出る 502 は別の原因（接続中のターゲットの停止）なので、発生時刻がデプロイと重なるかも確認する。</p>
+      </div>
+
+      <div class="hands-on">
+        <div class="box-title">⌨️ 手を動かす（5 分）</div>
+        <p>5 秒で接続を閉じるサーバーに対し、同じ接続で「3 秒後」と「6 秒後」に 2 回目のリクエストを送り、タイマーを過ぎた接続へ送ると応答が返らないことを確かめる。<code>python3</code> だけで動く（追加パッケージ不要）。</p>
+        <pre class="code">mkdir ka &amp;&amp; cd ka
+cat &gt; server.py &lt;&lt;'EOF'
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+
+class H(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"  # keep-alive を有効にする
+    timeout = 5                    # 5 秒アイドルで接続を切る
+
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-Length", "3")
+        self.end_headers()
+        self.wfile.write(b"ok\n")
+
+    def log_message(self, *a):
+        pass
+
+ThreadingHTTPServer(("127.0.0.1", 8080), H).serve_forever()
+EOF
+cat &gt; client.py &lt;&lt;'EOF'
+import socket, sys, time
+
+def get(s):
+    s.sendall(b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n")
+    buf = b""
+    while not buf.endswith(b"ok\n"):
+        chunk = s.recv(1024)
+        if not chunk:
+            return "応答なし（相手はもう接続を閉じていた）"
+        buf += chunk
+    return buf.split(b"\r\n")[0].decode()
+
+idle = float(sys.argv[1])
+s = socket.create_connection(("127.0.0.1", 8080))
+print("1 回目:", get(s))
+time.sleep(idle)
+try:
+    print(f"{idle} 秒後の 2 回目:", get(s))
+except OSError as e:
+    print(f"{idle} 秒後の 2 回目:", type(e).__name__)
+EOF
+python3 server.py &amp;
+sleep 1
+python3 client.py 3
+python3 client.py 6
+kill %1</pre>
+        <p>3 秒後の 2 回目は <code>HTTP/1.1 200 OK</code> が返り、6 秒後の 2 回目は「応答なし」か <code>ConnectionResetError</code> になるはずだ。6 秒のケースでも <code>sendall</code> 自体は失敗しない点に注目してほしい。送る側は相手が閉じたことを送信時点では知らず、応答を待って初めて失敗に気づく。ALB が 502 を返すのはこの瞬間だ。<code>server.py</code> の <code>timeout</code> を 10 に変えて再実行すると、6 秒後も 200 が返る。</p>
+      </div>
+
+      <div class="misconceptions">
+        <div class="box-title">🙅 よくある誤解</div>
+        <ul>
+          <li><span class="wrong">502 が出ているならアプリが落ちたかエラーを返した</span> — このケースの 502 は ALB が自分で作ったもので、リクエストはアプリに届いていない。アプリのログやエラー監視が静かなのはそのためで、ALB 側のメトリクス（<code>HTTPCode_ELB_5XX_Count</code>）で見分ける。</li>
+          <li><span class="wrong">TCP keepalive を有効にすれば idle timeout で切られなくなる</span> — TCP keepalive は OS が空のパケットで相手の生存を確かめる別の仕組みで、HTTP のデータは流さない。ALB の文書も、TCP keep-alive を送っても idle timeout は防げないと明記している。</li>
+          <li><span class="wrong">タイムアウトは短いほど資源を早く解放できて安全</span> — 使い回される側のタイマーを使い回す側より短くすると、このすれ違いを自分で招く。短くするなら、接続を使い回す側（LB やクライアントのプール）のタイマーも合わせて短くする。</li>
+        </ul>
+      </div>
+
+      <div class="glossary">
+        <div class="box-title">📖 用語ミニ辞典</div>
+        <dl>
+          <dt>HTTP keep-alive（持続的接続）</dt><dd>1 本の TCP 接続を閉じずに、複数のリクエスト・レスポンスで使い回す HTTP/1.1 の動作。</dd>
+          <dt>idle timeout</dt><dd>無通信の接続をこの時間で閉じる、という接続の各端が持つタイマー。両端で独立に設定される。</dd>
+          <dt>FIN</dt><dd>「こちらからはもう送らない」と伝える TCP の正常な終了合図。</dd>
+          <dt>RST</dt><dd>「その接続は存在しない」と伝えて接続を強制的に打ち切る TCP の合図。閉じたソケットにデータが届くと返される。</dd>
+          <dt>502 Bad Gateway</dt><dd>中継役（プロキシや LB）が、後ろのサーバーから正しい応答を受け取れなかったときに返すステータス。</dd>
+          <dt>コネクションプール</dt><dd>張った接続を閉じずに貯めておき、次のリクエストで再利用する仕組み。</dd>
+        </dl>
+      </div>
+
+      <div class="further-reading">
+        <div class="box-title">🔗 もっと深く</div>
+        <ul>
+          <li><a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/application/edit-load-balancer-attributes.html">Edit attributes for your Application Load Balancer（AWS）</a> — idle timeout の既定 60 秒と、アプリ側をそれより長くすべき理由が書かれた一次情報。</li>
+          <li><a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-troubleshooting.html">Troubleshoot your Application Load Balancers（AWS）</a> — 502・504・460 などのステータスを ALB がどんな条件で返すかの一覧。原因の切り分けに使える。</li>
+          <li><a href="https://nodejs.org/api/http.html#serverkeepalivetimeout">Node.js HTTP: server.keepAliveTimeout</a> — 既定 5 秒の意味と、<code>keepAliveTimeoutBuffer</code>・<code>request.reusedSocket</code> による <code>ECONNRESET</code> 対策。</li>
+          <li><a href="https://www.rfc-editor.org/rfc/rfc9112.html#section-9.5">RFC 9112 §9.5 Failures and Timeouts</a> — 持続的接続のタイムアウトについて仕様が何を定め、何を定めていないか。</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- recent:start -->
+    <!-- recent:end -->
+
+    <footer>
+      <p>Generated by Claude Code (GitHub Actions)</p>
+      <a href="./" class="archive-link">過去の記事</a>
+    </footer>
+  </div>
+</body>
+</html>
