@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tech Learning Daily — -p 3000:3000 と書いたのに、なぜコンテナのアプリに繋がらないのか？</title>
+  <link rel="stylesheet" href="../style.css">
+  <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="../feed.xml">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Tech Learning Daily</h1>
+      <div class="date">2026-11-06 (Fri) — 第 112 号</div>
+      <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
+    </header>
+
+    <article class="article">
+      <div class="meta-bar">
+        <span class="tag tag-container">Container</span>
+        <span class="difficulty">🌿 基礎</span>
+        <span class="read-time">⏱ 約 7 分</span>
+      </div>
+      <h2 class="article-title">-p 3000:3000 と書いたのに、なぜコンテナのアプリに繋がらないのか？</h2>
+      <p class="lead">Rails アプリを Docker に載せ、<code>docker run -p 3000:3000</code> で起動した。ログには <code>Listening on http://127.0.0.1:3000</code> と出ていて、アプリは確かに動いている。それなのにブラウザで <code>localhost:3000</code> を開くと応答が無い。ホストの localhost とコンテナの localhost は、同じ場所を指しているのだろうか。</p>
+
+      <div class="tldr">
+        <div class="box-title">🎯 3 行まとめ</div>
+        <ul>
+          <li>コンテナは自分専用のネットワーク空間（network namespace）を持ち、そこにはホストとは別の <code>lo</code>（127.0.0.1）と <code>eth0</code> がある。コンテナ内の localhost はコンテナ自身だけを指す。</li>
+          <li><code>-p</code> のポート転送は、ホストに来た通信をコンテナの <code>eth0</code> 側のアドレスへ届ける。アプリが 127.0.0.1 だけで待っていると、その通信を受け取れない。</li>
+          <li>コンテナ内のアプリは <code>0.0.0.0</code>（全アドレス）で待たせる。外部への公開範囲を絞りたいときは、アプリ側ではなく <code>-p 127.0.0.1:3000:3000</code> のようにホスト側で絞る。</li>
+        </ul>
+      </div>
+
+      <section class="body-section">
+        <h3>「どのアドレスで待つか」もサーバーの設定である</h3>
+        <p>サーバーがポートを開くとき、OS に渡しているのはポート番号だけではない。「どの IP アドレス宛ての接続を受け付けるか」も一緒に指定している。この操作を <strong>バインド</strong>（bind: ソケットにアドレスとポートを結びつけること）と呼ぶ。<code>127.0.0.1</code> にバインドすれば、同じマシンの内部から <code>127.0.0.1</code> 宛てに来た接続だけを受ける。<code>0.0.0.0</code> にバインドすれば、そのマシンが持つ全てのアドレス宛ての接続を受ける。</p>
+        <p><code>127.0.0.1</code> は <strong>ループバックアドレス</strong>（loopback: 外に出ずに自分自身へ戻ってくる仮想的な宛先）で、<code>lo</code> という仮想インターフェースに割り当てられている。開発用サーバーの多くは、安全のためにこちらを既定にしている。Rails は 4.2 から <code>rails server</code> の既定を <code>0.0.0.0</code> から <code>localhost</code> に変えた。Vite の <code>server.host</code> も既定は <code>'localhost'</code> だ。</p>
+        <p>Mac で直接動かしている限り、この既定で困ることはない。ブラウザもサーバーも同じマシンの上にいて、どちらの「localhost」も同じ <code>lo</code> を指すからだ。困るのは、サーバーを箱に入れて別の場所へ移したときである。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>コンテナの中にはもう 1 つの localhost がある</h3>
+        <p>コンテナは Linux の <strong>network namespace</strong>（ネットワーク名前空間）の中で動く。Linux の man ページによれば、network namespace はネットワークデバイス・IP プロトコルスタック・ルーティングテーブル・ファイアウォールルール・ポート番号を名前空間ごとに分離する。コンテナから見えるのは、自分専用の <code>lo</code> と、ホストと仮想ケーブル（veth ペア）でつながった <code>eth0</code> だけだ。</p>
+        <p>つまりコンテナ内の <code>127.0.0.1</code> は、コンテナ自身にしか届かない。ホストの <code>127.0.0.1</code> とは名前が同じだけの、別の部屋の別の内線である。<code>-p 3000:3000</code> を付けると、Docker はホストの 3000 番に来た通信を NAT（宛先アドレスを書き換えて転送する仕組み）でコンテナへ流す。このときの宛先はコンテナの <code>eth0</code> のアドレスであって、コンテナの <code>lo</code> ではない。</p>
+        <pre class="diagram">［Mac ホスト］
+  curl localhost:3000
+      │
+      ▼ -p 3000:3000 で受付
+  Docker のポート転送（NAT）
+      │ 宛先をコンテナの eth0 へ
+      ▼
+［コンテナ = 別の network namespace］
+  ├ eth0 &lt;コンテナの IP&gt;  ◀ ここに届く
+  └ lo   127.0.0.1        ◀ 内部専用
+
+  127.0.0.1:3000 で listen
+      → eth0 宛てを受け取れない ✗
+  0.0.0.0:3000 で listen
+      → eth0 も lo も受け取れる ✓</pre>
+        <p>アプリが <code>127.0.0.1:3000</code> で待っていると、<code>eth0</code> 宛てに届いた接続を引き受けるソケットがコンテナ内に存在しない。転送の仕組みは正しく動いているのに、最後の 1 歩で行き場を失う。アプリのログにリクエストが 1 件も出ないのはこのためだ。</p>
+      </section>
+
+      <div class="analogy">
+        <div class="box-title">🍱 たとえるなら</div>
+        <p>マンションの各部屋に「内線 1 番」がある。302 号室（コンテナ）の住人が「内線 1 番にかかってきた電話だけ取る」と決めていると、管理人室（ホスト）が外線を 302 号室の部屋番号宛てに転送しても、住人は出ない。管理人室の内線 1 番と 302 号室の内線 1 番は番号が同じだけで別の回線だからだ。住人が「この部屋に来た電話は全部取る」（0.0.0.0）と決めて初めて、転送された外線がつながる。</p>
+      </div>
+
+      <section class="body-section">
+        <h3>直し方はアプリ側の 1 行</h3>
+        <p>コンテナで動かすサーバーは <code>0.0.0.0</code> にバインドする。主なサーバーの指定方法は次のとおりで、どれも「指定しないと何で待つか」が違う。</p>
+        <pre class="code"># Rails: 既定は localhost
+bin/rails server -b 0.0.0.0
+
+# Vite: 既定は 'localhost'。--host 単独でも全アドレス
+npx vite --host 0.0.0.0
+
+# Python http.server: 既定で全インターフェース
+python -m http.server 8000</pre>
+        <p>Go の <code>net/http</code> ではアドレス文字列の書き方で決まる。ホスト部を空にした <code>":8080"</code> は全アドレスで待ち、<code>"localhost:8080"</code> や <code>"127.0.0.1:8080"</code> はループバックだけで待つ。手元では動いていたのに、コンテナに入れた途端に繋がらなくなる Go アプリは、たいていこの文字列にホスト名が入っている。</p>
+        <pre class="code">// コンテナ内で外から受けるならホスト部を空に
+http.ListenAndServe(":8080", mux)       // ✓
+http.ListenAndServe("localhost:8080", mux) // ✗</pre>
+        <p>Dockerfile の <code>CMD</code> に <code>-b 0.0.0.0</code> を書いておけば、起動のたびに指定し忘れることもない。<code>EXPOSE 3000</code> は「このポートを使う」という記録で、それだけではバインド先もポート公開も変わらない点に注意する。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>0.0.0.0 にすると危ないのでは？</h3>
+        <p><code>0.0.0.0</code> は「全世界に公開する」という意味に聞こえるので、ためらう人が多い。しかしコンテナ内の <code>0.0.0.0</code> が指すのは、そのコンテナの network namespace にあるアドレス全部、つまり <code>lo</code> と <code>eth0</code> だけだ。ホストの外から直接届く経路は、<code>-p</code> で開けない限り存在しない。</p>
+        <p>本当に気にすべきなのはホスト側だ。Docker の公式ドキュメントは「コンテナのポート公開は既定では安全ではない」と明記している。<code>-p 3000:3000</code> のようにホストのアドレスを省略すると、Docker はホストの全アドレス（<code>0.0.0.0</code> と <code>[::]</code>）でポートを公開するので、同じネットワークにいる他のマシンからも届く。自分の Mac からだけ見たい開発用の DB などは、ホスト側のアドレスを書いて絞る。</p>
+        <pre class="code"># ホストの loopback だけで公開する
+docker run -p 127.0.0.1:5432:5432 postgres
+
+# compose.yaml でも同じ書き方
+ports:
+  - "127.0.0.1:5432:5432"</pre>
+        <p>アプリのバインドは「コンテナの中で、どの入口から受けるか」、<code>-p</code> のアドレスは「ホストの、どの入口で公開するか」を決める。役割が違う 2 つの設定なので、アクセス範囲の制御はホスト側に任せ、コンテナ内は <code>0.0.0.0</code> にしておくのが素直な分担である。</p>
+      </section>
+
+      <div class="practical">
+        <div class="box-title">💼 実務でどう出会うか</div>
+        <p>docker compose で Rails と Vite を立ち上げたら Rails だけ繋がらない、Go の API をコンテナ化したら手元の curl が通らない、といった形で出会う。<code>docker logs</code> で <code>127.0.0.1</code> や <code>localhost</code> で listen していると出ていたら、まずバインド先を疑う。逆方向の失敗も多い。コンテナ内のアプリから <code>localhost:5432</code> で Mac 上の Postgres に繋ごうとしても、それはコンテナ自身の 5432 番を叩くだけで届かない。Docker Desktop ではホストのサービスに <code>host.docker.internal</code> という名前で到達できる。</p>
+      </div>
+
+      <div class="hands-on">
+        <div class="box-title">⌨️ 手を動かす（5 分）</div>
+        <p>同じ Python サーバーを、127.0.0.1 だけで待たせた場合と全アドレスで待たせた場合で比べる。</p>
+        <pre class="code"># 1) loopback だけで待つ
+docker run --rm -d --name lo-only -p 8000:8000 \
+  python:3-slim python -m http.server 8000 --bind 127.0.0.1
+sleep 2
+curl -v http://localhost:8000/
+
+# コンテナの内側からは届く
+docker exec lo-only python -c \
+  "import urllib.request as u;print(u.urlopen('http://127.0.0.1:8000/').status)"
+
+# コンテナの eth0 のアドレスを確認
+docker exec lo-only hostname -i
+docker rm -f lo-only
+
+# 2) 全アドレスで待つ（--bind なし）
+docker run --rm -d --name all -p 8000:8000 \
+  python:3-slim python -m http.server 8000
+sleep 2
+curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8000/
+docker rm -f all</pre>
+        <p>1) では Mac からの <code>curl</code> がエラーで終わる一方、<code>docker exec</code> で内側から叩くと <code>200</code> が返る。サーバーは動いていて、届かないのは外から来た分だけだと分かる。<code>hostname -i</code> で表示されるのが転送先の <code>eth0</code> のアドレスだ。2) では Mac からも <code>200</code> が返る。1) の curl が「接続拒否」ではなく、いったん繋がってから切られるような表示になることが多いのも観察してほしい。ホスト側の 8000 番は Docker が受け付けているので、失敗するのはその先のコンテナへの転送だからだ。</p>
+      </div>
+
+      <div class="misconceptions">
+        <div class="box-title">🙅 よくある誤解</div>
+        <ul>
+          <li><span class="wrong">コンテナ内で 0.0.0.0 にバインドすると、インターネットに公開されてしまう</span> — コンテナ内の 0.0.0.0 はそのコンテナの network namespace のアドレスだけを指す。ホスト外への公開範囲を決めるのは <code>-p</code> のホスト側アドレスで、こちらは省略すると全アドレスで公開される。</li>
+          <li><span class="wrong"><code>-p</code> や <code>EXPOSE</code> を書けば、アプリに通信が届く</span> — <code>-p</code> はホストからコンテナの <code>eth0</code> までの経路を作るだけで、アプリがそのアドレスで待っていなければ受け取れない。<code>EXPOSE</code> は記録で、それ自体は公開もバインドもしない。</li>
+          <li><span class="wrong">コンテナから <code>localhost</code> と書けば Mac 上のサービスに繋がる</span> — コンテナ内の localhost はコンテナ自身を指す。Docker Desktop ではホスト上のサービスに <code>host.docker.internal</code> で繋ぐ。</li>
+        </ul>
+      </div>
+
+      <div class="glossary">
+        <div class="box-title">📖 用語ミニ辞典</div>
+        <dl>
+          <dt>バインド (bind)</dt><dd>ソケットに「どの IP アドレスとポートで待つか」を結びつける操作。</dd>
+          <dt>ループバックアドレス</dt><dd>自分自身に戻ってくる宛先。IPv4 では 127.0.0.1 で、<code>lo</code> インターフェースに割り当てられる。</dd>
+          <dt>0.0.0.0</dt><dd>バインド時に指定すると「このマシン（名前空間）が持つ全アドレスで待つ」という意味になる特別なアドレス。</dd>
+          <dt>network namespace</dt><dd>ネットワークデバイス・ルーティング・ポート番号などを分離する Linux の仕組み。コンテナごとに 1 つ持つ。</dd>
+          <dt>ポート公開 (-p)</dt><dd>ホストのポートに来た通信を NAT でコンテナへ転送する Docker の設定。ホスト側アドレスを省略すると全アドレスで公開される。</dd>
+        </dl>
+      </div>
+
+      <div class="further-reading">
+        <div class="box-title">🔗 もっと深く</div>
+        <ul>
+          <li><a href="https://docs.docker.com/engine/network/port-publishing/">Docker Docs: Port publishing and mapping</a> — <code>-p</code> の既定が全ホストアドレスであることと、127.0.0.1 で絞る方法の一次情報。</li>
+          <li><a href="https://man7.org/linux/man-pages/man7/network_namespaces.7.html">network_namespaces(7) — Linux manual page</a> — 名前空間ごとに何が分離されるかと、veth ペアの役割が短くまとまっている。</li>
+          <li><a href="https://guides.rubyonrails.org/4_2_release_notes.html">Ruby on Rails 4.2 Release Notes</a> — <code>rails server</code> の既定が localhost に変わった経緯と <code>-b 0.0.0.0</code> の記述。</li>
+          <li><a href="https://docs.docker.com/desktop/features/networking/networking-how-tos/">Docker Desktop: Networking how-tos</a> — コンテナからホストのサービスへ <code>host.docker.internal</code> で繋ぐ方法。</li>
+        </ul>
+      </div>
+    </article>
+
+<!-- recent:start -->
+    <section class="section recent-articles">
+      <div class="section-title">最近の記事</div>
+      <div class="card">
+        <h3><a href="archive/2026-11-04.html">同じ 20 件を取るだけなのに、なぜ 5 万ページ目は 1 ページ目より何百倍も遅いのか？</a></h3>
+        <div class="summary">OFFSET は捨てる行も読むため深いページほど遅くなる。前ページ最後のキー値から読む keyset ページネーションの仕組みと、行値比較・find_each・結果のずれまで解説。</div>
+        <div class="meta"><span class="tag tag-db">DB</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-04</span></div>
+      </div>
+      <div class="card">
+        <h3><a href="archive/2026-11-03.html">Mac では動いたイメージなのに、なぜ本番サーバーでは exec format error で起動しないのか？</a></h3>
+        <div class="summary">Apple Silicon で普通に build したイメージは arm64 専用になり、amd64 サーバーではカーネルが機械語を拒否して exec format error になる。イメージインデックスの仕組み、Mac で amd64 が動く binfmt_misc/QEMU の裏側、--platform と BUILDPLATFORM/TARGETARCH での対策を解説。</div>
+        <div class="meta"><span class="tag tag-container">Container</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-03</span></div>
+      </div>
+      <div class="card">
+        <h3><a href="archive/2026-11-02.html">同じサーバーに 200 バイト送るだけなのに、なぜ 2 回に分けて write すると 40ms 遅れるのか？</a></h3>
+        <div class="summary">Nagle アルゴリズムと delayed ACK が互いを待ち合うと、2 回に分けた小さな write が Linux では約 40ms 止まる。仕組みと TCP_NODELAY・write の集約による対策、言語ごとの既定値を解説する。</div>
+        <div class="meta"><span class="tag tag-network">Network</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-02</span></div>
+      </div>
+      <div class="card">
+        <h3><a href="archive/2026-11-01.html">終了時刻から開始時刻を引いただけなのに、なぜ処理時間がマイナスになるのか？</a></h3>
+        <div class="summary">OS には現在時刻を表す壁時計（CLOCK_REALTIME）と経過時間専用のモノトニッククロックがあり、壁時計は NTP のステップ補正や手動設定で後ろへ飛ぶため時刻の引き算は負になりうる。Cloudflare のうるう秒障害、Go 1.9 の透過的モノトニック時刻と UTC()・JSON 化で剥がれる落とし穴、Ruby/JS/Python の使い分けを解説。</div>
+        <div class="meta"><span class="tag tag-lang">Lang</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-01</span></div>
+      </div>
+      <div class="recent-more"><a href="./">アーカイブですべて見る →</a></div>
+    </section>
+    <!-- recent:end -->
+
+    <footer>
+      <p>Generated by Claude Code (GitHub Actions)</p>
+      <a href="./" class="archive-link">過去の記事</a>
+    </footer>
+  </div>
+</body>
+</html>

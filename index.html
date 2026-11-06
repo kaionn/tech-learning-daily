@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tech Learning Daily — アプリは一度も落ちていないのに、なぜ ALB はたまに 502 を返すのか？</title>
+  <title>Tech Learning Daily — -p 3000:3000 と書いたのに、なぜコンテナのアプリに繋がらないのか？</title>
   <link rel="stylesheet" href="style.css">
   <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="feed.xml">
   <link rel="icon" href="/favicon.ico" sizes="48x48">
@@ -14,175 +14,156 @@
   <div class="container">
     <header>
       <h1>Tech Learning Daily</h1>
-      <div class="date">2026-11-05 (Thu) — 第 111 号</div>
+      <div class="date">2026-11-06 (Fri) — 第 112 号</div>
       <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
     </header>
 
     <article class="article">
       <div class="meta-bar">
-        <span class="tag tag-network">Network</span>
+        <span class="tag tag-container">Container</span>
         <span class="difficulty">🌿 基礎</span>
-        <span class="read-time">⏱ 約 8 分</span>
+        <span class="read-time">⏱ 約 7 分</span>
       </div>
-      <h2 class="article-title">アプリは一度も落ちていないのに、なぜ ALB はたまに 502 を返すのか？</h2>
-      <p class="lead">Node.js の API を ALB の後ろに置いた。負荷は軽く、エラーログは空、プロセスも再起動していない。それなのに CloudWatch の 502 が 1 時間に数件ずつ、思い出したように増える。再現しようとしても手元では一度も出ない。アプリが何も記録していない 502 は、いったい誰が返しているのだろうか。</p>
+      <h2 class="article-title">-p 3000:3000 と書いたのに、なぜコンテナのアプリに繋がらないのか？</h2>
+      <p class="lead">Rails アプリを Docker に載せ、<code>docker run -p 3000:3000</code> で起動した。ログには <code>Listening on http://127.0.0.1:3000</code> と出ていて、アプリは確かに動いている。それなのにブラウザで <code>localhost:3000</code> を開くと応答が無い。ホストの localhost とコンテナの localhost は、同じ場所を指しているのだろうか。</p>
 
       <div class="tldr">
         <div class="box-title">🎯 3 行まとめ</div>
         <ul>
-          <li>ALB はバックエンドへの TCP 接続を使い回す（HTTP keep-alive）。無通信の接続をいつ閉じるかは、ALB とアプリがそれぞれ別のタイマー（idle timeout）で決めている。</li>
-          <li>アプリ側のタイマーが短いと、アプリが接続を閉じた瞬間に ALB が同じ接続へ次のリクエストを送る「すれ違い」が起き、ALB は 502 を返す。アプリにはそのリクエストが届いていないのでログにも残らない。</li>
-          <li>対策は「接続を使い回す側より、受ける側のタイマーを長くする」こと。ALB の既定 60 秒に対し、Node.js の既定は 5 秒なので、何もしなければこの条件を満たさない。</li>
+          <li>コンテナは自分専用のネットワーク空間（network namespace）を持ち、そこにはホストとは別の <code>lo</code>（127.0.0.1）と <code>eth0</code> がある。コンテナ内の localhost はコンテナ自身だけを指す。</li>
+          <li><code>-p</code> のポート転送は、ホストに来た通信をコンテナの <code>eth0</code> 側のアドレスへ届ける。アプリが 127.0.0.1 だけで待っていると、その通信を受け取れない。</li>
+          <li>コンテナ内のアプリは <code>0.0.0.0</code>（全アドレス）で待たせる。外部への公開範囲を絞りたいときは、アプリ側ではなく <code>-p 127.0.0.1:3000:3000</code> のようにホスト側で絞る。</li>
         </ul>
       </div>
 
       <section class="body-section">
-        <h3>ALB はリクエストごとに接続を張り直していない</h3>
-        <p>ALB はクライアントからリクエストを受けると、ターゲット（バックエンドのサーバー）へ別の TCP 接続で転送する。毎回 3-way ハンドシェイクからやり直すと遅いので、一度張った接続を次のリクエストにも使い回す。これが <strong>HTTP keep-alive</strong>（持続的接続）で、1 本の TCP 接続の上でリクエストとレスポンスを何往復もさせる HTTP/1.1 の標準的な動作だ。</p>
-        <p>使い回すということは、リクエストの合間に「何も流れていない接続」が開いたまま残るということだ。開きっぱなしの接続はメモリやファイルディスクリプタを消費するので、両端はそれぞれ「この時間だけ無通信なら閉じる」というタイマーを持つ。これを <strong>idle timeout</strong> と呼ぶ。ALB の idle timeout は既定 60 秒（1〜4000 秒で変更可）だ。</p>
-        <p>問題は、このタイマーが接続の両端で独立していることだ。HTTP/1.1 の仕様（RFC 9112 §9.5）も、持続的接続のタイムアウトの長さについてクライアントにもサーバーにも何も要求していない。つまり「どちらが先に切るか」は、設定の組み合わせ次第で決まる。</p>
+        <h3>「どのアドレスで待つか」もサーバーの設定である</h3>
+        <p>サーバーがポートを開くとき、OS に渡しているのはポート番号だけではない。「どの IP アドレス宛ての接続を受け付けるか」も一緒に指定している。この操作を <strong>バインド</strong>（bind: ソケットにアドレスとポートを結びつけること）と呼ぶ。<code>127.0.0.1</code> にバインドすれば、同じマシンの内部から <code>127.0.0.1</code> 宛てに来た接続だけを受ける。<code>0.0.0.0</code> にバインドすれば、そのマシンが持つ全てのアドレス宛ての接続を受ける。</p>
+        <p><code>127.0.0.1</code> は <strong>ループバックアドレス</strong>（loopback: 外に出ずに自分自身へ戻ってくる仮想的な宛先）で、<code>lo</code> という仮想インターフェースに割り当てられている。開発用サーバーの多くは、安全のためにこちらを既定にしている。Rails は 4.2 から <code>rails server</code> の既定を <code>0.0.0.0</code> から <code>localhost</code> に変えた。Vite の <code>server.host</code> も既定は <code>'localhost'</code> だ。</p>
+        <p>Mac で直接動かしている限り、この既定で困ることはない。ブラウザもサーバーも同じマシンの上にいて、どちらの「localhost」も同じ <code>lo</code> を指すからだ。困るのは、サーバーを箱に入れて別の場所へ移したときである。</p>
       </section>
 
       <section class="body-section">
-        <h3>閉じる合図とリクエストがすれ違う</h3>
-        <p>アプリが idle timeout を迎えると、OS は相手に <strong>FIN</strong>（「こちらからはもう送らない」という TCP の終了合図）を送る。ALB は FIN を受け取ればその接続を使わなくなるので、普通は何も起きないように思える。しかし FIN はネットワークを渡って届くまでに時間がかかる。その短い隙間に ALB がちょうどその接続を選んでリクエストを送り出すと、両者が線路の上ですれ違う。</p>
-        <pre class="diagram">  ALB                       App
-   │                         │
-   │──── GET /a ────────────▶│
-   │◀─────────── 200 ────────│
-   │                         │
-   │                         │ 5 秒 無通信
-   │                         │ → 接続を閉じる
-   │──── GET /b ──▶ ◀── FIN ─│
-   │                         │
-   │◀─────────────── RST ────│ /b は届かず
-   ▼
- クライアントに 502</pre>
-        <p>すでに閉じたソケットにデータが届くと、アプリ側の OS は <strong>RST</strong>（「その接続は存在しない」という強制切断の合図）を返す。<code>GET /b</code> はアプリのコードに一度も渡らないので、アプリのログには何も残らない。ALB は応答を受け取れないまま接続を失ったので、自分で 502 Bad Gateway を作ってクライアントに返す。AWS のトラブルシューティング文書も 502 の原因として「ALB がリクエストを送っている最中にターゲットが RST か FIN で接続を閉じた」を挙げ、ターゲットの keep-alive 時間が ALB の idle timeout より短くないか確認せよと書いている。</p>
-        <p>「たまに」しか起きないのは、すれ違いの窓が狭いからだ。トラフィックが多いと接続は 5 秒も黙らないのでタイマーが満了しない。逆に誰も来なければ送るリクエストが無い。ちょうど 5 秒前後の間隔でリクエストがぽつぽつ来る、夜間や低負荷時間帯に一番起きやすい。</p>
+        <h3>コンテナの中にはもう 1 つの localhost がある</h3>
+        <p>コンテナは Linux の <strong>network namespace</strong>（ネットワーク名前空間）の中で動く。Linux の man ページによれば、network namespace はネットワークデバイス・IP プロトコルスタック・ルーティングテーブル・ファイアウォールルール・ポート番号を名前空間ごとに分離する。コンテナから見えるのは、自分専用の <code>lo</code> と、ホストと仮想ケーブル（veth ペア）でつながった <code>eth0</code> だけだ。</p>
+        <p>つまりコンテナ内の <code>127.0.0.1</code> は、コンテナ自身にしか届かない。ホストの <code>127.0.0.1</code> とは名前が同じだけの、別の部屋の別の内線である。<code>-p 3000:3000</code> を付けると、Docker はホストの 3000 番に来た通信を NAT（宛先アドレスを書き換えて転送する仕組み）でコンテナへ流す。このときの宛先はコンテナの <code>eth0</code> のアドレスであって、コンテナの <code>lo</code> ではない。</p>
+        <pre class="diagram">［Mac ホスト］
+  curl localhost:3000
+      │
+      ▼ -p 3000:3000 で受付
+  Docker のポート転送（NAT）
+      │ 宛先をコンテナの eth0 へ
+      ▼
+［コンテナ = 別の network namespace］
+  ├ eth0 &lt;コンテナの IP&gt;  ◀ ここに届く
+  └ lo   127.0.0.1        ◀ 内部専用
+
+  127.0.0.1:3000 で listen
+      → eth0 宛てを受け取れない ✗
+  0.0.0.0:3000 で listen
+      → eth0 も lo も受け取れる ✓</pre>
+        <p>アプリが <code>127.0.0.1:3000</code> で待っていると、<code>eth0</code> 宛てに届いた接続を引き受けるソケットがコンテナ内に存在しない。転送の仕組みは正しく動いているのに、最後の 1 歩で行き場を失う。アプリのログにリクエストが 1 件も出ないのはこのためだ。</p>
       </section>
 
       <div class="analogy">
         <div class="box-title">🍱 たとえるなら</div>
-        <p>駅のタクシー乗り場で、配車係（ALB）は「60 分待っても客が付かない車は帰していい」というルールで車を並べている。ところが運転手（アプリ）は自分の判断で「5 分客が来なければ帰る」と決めていて、黙って発車する。配車係が発車に気づく前に客を案内すると、客の目の前には空のスペースしかない。運転手が配車係より長く待つと決めておけば、帰る判断は常に配車係が先に下すので、この事故は起きない。</p>
+        <p>マンションの各部屋に「内線 1 番」がある。302 号室（コンテナ）の住人が「内線 1 番にかかってきた電話だけ取る」と決めていると、管理人室（ホスト）が外線を 302 号室の部屋番号宛てに転送しても、住人は出ない。管理人室の内線 1 番と 302 号室の内線 1 番は番号が同じだけで別の回線だからだ。住人が「この部屋に来た電話は全部取る」（0.0.0.0）と決めて初めて、転送された外線がつながる。</p>
       </div>
 
       <section class="body-section">
-        <h3>ルールは「受ける側のタイマーを長く」</h3>
-        <p>すれ違いを防ぐには、接続を閉じる判断を、使い回す側（ALB）に先にさせればよい。ALB は自分で閉じる接続には次のリクエストを送らないので、アプリ側のタイマーが ALB より長ければ、アプリが黙って閉じる場面がそもそも来ない。AWS も、アプリの idle timeout を ALB より大きく設定するよう推奨している。主なサーバーの既定値は次のとおりで、ALB の 60 秒を下回るものがある。</p>
-        <pre class="code">サーバー                既定値      ALB 60 秒より
-Node.js keepAliveTimeout   5 秒        短い ✗
-Puma persistent_timeout    65 秒(7.0+) 長い ✓
-                           20 秒(6.x)  短い ✗
-nginx keepalive_timeout    75 秒       長い ✓</pre>
-        <p>Node.js は既定のままだと 5 秒で切るので、明示的に延ばす。値は新しい接続にだけ効くので、サーバー起動前に設定する。</p>
-        <pre class="code">const server = http.createServer(app);
-server.keepAliveTimeout = 65_000; // ms。ALB の 60 秒より長く
-server.listen(3000);</pre>
-        <p>Puma は 7.0.0 で既定が 65 秒に引き上げられたが、6 系の既定は 20 秒だ。古い Puma を使っているなら <code>config/puma.rb</code> に <code>persistent_timeout 65</code> を書く。Go の <code>http.Server</code> は <code>IdleTimeout</code> が 0 なら <code>ReadTimeout</code> の値を使い、両方 0 なら無期限になる。何も設定しなければ問題は起きないが、遅いクライアント対策で <code>ReadTimeout: 30 * time.Second</code> だけを入れると、idle も 30 秒になって 502 の条件を満たしてしまう。<code>IdleTimeout</code> も明示しておくのが安全だ。</p>
-        <pre class="code">srv := &amp;http.Server{
-    ReadTimeout: 30 * time.Second,
-    IdleTimeout: 120 * time.Second, // 明示しないと 30 秒になる
-}</pre>
-        <p>逆方向の変更にも注意がいる。長時間のアップロード対策で ALB の <code>idle_timeout.timeout_seconds</code> を 300 に上げたなら、アプリ側も 300 秒より長くしないと、今まで安全だった組み合わせが崩れる。</p>
+        <h3>直し方はアプリ側の 1 行</h3>
+        <p>コンテナで動かすサーバーは <code>0.0.0.0</code> にバインドする。主なサーバーの指定方法は次のとおりで、どれも「指定しないと何で待つか」が違う。</p>
+        <pre class="code"># Rails: 既定は localhost
+bin/rails server -b 0.0.0.0
+
+# Vite: 既定は 'localhost'。--host 単独でも全アドレス
+npx vite --host 0.0.0.0
+
+# Python http.server: 既定で全インターフェース
+python -m http.server 8000</pre>
+        <p>Go の <code>net/http</code> ではアドレス文字列の書き方で決まる。ホスト部を空にした <code>":8080"</code> は全アドレスで待ち、<code>"localhost:8080"</code> や <code>"127.0.0.1:8080"</code> はループバックだけで待つ。手元では動いていたのに、コンテナに入れた途端に繋がらなくなる Go アプリは、たいていこの文字列にホスト名が入っている。</p>
+        <pre class="code">// コンテナ内で外から受けるならホスト部を空に
+http.ListenAndServe(":8080", mux)       // ✓
+http.ListenAndServe("localhost:8080", mux) // ✗</pre>
+        <p>Dockerfile の <code>CMD</code> に <code>-b 0.0.0.0</code> を書いておけば、起動のたびに指定し忘れることもない。<code>EXPOSE 3000</code> は「このポートを使う」という記録で、それだけではバインド先もポート公開も変わらない点に注意する。</p>
       </section>
 
       <section class="body-section">
-        <h3>同じ構図はアプリの外向き通信にもある</h3>
-        <p>このすれ違いは ALB 固有の話ではない。接続を使い回すクライアントと、黙って閉じるサーバーの組み合わせならどこでも起きる。アプリが HTTP クライアントのコネクションプール（張った接続を貯めて再利用する仕組み）で外部 API を呼ぶときは、立場が入れ替わってアプリが「使い回す側」になる。Go の標準 <code>http.DefaultTransport</code> はアイドル接続を 90 秒保持するので、相手のサーバーがそれより短く切ると、たまに <code>ECONNRESET</code> を受け取る。</p>
-        <p>この方向では相手の設定を変えられないことが多いので、クライアント側のアイドル保持時間を相手より短くするか、再試行で吸収する。Node.js の公式ドキュメントも、再利用した接続が切られて失敗したリクエストを <code>request.reusedSocket</code> で見分け、冪等なリクエストだけ再試行する例を載せている。冪等（何度送っても結果が同じ）でない POST を無条件に再試行すると、サーバーが実は処理していた場合に二重実行になるので、再試行は GET などに限るのが原則だ。</p>
+        <h3>0.0.0.0 にすると危ないのでは？</h3>
+        <p><code>0.0.0.0</code> は「全世界に公開する」という意味に聞こえるので、ためらう人が多い。しかしコンテナ内の <code>0.0.0.0</code> が指すのは、そのコンテナの network namespace にあるアドレス全部、つまり <code>lo</code> と <code>eth0</code> だけだ。ホストの外から直接届く経路は、<code>-p</code> で開けない限り存在しない。</p>
+        <p>本当に気にすべきなのはホスト側だ。Docker の公式ドキュメントは「コンテナのポート公開は既定では安全ではない」と明記している。<code>-p 3000:3000</code> のようにホストのアドレスを省略すると、Docker はホストの全アドレス（<code>0.0.0.0</code> と <code>[::]</code>）でポートを公開するので、同じネットワークにいる他のマシンからも届く。自分の Mac からだけ見たい開発用の DB などは、ホスト側のアドレスを書いて絞る。</p>
+        <pre class="code"># ホストの loopback だけで公開する
+docker run -p 127.0.0.1:5432:5432 postgres
+
+# compose.yaml でも同じ書き方
+ports:
+  - "127.0.0.1:5432:5432"</pre>
+        <p>アプリのバインドは「コンテナの中で、どの入口から受けるか」、<code>-p</code> のアドレスは「ホストの、どの入口で公開するか」を決める。役割が違う 2 つの設定なので、アクセス範囲の制御はホスト側に任せ、コンテナ内は <code>0.0.0.0</code> にしておくのが素直な分担である。</p>
       </section>
 
       <div class="practical">
         <div class="box-title">💼 実務でどう出会うか</div>
-        <p>CloudWatch で <code>HTTPCode_ELB_5XX_Count</code>（ALB 自身が生成したエラー）だけが増え、<code>HTTPCode_Target_5XX_Count</code>（アプリが返したエラー）は増えていない。ALB のアクセスログを見ると、<code>elb_status_code</code> が 502 で、<code>target_status_code</code> が <code>-</code>（ターゲットから応答を受け取れなかった）になっている。この組み合わせが見えたら、アプリのコードを疑う前にアプリサーバーの keep-alive 設定と ALB の idle timeout を並べて比べる。デプロイ直後や Pod の終了時に出る 502 は別の原因（接続中のターゲットの停止）なので、発生時刻がデプロイと重なるかも確認する。</p>
+        <p>docker compose で Rails と Vite を立ち上げたら Rails だけ繋がらない、Go の API をコンテナ化したら手元の curl が通らない、といった形で出会う。<code>docker logs</code> で <code>127.0.0.1</code> や <code>localhost</code> で listen していると出ていたら、まずバインド先を疑う。逆方向の失敗も多い。コンテナ内のアプリから <code>localhost:5432</code> で Mac 上の Postgres に繋ごうとしても、それはコンテナ自身の 5432 番を叩くだけで届かない。Docker Desktop ではホストのサービスに <code>host.docker.internal</code> という名前で到達できる。</p>
       </div>
 
       <div class="hands-on">
         <div class="box-title">⌨️ 手を動かす（5 分）</div>
-        <p>5 秒で接続を閉じるサーバーに対し、同じ接続で「3 秒後」と「6 秒後」に 2 回目のリクエストを送り、タイマーを過ぎた接続へ送ると応答が返らないことを確かめる。<code>python3</code> だけで動く（追加パッケージ不要）。</p>
-        <pre class="code">mkdir ka &amp;&amp; cd ka
-cat &gt; server.py &lt;&lt;'EOF'
-from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+        <p>同じ Python サーバーを、127.0.0.1 だけで待たせた場合と全アドレスで待たせた場合で比べる。</p>
+        <pre class="code"># 1) loopback だけで待つ
+docker run --rm -d --name lo-only -p 8000:8000 \
+  python:3-slim python -m http.server 8000 --bind 127.0.0.1
+sleep 2
+curl -v http://localhost:8000/
 
-class H(BaseHTTPRequestHandler):
-    protocol_version = "HTTP/1.1"  # keep-alive を有効にする
-    timeout = 5                    # 5 秒アイドルで接続を切る
+# コンテナの内側からは届く
+docker exec lo-only python -c \
+  "import urllib.request as u;print(u.urlopen('http://127.0.0.1:8000/').status)"
 
-    def do_GET(self):
-        self.send_response(200)
-        self.send_header("Content-Length", "3")
-        self.end_headers()
-        self.wfile.write(b"ok\n")
+# コンテナの eth0 のアドレスを確認
+docker exec lo-only hostname -i
+docker rm -f lo-only
 
-    def log_message(self, *a):
-        pass
-
-ThreadingHTTPServer(("127.0.0.1", 8080), H).serve_forever()
-EOF
-cat &gt; client.py &lt;&lt;'EOF'
-import socket, sys, time
-
-def get(s):
-    s.sendall(b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n")
-    buf = b""
-    while not buf.endswith(b"ok\n"):
-        chunk = s.recv(1024)
-        if not chunk:
-            return "応答なし（相手はもう接続を閉じていた）"
-        buf += chunk
-    return buf.split(b"\r\n")[0].decode()
-
-idle = float(sys.argv[1])
-s = socket.create_connection(("127.0.0.1", 8080))
-print("1 回目:", get(s))
-time.sleep(idle)
-try:
-    print(f"{idle} 秒後の 2 回目:", get(s))
-except OSError as e:
-    print(f"{idle} 秒後の 2 回目:", type(e).__name__)
-EOF
-python3 server.py &amp;
-sleep 1
-python3 client.py 3
-python3 client.py 6
-kill %1</pre>
-        <p>3 秒後の 2 回目は <code>HTTP/1.1 200 OK</code> が返り、6 秒後の 2 回目は「応答なし」か <code>ConnectionResetError</code> になるはずだ。6 秒のケースでも <code>sendall</code> 自体は失敗しない点に注目してほしい。送る側は相手が閉じたことを送信時点では知らず、応答を待って初めて失敗に気づく。ALB が 502 を返すのはこの瞬間だ。<code>server.py</code> の <code>timeout</code> を 10 に変えて再実行すると、6 秒後も 200 が返る。</p>
+# 2) 全アドレスで待つ（--bind なし）
+docker run --rm -d --name all -p 8000:8000 \
+  python:3-slim python -m http.server 8000
+sleep 2
+curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8000/
+docker rm -f all</pre>
+        <p>1) では Mac からの <code>curl</code> がエラーで終わる一方、<code>docker exec</code> で内側から叩くと <code>200</code> が返る。サーバーは動いていて、届かないのは外から来た分だけだと分かる。<code>hostname -i</code> で表示されるのが転送先の <code>eth0</code> のアドレスだ。2) では Mac からも <code>200</code> が返る。1) の curl が「接続拒否」ではなく、いったん繋がってから切られるような表示になることが多いのも観察してほしい。ホスト側の 8000 番は Docker が受け付けているので、失敗するのはその先のコンテナへの転送だからだ。</p>
       </div>
 
       <div class="misconceptions">
         <div class="box-title">🙅 よくある誤解</div>
         <ul>
-          <li><span class="wrong">502 が出ているならアプリが落ちたかエラーを返した</span> — このケースの 502 は ALB が自分で作ったもので、リクエストはアプリに届いていない。アプリのログやエラー監視が静かなのはそのためで、ALB 側のメトリクス（<code>HTTPCode_ELB_5XX_Count</code>）で見分ける。</li>
-          <li><span class="wrong">TCP keepalive を有効にすれば idle timeout で切られなくなる</span> — TCP keepalive は OS が空のパケットで相手の生存を確かめる別の仕組みで、HTTP のデータは流さない。ALB の文書も、TCP keep-alive を送っても idle timeout は防げないと明記している。</li>
-          <li><span class="wrong">タイムアウトは短いほど資源を早く解放できて安全</span> — 使い回される側のタイマーを使い回す側より短くすると、このすれ違いを自分で招く。短くするなら、接続を使い回す側（LB やクライアントのプール）のタイマーも合わせて短くする。</li>
+          <li><span class="wrong">コンテナ内で 0.0.0.0 にバインドすると、インターネットに公開されてしまう</span> — コンテナ内の 0.0.0.0 はそのコンテナの network namespace のアドレスだけを指す。ホスト外への公開範囲を決めるのは <code>-p</code> のホスト側アドレスで、こちらは省略すると全アドレスで公開される。</li>
+          <li><span class="wrong"><code>-p</code> や <code>EXPOSE</code> を書けば、アプリに通信が届く</span> — <code>-p</code> はホストからコンテナの <code>eth0</code> までの経路を作るだけで、アプリがそのアドレスで待っていなければ受け取れない。<code>EXPOSE</code> は記録で、それ自体は公開もバインドもしない。</li>
+          <li><span class="wrong">コンテナから <code>localhost</code> と書けば Mac 上のサービスに繋がる</span> — コンテナ内の localhost はコンテナ自身を指す。Docker Desktop ではホスト上のサービスに <code>host.docker.internal</code> で繋ぐ。</li>
         </ul>
       </div>
 
       <div class="glossary">
         <div class="box-title">📖 用語ミニ辞典</div>
         <dl>
-          <dt>HTTP keep-alive（持続的接続）</dt><dd>1 本の TCP 接続を閉じずに、複数のリクエスト・レスポンスで使い回す HTTP/1.1 の動作。</dd>
-          <dt>idle timeout</dt><dd>無通信の接続をこの時間で閉じる、という接続の各端が持つタイマー。両端で独立に設定される。</dd>
-          <dt>FIN</dt><dd>「こちらからはもう送らない」と伝える TCP の正常な終了合図。</dd>
-          <dt>RST</dt><dd>「その接続は存在しない」と伝えて接続を強制的に打ち切る TCP の合図。閉じたソケットにデータが届くと返される。</dd>
-          <dt>502 Bad Gateway</dt><dd>中継役（プロキシや LB）が、後ろのサーバーから正しい応答を受け取れなかったときに返すステータス。</dd>
-          <dt>コネクションプール</dt><dd>張った接続を閉じずに貯めておき、次のリクエストで再利用する仕組み。</dd>
+          <dt>バインド (bind)</dt><dd>ソケットに「どの IP アドレスとポートで待つか」を結びつける操作。</dd>
+          <dt>ループバックアドレス</dt><dd>自分自身に戻ってくる宛先。IPv4 では 127.0.0.1 で、<code>lo</code> インターフェースに割り当てられる。</dd>
+          <dt>0.0.0.0</dt><dd>バインド時に指定すると「このマシン（名前空間）が持つ全アドレスで待つ」という意味になる特別なアドレス。</dd>
+          <dt>network namespace</dt><dd>ネットワークデバイス・ルーティング・ポート番号などを分離する Linux の仕組み。コンテナごとに 1 つ持つ。</dd>
+          <dt>ポート公開 (-p)</dt><dd>ホストのポートに来た通信を NAT でコンテナへ転送する Docker の設定。ホスト側アドレスを省略すると全アドレスで公開される。</dd>
         </dl>
       </div>
 
       <div class="further-reading">
         <div class="box-title">🔗 もっと深く</div>
         <ul>
-          <li><a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/application/edit-load-balancer-attributes.html">Edit attributes for your Application Load Balancer（AWS）</a> — idle timeout の既定 60 秒と、アプリ側をそれより長くすべき理由が書かれた一次情報。</li>
-          <li><a href="https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-troubleshooting.html">Troubleshoot your Application Load Balancers（AWS）</a> — 502・504・460 などのステータスを ALB がどんな条件で返すかの一覧。原因の切り分けに使える。</li>
-          <li><a href="https://nodejs.org/api/http.html#serverkeepalivetimeout">Node.js HTTP: server.keepAliveTimeout</a> — 既定 5 秒の意味と、<code>keepAliveTimeoutBuffer</code>・<code>request.reusedSocket</code> による <code>ECONNRESET</code> 対策。</li>
-          <li><a href="https://www.rfc-editor.org/rfc/rfc9112.html#section-9.5">RFC 9112 §9.5 Failures and Timeouts</a> — 持続的接続のタイムアウトについて仕様が何を定め、何を定めていないか。</li>
+          <li><a href="https://docs.docker.com/engine/network/port-publishing/">Docker Docs: Port publishing and mapping</a> — <code>-p</code> の既定が全ホストアドレスであることと、127.0.0.1 で絞る方法の一次情報。</li>
+          <li><a href="https://man7.org/linux/man-pages/man7/network_namespaces.7.html">network_namespaces(7) — Linux manual page</a> — 名前空間ごとに何が分離されるかと、veth ペアの役割が短くまとまっている。</li>
+          <li><a href="https://guides.rubyonrails.org/4_2_release_notes.html">Ruby on Rails 4.2 Release Notes</a> — <code>rails server</code> の既定が localhost に変わった経緯と <code>-b 0.0.0.0</code> の記述。</li>
+          <li><a href="https://docs.docker.com/desktop/features/networking/networking-how-tos/">Docker Desktop: Networking how-tos</a> — コンテナからホストのサービスへ <code>host.docker.internal</code> で繋ぐ方法。</li>
         </ul>
       </div>
     </article>
 
-    <!-- recent:start -->
+<!-- recent:start -->
     <section class="section recent-articles">
       <div class="section-title">最近の記事</div>
       <div class="card">
@@ -204,6 +185,33 @@ kill %1</pre>
         <h3><a href="archive/2026-11-01.html">終了時刻から開始時刻を引いただけなのに、なぜ処理時間がマイナスになるのか？</a></h3>
         <div class="summary">OS には現在時刻を表す壁時計（CLOCK_REALTIME）と経過時間専用のモノトニッククロックがあり、壁時計は NTP のステップ補正や手動設定で後ろへ飛ぶため時刻の引き算は負になりうる。Cloudflare のうるう秒障害、Go 1.9 の透過的モノトニック時刻と UTC()・JSON 化で剥がれる落とし穴、Ruby/JS/Python の使い分けを解説。</div>
         <div class="meta"><span class="tag tag-lang">Lang</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-01</span></div>
+      </div>
+      <div class="recent-more"><a href="archive/">アーカイブですべて見る →</a></div>
+    </section>
+    <!-- recent:end -->
+
+    <!-- recent:start -->
+    <section class="section recent-articles">
+      <div class="section-title">最近の記事</div>
+      <div class="card">
+        <h3><a href="archive/2026-11-05.html">アプリは一度も落ちていないのに、なぜ ALB はたまに 502 を返すのか？</a></h3>
+        <div class="summary">ALB とアプリはそれぞれ別の idle timeout で keep-alive 接続を閉じる。アプリ側が短いと閉じる合図と次のリクエストがすれ違い、アプリに届かないまま ALB が 502 を返す。Node.js 既定 5 秒・Puma・Go の IdleTimeout の落とし穴と、受ける側を長くする設定ルール。</div>
+        <div class="meta"><span class="tag tag-network">Network</span><span>🌿 基礎</span><span>⏱ 約 8 分</span><span>2026-11-05</span></div>
+      </div>
+      <div class="card">
+        <h3><a href="archive/2026-11-04.html">同じ 20 件を取るだけなのに、なぜ 5 万ページ目は 1 ページ目より何百倍も遅いのか？</a></h3>
+        <div class="summary">OFFSET は捨てる行も読むため深いページほど遅くなる。前ページ最後のキー値から読む keyset ページネーションの仕組みと、行値比較・find_each・結果のずれまで解説。</div>
+        <div class="meta"><span class="tag tag-db">DB</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-04</span></div>
+      </div>
+      <div class="card">
+        <h3><a href="archive/2026-11-03.html">Mac では動いたイメージなのに、なぜ本番サーバーでは exec format error で起動しないのか？</a></h3>
+        <div class="summary">Apple Silicon で普通に build したイメージは arm64 専用になり、amd64 サーバーではカーネルが機械語を拒否して exec format error になる。イメージインデックスの仕組み、Mac で amd64 が動く binfmt_misc/QEMU の裏側、--platform と BUILDPLATFORM/TARGETARCH での対策を解説。</div>
+        <div class="meta"><span class="tag tag-container">Container</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-03</span></div>
+      </div>
+      <div class="card">
+        <h3><a href="archive/2026-11-02.html">同じサーバーに 200 バイト送るだけなのに、なぜ 2 回に分けて write すると 40ms 遅れるのか？</a></h3>
+        <div class="summary">Nagle アルゴリズムと delayed ACK が互いを待ち合うと、2 回に分けた小さな write が Linux では約 40ms 止まる。仕組みと TCP_NODELAY・write の集約による対策、言語ごとの既定値を解説する。</div>
+        <div class="meta"><span class="tag tag-network">Network</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-02</span></div>
       </div>
       <div class="recent-more"><a href="archive/">アーカイブですべて見る →</a></div>
     </section>

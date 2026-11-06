@@ -30,7 +30,7 @@
       <div class="chip-row" id="cat-chips">
         <span class="row-label">カテゴリ</span>
         <button class="chip on" data-cat="">すべて</button>
-        <button class="chip" data-cat="container">Container <span class="chip-count">17</span></button>
+        <button class="chip" data-cat="container">Container <span class="chip-count">18</span></button>
         <button class="chip" data-cat="network">Network <span class="chip-count">17</span></button>
         <button class="chip" data-cat="db">DB <span class="chip-count">14</span></button>
         <button class="chip" data-cat="lang">Lang <span class="chip-count">11</span></button>
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-11">
       <div class="section-title">2026 年 11 月 <span class="count"></span></div>
+      <div class="card" data-cat="container" data-diff="基礎"
+           data-search="-p 3000:3000 と書いたのに、なぜコンテナのアプリに繋がらないのか？ コンテナ内の localhost はコンテナ自身だけを指し、-p の転送は eth0 側に届く。127.0.0.1 で待つアプリには繋がらないので 0.0.0.0 にバインドし、公開範囲は -p のホスト側で絞る。" data-terms="バインド (bind) / ループバックアドレス / 0.0.0.0 / network namespace / ポート公開 (-p)">
+        <h3><a href="2026-11-06.html">-p 3000:3000 と書いたのに、なぜコンテナのアプリに繋がらないのか？</a></h3>
+        <div class="summary">コンテナ内の localhost はコンテナ自身だけを指し、-p の転送は eth0 側に届く。127.0.0.1 で待つアプリには繋がらないので 0.0.0.0 にバインドし、公開範囲は -p のホスト側で絞る。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-container">Container</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-06</span></div>
+      </div>
       <div class="card" data-cat="network" data-diff="基礎"
            data-search="アプリは一度も落ちていないのに、なぜ alb はたまに 502 を返すのか？ alb とアプリはそれぞれ別の idle timeout で keep-alive 接続を閉じる。アプリ側が短いと閉じる合図と次のリクエストがすれ違い、アプリに届かないまま alb が 502 を返す。node.js 既定 5 秒・puma・go の idletimeout の落とし穴と、受ける側を長くする設定ルール。" data-terms="HTTP keep-alive（持続的接続） / idle timeout / FIN / RST / 502 Bad Gateway / コネクションプール">
         <h3><a href="2026-11-05.html">アプリは一度も落ちていないのに、なぜ ALB はたまに 502 を返すのか？</a></h3>
