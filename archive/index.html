@@ -33,7 +33,7 @@
         <button class="chip" data-cat="container">Container <span class="chip-count">18</span></button>
         <button class="chip" data-cat="network">Network <span class="chip-count">17</span></button>
         <button class="chip" data-cat="db">DB <span class="chip-count">14</span></button>
-        <button class="chip" data-cat="lang">Lang <span class="chip-count">11</span></button>
+        <button class="chip" data-cat="lang">Lang <span class="chip-count">12</span></button>
         <button class="chip" data-cat="arch">Arch <span class="chip-count">9</span></button>
         <button class="chip" data-cat="security">Security <span class="chip-count">9</span></button>
         <button class="chip" data-cat="ai">AI <span class="chip-count">8</span></button>
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-11">
       <div class="section-title">2026 年 11 月 <span class="count"></span></div>
+      <div class="card" data-cat="lang" data-diff="基礎"
+           data-search="b に append しただけなのに、なぜ別の変数 c の中身まで変わるのか？ go の slice はヘッダ（ポインタ・長さ・容量）にすぎず、append は容量に空きがあれば共有中の基底配列に上書きする。再帰で結果が全部同じ値になる理由と、full slice expression・slices.clip・slices.clone で共有を断つ方法を解説。" data-terms="slice ヘッダ / 基底配列 / 容量（cap） / full slice expression / slices.Clip">
+        <h3><a href="2026-11-07.html">b に append しただけなのに、なぜ別の変数 c の中身まで変わるのか？</a></h3>
+        <div class="summary">Go の slice はヘッダ（ポインタ・長さ・容量）にすぎず、append は容量に空きがあれば共有中の基底配列に上書きする。再帰で結果が全部同じ値になる理由と、full slice expression・slices.Clip・slices.Clone で共有を断つ方法を解説。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-lang">Lang</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-07</span></div>
+      </div>
       <div class="card" data-cat="container" data-diff="基礎"
            data-search="-p 3000:3000 と書いたのに、なぜコンテナのアプリに繋がらないのか？ コンテナ内の localhost はコンテナ自身だけを指し、-p の転送は eth0 側に届く。127.0.0.1 で待つアプリには繋がらないので 0.0.0.0 にバインドし、公開範囲は -p のホスト側で絞る。" data-terms="バインド (bind) / ループバックアドレス / 0.0.0.0 / network namespace / ポート公開 (-p)">
         <h3><a href="2026-11-06.html">-p 3000:3000 と書いたのに、なぜコンテナのアプリに繋がらないのか？</a></h3>

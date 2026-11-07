@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tech Learning Daily — b に append しただけなのに、なぜ別の変数 c の中身まで変わるのか？</title>
+  <link rel="stylesheet" href="../style.css">
+  <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="../feed.xml">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Tech Learning Daily</h1>
+      <div class="date">2026-11-07 (Sat) — 第 113 号</div>
+      <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
+    </header>
+
+    <article class="article">
+      <div class="meta-bar">
+        <span class="tag tag-lang">Lang</span>
+        <span class="difficulty">🌿 基礎</span>
+        <span class="read-time">⏱ 約 7 分</span>
+      </div>
+      <h2 class="article-title">b に append しただけなのに、なぜ別の変数 c の中身まで変わるのか？</h2>
+      <p class="lead">Go で再帰を書き、途中の経路 <code>path</code> に要素を足しながら結果を <code>res = append(res, append(path, x))</code> と集めた。期待したのは <code>[[1] [2] [3]]</code> なのに、出力は <code>[[3] [3] [3]]</code> だった。<code>append</code> は「新しい slice を返す関数」のはずではなかったか。</p>
+
+      <div class="tldr">
+        <div class="box-title">🎯 3 行まとめ</div>
+        <ul>
+          <li>Go の slice は「配列へのポインタ・長さ・容量」の 3 つ組にすぎない。slice をコピーしたり切り出したりしても、指している配列は同じままだ。</li>
+          <li><code>append</code> は容量に空きがあれば既存の配列にそのまま書き込み、足りないときだけ新しい配列を確保する。空きがあると、同じ配列を指す別の slice の中身まで書き換わる。</li>
+          <li>共有させたくないときは <code>s[low:high:max]</code> や <code>slices.Clip</code> で容量を長さに揃えるか、<code>slices.Clone</code> でコピーしてから <code>append</code> する。</li>
+        </ul>
+      </div>
+
+      <section class="body-section">
+        <h3>slice は配列そのものではなく「配列の窓」である</h3>
+        <p>Go 公式ブログの解説によれば、slice は配列の一区間を表す小さな記述子で、<strong>配列へのポインタ</strong>・<strong>長さ</strong>（<code>len</code>: いま見えている要素数）・<strong>容量</strong>（<code>cap</code>: ポインタの位置から配列の末尾までの要素数）の 3 つを持つ。この 3 つ組を <strong>slice ヘッダ</strong> と呼ぶ。要素の実体は、ヘッダの外にある <strong>基底配列</strong>（underlying array: slice が指す実際のメモリ領域）に並んでいる。</p>
+        <p>そのため <code>t := s</code> と代入したり <code>s[1:3]</code> で切り出したりしても、コピーされるのはヘッダだけだ。同ブログは「slicing does not copy the slice's data」と明言している。<code>t[0] = 9</code> と書けば、同じ配列を指す <code>s</code> からも 9 が見える。</p>
+        <pre class="diagram">s := make([]int, 3, 4)
+t := s
+
+ s ヘッダ  ptr ─┐ len=3 cap=4
+                │
+ t ヘッダ  ptr ─┤ len=3 cap=4
+                ▼
+ 基底配列      ┌──┬──┬──┬──┐
+               │0 │0 │0 │  │◀ 空き
+               └──┴──┴──┴──┘
+  （ヘッダは 2 つ、配列は 1 つ）</pre>
+        <p>関数に slice を渡したときも同じである。公式ブログの言い方では、関数が受け取るのは「slice ヘッダのコピー」だ。中の要素を書き換えれば呼び出し元にも見えるが、呼び出し先で長さを伸ばしても、呼び出し元のヘッダの <code>len</code> は変わらない。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>append は容量に空きがあれば上書きする</h3>
+        <p>言語仕様は <code>append</code> の挙動を 2 つに分けて書いている。容量が足りなければ「新しい、十分な大きさの基底配列を確保」する。そうでなければ「基底配列を再利用する」。<code>append</code> は新しい slice ヘッダを返す。しかし、その中のポインタが新しい配列を指すとは限らない。</p>
+        <p>冒頭のバグはこの「再利用」の側で起きている。<code>path</code> は <code>make([]int, 0, 4)</code> で長さ 0・容量 4 だった。<code>append(path, 1)</code> は空きの先頭、つまり配列の 0 番目に 1 を書いて、長さ 1 のヘッダを返す。次の <code>append(path, 2)</code> も、<code>path</code> の長さは 0 のままなので同じ 0 番目に 2 を書く。<code>res</code> に入った 3 つの slice は全部同じ配列の 0 番目を見ているので、最後に書いた 3 が 3 回並ぶ。</p>
+        <pre class="code">path := make([]int, 0, 4)
+for _, x := range []int{1, 2, 3} {
+    res = append(res, append(path, x))
+}
+fmt.Println(res) // [[3] [3] [3]]</pre>
+        <p>直感では「<code>append</code> は配列を伸ばす操作」に見える。しかし実際に <code>append</code> がしているのは「<code>len</code> の位置に書き、<code>len</code> を 1 つ増やしたヘッダを返す」ことだけだ。その位置が他の slice からも見えるかどうかを、<code>append</code> は気にしない。</p>
+      </section>
+
+      <div class="analogy">
+        <div class="box-title">🍱 たとえるなら</div>
+        <p>1 冊のノートを複数人で共有し、各自が「自分は何ページ目まで書いたか」を付箋で持っている状態だ。付箋（slice ヘッダ）は人ごとに別々でも、ノート（基底配列）は 1 冊しかない。A さんの付箋が 3 ページ目、B さんの付箋も 3 ページ目なら、2 人とも「次は 4 ページ目」に書き込み、後から書いたほうが残る。ノートが最後のページまで埋まったときだけ、書き手は新しいノートに全部写してから書き足す。</p>
+      </div>
+
+      <section class="body-section">
+        <h3>「たまにしか壊れない」のは再確保が起きるかどうかで分かれるから</h3>
+        <p>この種のバグが厄介なのは、容量が足りなくなった瞬間に症状が消えることだ。容量を超える <code>append</code> は新しい配列に要素を写すため、そこから先は元の slice と縁が切れる。同じコードでも、元の slice の容量にたまたま空きがあれば共有が起き、ちょうど満杯なら起きない。</p>
+        <p>再確保のときに容量をいくつにするかは、言語仕様では決まっていない。Go 1.18 のリリースノートも「append が新しい配列を確保するときの成長の計算式を少し変えた」と書くだけで、式そのものは仕様として約束していない。そのため「容量は毎回 2 倍になるから、ここでは必ず再確保される」という前提でコードを書くと、バージョンや要素数が変わったときに挙動が変わりうる。</p>
+        <p>共有は切り出しでも起きる。<code>head := s[:2]</code> の容量は <code>s</code> の末尾までなので、<code>append(head, 99)</code> は <code>s[2]</code> を上書きする。「先頭 2 件だけ取り出して加工したつもりが、元のデータの 3 件目が消えていた」という形で表に出る。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>容量を絞れば、次の append は新しい配列に書く</h3>
+        <p>言語仕様には <strong>full slice expression</strong>（3 つ目の添字で容量まで指定する切り出し）がある。<code>a[low:high:max]</code> は <code>a[low:high]</code> と同じ要素を持ち、容量を <code>max - low</code> にする。<code>max</code> を <code>high</code> と同じにすると容量が長さに一致し、空きがゼロになる。空きがなければ次の <code>append</code> は新しい配列を確保するので、元の配列には触れない。</p>
+        <pre class="code">// 容量 = 長さ にしてから渡す
+res = append(res, append(path[:len(path):len(path)], x))
+
+// Go 1.21+ の slices パッケージなら
+res = append(res, append(slices.Clip(path), x))
+
+// 呼び出し先に渡す前に丸ごと複製する
+safe := slices.Clone(head)</pre>
+        <p><code>slices.Clip(s)</code> の中身は <code>s[:len(s):len(s)]</code> だと公式ドキュメントに書かれている。<code>slices.Clone</code> は要素をコピーした別の slice を返す。ただし「浅いコピー」なので、要素がポインタや slice なら、その先は共有されたまま残る。</p>
+        <p>どちらを使うかは目的で決まる。「この slice に後から足されても元を壊さないでほしい」なら <code>Clip</code> で容量を絞れば足りる。「受け取った側が要素を書き換えるかもしれない」なら、<code>Clone</code> で配列ごと分けるしかない。</p>
+      </section>
+
+      <div class="practical">
+        <div class="box-title">💼 実務でどう出会うか</div>
+        <p>典型は 3 つある。1 つ目は冒頭のような再帰・バックトラックで、経路の slice を使い回して結果に追加するときに起きる。2 つ目は「共通のベース設定に項目を足す」処理で、<code>base := []string{"-v", "-x"}</code> を元に <code>append(base, "a")</code> と <code>append(base, "b")</code> を作ると、<code>base</code> の容量に空きがある場合だけ互いを上書きする。3 つ目はメモリで、Go 公式ブログは大きなファイルを読み込んだ <code>[]byte</code> から数バイトだけ切り出して返すと、ファイル全体の配列が GC されずに残り続けると注意している。対策はどれも同じで、必要な分だけ新しい slice に <code>copy</code>（または <code>slices.Clone</code>）してから返す。</p>
+      </div>
+
+      <div class="hands-on">
+        <div class="box-title">⌨️ 手を動かす（5 分）</div>
+        <p>容量に空きがある slice に 2 回 <code>append</code> したときと、容量を絞ってから <code>append</code> したときの違いを確かめる。Go が入っていれば次をそのまま貼り付けて実行できる（入っていなければ Go Playground に <code>main.go</code> の中身を貼ってもよい）。</p>
+        <pre class="code">mkdir -p /tmp/slicedemo &amp;&amp; cd /tmp/slicedemo
+cat &gt; main.go &lt;&lt;'EOF'
+package main
+
+import "fmt"
+
+func main() {
+	a := make([]int, 3, 4)
+	b := append(a, 1)
+	c := append(a, 2)
+	fmt.Println("b:", b, "c:", c)
+
+	d := append(a[:3:3], 1)
+	e := append(a[:3:3], 2)
+	fmt.Println("d:", d, "e:", e)
+
+	s := []int{1, 2, 3, 4}
+	head := s[:2]
+	head = append(head, 99)
+	fmt.Println("s:", s, "head:", head)
+}
+EOF
+go run main.go</pre>
+        <p><code>b: [0 0 0 2] c: [0 0 0 2]</code> と出るはずだ。<code>b</code> に入れたはずの 1 が、後の <code>append(a, 2)</code> に上書きされている。容量を 3 に絞った <code>d</code> と <code>e</code> は <code>[0 0 0 1]</code> と <code>[0 0 0 2]</code> に分かれる。最後の行では <code>s</code> が <code>[1 2 99 4]</code> になり、切り出しへの <code>append</code> が元の 3 件目を書き換えたことが分かる。</p>
+      </div>
+
+      <div class="misconceptions">
+        <div class="box-title">🙅 よくある誤解</div>
+        <ul>
+          <li><span class="wrong">append は常に新しい slice（新しい配列）を作って返す</span> — 返るのは新しいヘッダだが、容量に空きがあれば中のポインタは元と同じ配列を指す。新しい配列が確保されるのは容量が足りないときだけだ。</li>
+          <li><span class="wrong">slice は参照型だから、関数内で append すれば呼び出し元にも要素が増える</span> — 関数が受け取るのはヘッダのコピーなので、呼び出し元の <code>len</code> は伸びない。だから <code>s = append(s, x)</code> のように戻り値を受け取る必要がある。</li>
+          <li><span class="wrong">容量は毎回 2 倍に増えるので、再確保のタイミングは予測できる</span> — 成長の計算式は仕様で決まっておらず、Go 1.18 でも変更された。共有の有無を再確保のタイミングに頼らず、<code>Clip</code> や <code>Clone</code> で明示する。</li>
+        </ul>
+      </div>
+
+      <div class="glossary">
+        <div class="box-title">📖 用語ミニ辞典</div>
+        <dl>
+          <dt>slice ヘッダ</dt><dd>基底配列へのポインタ・長さ・容量の 3 つ組。代入や関数呼び出しではこれだけがコピーされる。</dd>
+          <dt>基底配列</dt><dd>slice が指している要素の実体が並ぶメモリ領域。複数の slice が同じ基底配列を共有しうる。</dd>
+          <dt>容量（cap）</dt><dd>slice の先頭から基底配列の末尾までの要素数。<code>append</code> が再確保せずに書き込める上限を決める。</dd>
+          <dt>full slice expression</dt><dd><code>a[low:high:max]</code> の形の切り出し。結果の容量を <code>max - low</code> に制限する。</dd>
+          <dt>slices.Clip</dt><dd>slice の容量を長さに揃えて返す関数。中身は <code>s[:len(s):len(s)]</code>。</dd>
+        </dl>
+      </div>
+
+      <div class="further-reading">
+        <div class="box-title">🔗 もっと深く</div>
+        <ul>
+          <li><a href="https://go.dev/blog/slices-intro">Go Slices: usage and internals</a> — slice ヘッダの図解と、小さな切り出しが大きな配列を GC させない落とし穴の実例がある。</li>
+          <li><a href="https://go.dev/blog/slices">Arrays, slices (and strings): The mechanics of 'append'</a> — <code>append</code> を自作しながら、なぜ戻り値を受け取らなければならないのかを順に示す。</li>
+          <li><a href="https://go.dev/ref/spec#Appending_and_copying_slices">The Go Programming Language Specification: Appending to and copying slices</a> — 再利用と再確保の条件を定める一次ソース。full slice expression の定義は同じ仕様書の Slice expressions の節にある。</li>
+          <li><a href="https://pkg.go.dev/slices#Clip">slices.Clip（pkg.go.dev）</a> — <code>Clip</code> と <code>Clone</code> の正確な定義。</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- recent:start -->
+    <!-- recent:end -->
+
+    <footer>
+      <p>Generated by Claude Code (GitHub Actions)</p>
+      <a href="./" class="archive-link">過去の記事</a>
+    </footer>
+  </div>
+</body>
+</html>

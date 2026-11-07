@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-11-07.html",
+    "date": "2026-11-07",
+    "title": "b に append しただけなのに、なぜ別の変数 c の中身まで変わるのか？",
+    "summary": "Go の slice はヘッダ（ポインタ・長さ・容量）にすぎず、append は容量に空きがあれば共有中の基底配列に上書きする。再帰で結果が全部同じ値になる理由と、full slice expression・slices.Clip・slices.Clone で共有を断つ方法を解説。",
+    "category": "lang",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": ["slice ヘッダ", "基底配列", "容量（cap）", "full slice expression", "slices.Clip"]
+  },
+  {
     "file": "2026-11-06.html",
     "date": "2026-11-06",
     "title": "-p 3000:3000 と書いたのに、なぜコンテナのアプリに繋がらないのか？",

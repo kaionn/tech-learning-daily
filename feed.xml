@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-11-06T10:42:57+09:00</updated>
+  <updated>2026-11-07T10:02:31+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>b に append しただけなのに、なぜ別の変数 c の中身まで変わるのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-11-07.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-11-07.html</id>
+    <updated>2026-11-07T10:02:31+09:00</updated>
+    <summary>Go の slice は配列へのポインタ・長さ・容量の 3 つ組で、append は容量に空きがあれば共有中の配列に上書きする。共有を断つには s[a:b:b] や slices.Clip で容量を絞るか Clone する。</summary>
+  </entry>
   <entry>
     <title>-p 3000:3000 と書いたのに、なぜコンテナのアプリに繋がらないのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-11-06.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-10-25.html</id>
     <updated>2026-10-25T08:23:05+09:00</updated>
     <summary>B+Tree はキー順に並ぶため、乱数の UUIDv4 は挿入先がインデックス全体に散りページ分割とメモリ圧迫を招く。先頭 48 ビットが時刻の UUIDv7 は右端に入り連番に近い書き込みになる。</summary>
-  </entry>
-  <entry>
-    <title>スレッドは数本しかないのに、なぜ nginx は何千もの接続を同時に捌けるのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-10-24.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-10-24.html</id>
-    <updated>2026-10-24T08:56:02+09:00</updated>
-    <summary>1 接続 1 スレッドは待つだけの接続にもスレッドを抱え続けて頭打ちになる。epoll/kqueue は監視対象をカーネルに登録し準備完了の fd だけを返すので、少数のスレッドで大量の接続を捌ける。</summary>
   </entry>
 </feed>
