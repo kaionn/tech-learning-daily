@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-11-07T10:02:31+09:00</updated>
+  <updated>2026-11-08T09:51:19+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>ブラウザでは鍵マークが付くのに、なぜ curl だけ証明書エラーになるのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-11-08.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-11-08.html</id>
+    <updated>2026-11-08T09:51:19+09:00</updated>
+    <summary>サーバーは自分の証明書と一緒に中間証明書を送る必要がある。送り忘れてもブラウザはキャッシュや AIA で補うが、OpenSSL ベースの curl は補わずに失敗する。nginx では fullchain.pem を指定して直す。</summary>
+  </entry>
   <entry>
     <title>b に append しただけなのに、なぜ別の変数 c の中身まで変わるのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-11-07.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-10-26.html</id>
     <updated>2026-10-26T08:23:47+09:00</updated>
     <summary>free した領域は上端に使用中が残る限り OS に返らず、glibc malloc はスレッド競合を避けてアリーナを最大コア数の 8 倍まで増やすため空きが分散する。MALLOC_ARENA_MAX=2 か jemalloc で抑える。</summary>
-  </entry>
-  <entry>
-    <title>同じ UUID の主キーなのに、なぜ v4 だとテーブルが育つほど INSERT が重くなるのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-10-25.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-10-25.html</id>
-    <updated>2026-10-25T08:23:05+09:00</updated>
-    <summary>B+Tree はキー順に並ぶため、乱数の UUIDv4 は挿入先がインデックス全体に散りページ分割とメモリ圧迫を招く。先頭 48 ビットが時刻の UUIDv7 は右端に入り連番に近い書き込みになる。</summary>
   </entry>
 </feed>

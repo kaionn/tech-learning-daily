@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tech Learning Daily — ブラウザでは鍵マークが付くのに、なぜ curl だけ証明書エラーになるのか？</title>
+  <link rel="stylesheet" href="../style.css">
+  <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="../feed.xml">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Tech Learning Daily</h1>
+      <div class="date">2026-11-08 (Sun) — 第 114 号</div>
+      <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
+    </header>
+
+    <article class="article">
+      <div class="meta-bar">
+        <span class="tag tag-network">Network</span>
+        <span class="difficulty">🌿 基礎</span>
+        <span class="read-time">⏱ 約 7 分</span>
+      </div>
+      <h2 class="article-title">ブラウザでは鍵マークが付くのに、なぜ curl だけ証明書エラーになるのか？</h2>
+      <p class="lead">証明書を更新した翌日、外部サービスからの Webhook が全部失敗し始めた。ブラウザで開くと鍵マークは正常で、証明書も期限内だ。ところがサーバーから <code>curl</code> を叩くと <code>unable to get local issuer certificate</code> と言われる。同じ URL・同じ証明書なのに、なぜクライアントによって結果が割れるのだろうか。</p>
+
+      <div class="tldr">
+        <div class="box-title">🎯 3 行まとめ</div>
+        <ul>
+          <li>サーバー証明書はルート CA が直接署名したものではなく、間の「中間証明書」を経由してルートに繋がる。この中間証明書はサーバーが TLS ハンドシェイクで一緒に送る決まりになっている。</li>
+          <li>中間証明書を送り忘れても、ブラウザは過去に見た中間証明書のキャッシュや AIA による取得で穴を埋めてしまうことがある。OpenSSL ベースの curl や多くのアプリはそれをしないので失敗する。</li>
+          <li>直し方はクライアント側ではなくサーバー側にある。nginx なら <code>ssl_certificate</code> に <code>cert.pem</code> ではなく <code>fullchain.pem</code> を指定し、<code>openssl s_client</code> で 2 枚以上届いているか確かめる。</li>
+        </ul>
+      </div>
+
+      <section class="body-section">
+        <h3>証明書は 1 枚ではなく「鎖」で信頼される</h3>
+        <p>TLS でクライアントがサーバーを信用する仕組みは、ブラウザや OS に最初から入っている<strong>ルート証明書</strong>（信頼の起点として手元に保存された CA の証明書）を出発点にしている。ただし、ルート CA の秘密鍵で個々のサイトの証明書に直接署名することはまずない。ルートの鍵はオフラインで厳重に保管され、日々の発行にはルートが署名した<strong>中間証明書</strong>（ルートと個々のサイトの間に立つ CA の証明書）の鍵が使われる。</p>
+        <p>そのため、クライアントは「サイトの証明書 → それに署名した中間 CA → それに署名したルート」と、発行者（issuer）を辿って手元のルートに行き着くかを確かめる。この並びを<strong>証明書チェーン</strong>と呼ぶ。手元にあるのはルートだけなので、途中の中間証明書はどこかから手に入れなければ鎖が繋がらない。</p>
+        <p>TLS 1.3 の仕様（RFC 8446 §4.4.2）は、サーバーが送る証明書リストの先頭に自分の証明書を置き、続く各証明書は直前のものを署名した証明書であるべきだと定めている。手元にあるはずのルート自体は省略してよい。中間証明書を届けるのはサーバーの責任である。</p>
+        <pre class="diagram"> サーバーが送る Certificate
+┌──────────────────────────┐
+│ #0 *.example.com         │
+│    issuer: Intermediate  │
+├──────────────────────────┤
+│ #1 Intermediate CA       │
+│    issuer: Root CA       │
+└────────────┬─────────────┘
+             ▼ issuer を辿る
+┌──────────────────────────┐
+│ Root CA (not sent)       │
+│ built into OS/browser    │
+└──────────────────────────┘</pre>
+      </section>
+
+      <div class="analogy">
+        <div class="box-title">🍱 たとえるなら</div>
+        <p>紹介状の束に近い。初対面の相手（サイト）が「A 社の部長の紹介です」と書いた紹介状を持ってきても、あなたが知っているのは A 社の社長だけだ。部長宛てに社長が書いた推薦状も一緒に出してもらえれば「社長 → 部長 → この人」と繋がる。部長の推薦状を持ってこなかった場合、前にその部長に会ったことがある人なら通してしまうが、初めての人は門前払いにする。</p>
+      </div>
+
+      <section class="body-section">
+        <h3>ブラウザは「送り忘れ」を黙って補ってしまう</h3>
+        <p>中間証明書が欠けたら、どのクライアントでも同じように失敗しそうに思える。しかし実際はブラウザの多くが穴を自力で埋める。nginx の公式ドキュメントも、よく使われているブラウザは受け取った中間証明書を保存しておくため、チェーンを付け忘れた証明書でもエラーにならないことがあると注意している。</p>
+        <p>補う手段はほかにもある。証明書には <strong>AIA（Authority Information Access）</strong>という拡張があり、「この証明書の発行者の証明書はこの URL で取れる」という情報（CA Issuers）が入っている。Chromium にはこの URL から欠けた中間証明書を取りに行く処理が実装されている。Firefox は別の方式で、信頼された中間 CA 証明書をあらかじめ一括ダウンロードしておく（Mozilla によれば Firefox 68 で導入）。</p>
+        <p>一方、curl が Linux で使う OpenSSL は AIA を辿って取りに行かない。curl にはこれを求める機能要望（issue #2793）が立っているが、OpenSSL ビルドの curl はサーバーが送ってきた証明書と手元のルートだけでチェーンを組もうとし、繋がらなければ <code>unable to get local issuer certificate</code>（発行者が見つからない）で止まる。Ruby の <code>Net::HTTP</code> や Python の <code>requests</code> のように OpenSSL で検証する HTTP クライアントも同じ側にいる。これが冒頭の「ブラウザでは平気なのに Webhook が落ちる」の正体だ。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>設定ミスの多くは「ファイルの選び間違い」</h3>
+        <p>チェーン欠けは、証明書ファイルの選び方で起きることが多い。Let's Encrypt の certbot は 4 つのファイルを作り、公式ドキュメントによれば <code>cert.pem</code> はサーバー証明書単体、<code>chain.pem</code> は中間証明書、<code>fullchain.pem</code> はサーバー証明書を先頭に中間証明書を続けたもの、<code>privkey.pem</code> は秘密鍵である。nginx の <code>ssl_certificate</code> に必要なのは <code>fullchain.pem</code> だと明記されている。</p>
+        <pre class="code"># nginx: ssl_certificate には中間まで含むファイルを渡す
+ssl_certificate     /etc/letsencrypt/live/example.com/fullchain.pem;
+ssl_certificate_key /etc/letsencrypt/live/example.com/privkey.pem;
+
+# ✗ cert.pem を渡すと #0 しか送られない
+# ssl_certificate   /etc/letsencrypt/live/example.com/cert.pem;</pre>
+        <p><code>cert.pem</code> を指定しても nginx は普通に起動し、ブラウザでの確認も通ってしまうことがある。前の節のとおりブラウザが穴を埋めるからで、だから気づかれないまま本番に出る。有料 CA から証明書を受け取った場合も、サイト証明書とは別に「中間証明書バンドル」が渡されることがある。nginx のドキュメントは、サーバー証明書を先、バンドルを後に <code>cat</code> で 1 ファイルに連結する方法を示している。順序を逆にすると、nginx は先頭の証明書（中間 CA）と秘密鍵を組み合わせようとして <code>key values mismatch</code> で起動に失敗する。</p>
+        <p>Apache も同様で、certbot のドキュメントによれば 2.4.8 以降は <code>SSLCertificateFile</code> に <code>fullchain.pem</code> を渡す。それより古い版では <code>SSLCertificateFile</code> に <code>cert.pem</code>、<code>SSLCertificateChainFile</code> に <code>chain.pem</code> と分けて指定する。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>クライアント側で「直す」のは筋が悪い</h3>
+        <p>curl が失敗したとき、<code>-k</code>（<code>--insecure</code>）や <code>verify: false</code> で検証を切る手がまず目に入る。これは「繋がらない」を「誰とでも繋がる」に変えるだけで、中間者攻撃を検出する仕組みそのものを捨てる。チェーン欠けへの対処としては釣り合わない。</p>
+        <p>呼び出し側で欠けた中間証明書を CA バンドルに追加すれば一時的に通るが、これも勧めにくい。中間証明書は CA の都合で切り替わることがあり、追加した 1 枚が古くなった時点で再び壊れる。相手のサーバーを管理できない場合は先方に「チェーンが不完全です」と <code>openssl s_client</code> の出力を添えて連絡し、自分のサーバーならチェーンを送る設定に直すのが本来の対応だ。</p>
+      </section>
+
+      <div class="practical">
+        <div class="box-title">💼 実務でどう出会うか</div>
+        <p>典型は「証明書を手で入れ替えた直後から、決済代行や Slack などの Webhook・モバイルアプリ・バッチだけが失敗する」という報告だ。ブラウザで確認すると正常なので、原因がアプリ側だと誤解されやすい。サーバー間通信のエラーに <code>unable to get local issuer certificate</code> や <code>unable to verify the first certificate</code> が出ていたら、まず相手（または自分）のサーバーが送っている証明書の枚数を数える。ALB や CloudFront のようなマネージドサービスに証明書をインポートする場合も、チェーン用の入力欄に中間証明書を入れ忘れると同じことが起きうる。</p>
+      </div>
+
+      <div class="hands-on">
+        <div class="box-title">⌨️ 手を動かす（5 分）</div>
+        <p>badssl.com が用意している「中間証明書をわざと送らないサーバー」と、正しく送るサーバーを比べる。</p>
+        <pre class="code"># 1) チェーンが欠けたサーバー: 届く証明書の数を見る
+echo | openssl s_client -connect incomplete-chain.badssl.com:443 \
+  -servername incomplete-chain.badssl.com -showcerts 2>/dev/null \
+  | grep -E '^ *[0-9]+ s:|Verify return code'
+
+# 2) 正しいサーバー
+echo | openssl s_client -connect badssl.com:443 \
+  -servername badssl.com -showcerts 2>/dev/null \
+  | grep -E '^ *[0-9]+ s:|Verify return code'
+
+# 3) 欠けた方の証明書に書かれた AIA（発行者の取得先）
+echo | openssl s_client -connect incomplete-chain.badssl.com:443 \
+  -servername incomplete-chain.badssl.com 2>/dev/null \
+  | openssl x509 -noout -ext authorityInfoAccess
+
+# 4) curl で叩く
+curl -sS -o /dev/null https://incomplete-chain.badssl.com/</pre>
+        <p>1) では <code>0 s:</code> の 1 行しか出ず、検証結果は <code>unable to verify the first certificate</code> になる。2) では <code>0</code>・<code>1</code>…と中間証明書まで並び <code>0 (ok)</code> になる。3) には <code>CA Issuers - URI:</code> として中間証明書の取得先が出る。ブラウザが辿りうるのはこの URL だ。4) は OpenSSL ビルドの curl なら証明書エラーで終わる（macOS 標準の curl はビルドが異なるため結果が違う可能性がある）。同じ URL を Chrome で開いて結果を比べるとよい。</p>
+      </div>
+
+      <div class="misconceptions">
+        <div class="box-title">🙅 よくある誤解</div>
+        <ul>
+          <li><span class="wrong">ブラウザで鍵マークが出ているから証明書の設定は正しい</span> — ブラウザはキャッシュや AIA・事前ダウンロードで欠けた中間証明書を補うことがある。設定の確認は <code>openssl s_client</code> で届いた枚数を見て行う。</li>
+          <li><span class="wrong">curl の証明書エラーは手元の CA バンドルが古いせいだ</span> — それが原因のこともあるが、<code>s_client</code> で 1 枚しか届いていなければサーバー側のチェーン欠けである。CA バンドルを更新しても直らない。</li>
+          <li><span class="wrong">ルート証明書まで全部送るのが一番安全だ</span> — ルートはクライアントが手元に持っている前提で、RFC 8446 でも省略してよいとされている。送るべきは自分の証明書と中間証明書で、ルートを足しても信頼は増えない。</li>
+        </ul>
+      </div>
+
+      <div class="glossary">
+        <div class="box-title">📖 用語ミニ辞典</div>
+        <dl>
+          <dt>ルート証明書</dt><dd>OS やブラウザに最初から入っている、信頼の起点となる CA の自己署名証明書。</dd>
+          <dt>中間証明書</dt><dd>ルート CA が署名し、サイトの証明書に署名する CA の証明書。サーバーが送る責任を持つ。</dd>
+          <dt>証明書チェーン</dt><dd>サイト証明書から発行者を辿ってルートに至る証明書の並び。</dd>
+          <dt>AIA（Authority Information Access）</dt><dd>発行者の証明書の取得先 URL などを記した証明書の拡張。</dd>
+          <dt>fullchain.pem</dt><dd>certbot が作る、サーバー証明書の後ろに中間証明書を続けたファイル。</dd>
+        </dl>
+      </div>
+
+      <div class="further-reading">
+        <div class="box-title">🔗 もっと深く</div>
+        <ul>
+          <li><a href="https://nginx.org/en/docs/http/configuring_https_servers.html#chains">Configuring HTTPS servers — SSL certificate chains（nginx）</a> — ブラウザごとに結果が割れる理由、連結の順序、<code>s_client</code> での確認手順が公式に揃っている。</li>
+          <li><a href="https://eff-certbot.readthedocs.io/en/stable/using.html#where-are-my-certificates">Where are my certificates?（certbot）</a> — <code>cert.pem</code>・<code>chain.pem</code>・<code>fullchain.pem</code> の中身と、nginx・Apache それぞれに渡すべきファイル。</li>
+          <li><a href="https://blog.mozilla.org/security/2020/11/13/preloading-intermediate-ca-certificates-into-firefox/">Preloading Intermediate CA Certificates into Firefox（Mozilla Security Blog）</a> — ブラウザがサーバーの設定ミスをどう肩代わりしているかの一例。</li>
+          <li><a href="https://www.rfc-editor.org/rfc/rfc8446#section-4.4.2">RFC 8446 §4.4.2 Certificate</a> — サーバーが送る証明書リストの順序とルートを省略してよいことの一次ソース。</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- recent:start -->
+    <!-- recent:end -->
+
+    <footer>
+      <p>Generated by Claude Code (GitHub Actions)</p>
+      <a href="./" class="archive-link">過去の記事</a>
+    </footer>
+  </div>
+</body>
+</html>

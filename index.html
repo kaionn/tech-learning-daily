@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tech Learning Daily — b に append しただけなのに、なぜ別の変数 c の中身まで変わるのか？</title>
+  <title>Tech Learning Daily — ブラウザでは鍵マークが付くのに、なぜ curl だけ証明書エラーになるのか？</title>
   <link rel="stylesheet" href="style.css">
   <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="feed.xml">
   <link rel="icon" href="/favicon.ico" sizes="48x48">
@@ -14,146 +14,134 @@
   <div class="container">
     <header>
       <h1>Tech Learning Daily</h1>
-      <div class="date">2026-11-07 (Sat) — 第 113 号</div>
+      <div class="date">2026-11-08 (Sun) — 第 114 号</div>
       <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
     </header>
 
     <article class="article">
       <div class="meta-bar">
-        <span class="tag tag-lang">Lang</span>
+        <span class="tag tag-network">Network</span>
         <span class="difficulty">🌿 基礎</span>
         <span class="read-time">⏱ 約 7 分</span>
       </div>
-      <h2 class="article-title">b に append しただけなのに、なぜ別の変数 c の中身まで変わるのか？</h2>
-      <p class="lead">Go で再帰を書き、途中の経路 <code>path</code> に要素を足しながら結果を <code>res = append(res, append(path, x))</code> と集めた。期待したのは <code>[[1] [2] [3]]</code> なのに、出力は <code>[[3] [3] [3]]</code> だった。<code>append</code> は「新しい slice を返す関数」のはずではなかったか。</p>
+      <h2 class="article-title">ブラウザでは鍵マークが付くのに、なぜ curl だけ証明書エラーになるのか？</h2>
+      <p class="lead">証明書を更新した翌日、外部サービスからの Webhook が全部失敗し始めた。ブラウザで開くと鍵マークは正常で、証明書も期限内だ。ところがサーバーから <code>curl</code> を叩くと <code>unable to get local issuer certificate</code> と言われる。同じ URL・同じ証明書なのに、なぜクライアントによって結果が割れるのだろうか。</p>
 
       <div class="tldr">
         <div class="box-title">🎯 3 行まとめ</div>
         <ul>
-          <li>Go の slice は「配列へのポインタ・長さ・容量」の 3 つ組にすぎない。slice をコピーしたり切り出したりしても、指している配列は同じままだ。</li>
-          <li><code>append</code> は容量に空きがあれば既存の配列にそのまま書き込み、足りないときだけ新しい配列を確保する。空きがあると、同じ配列を指す別の slice の中身まで書き換わる。</li>
-          <li>共有させたくないときは <code>s[low:high:max]</code> や <code>slices.Clip</code> で容量を長さに揃えるか、<code>slices.Clone</code> でコピーしてから <code>append</code> する。</li>
+          <li>サーバー証明書はルート CA が直接署名したものではなく、間の「中間証明書」を経由してルートに繋がる。この中間証明書はサーバーが TLS ハンドシェイクで一緒に送る決まりになっている。</li>
+          <li>中間証明書を送り忘れても、ブラウザは過去に見た中間証明書のキャッシュや AIA による取得で穴を埋めてしまうことがある。OpenSSL ベースの curl や多くのアプリはそれをしないので失敗する。</li>
+          <li>直し方はクライアント側ではなくサーバー側にある。nginx なら <code>ssl_certificate</code> に <code>cert.pem</code> ではなく <code>fullchain.pem</code> を指定し、<code>openssl s_client</code> で 2 枚以上届いているか確かめる。</li>
         </ul>
       </div>
 
       <section class="body-section">
-        <h3>slice は配列そのものではなく「配列の窓」である</h3>
-        <p>Go 公式ブログの解説によれば、slice は配列の一区間を表す小さな記述子で、<strong>配列へのポインタ</strong>・<strong>長さ</strong>（<code>len</code>: いま見えている要素数）・<strong>容量</strong>（<code>cap</code>: ポインタの位置から配列の末尾までの要素数）の 3 つを持つ。この 3 つ組を <strong>slice ヘッダ</strong> と呼ぶ。要素の実体は、ヘッダの外にある <strong>基底配列</strong>（underlying array: slice が指す実際のメモリ領域）に並んでいる。</p>
-        <p>そのため <code>t := s</code> と代入したり <code>s[1:3]</code> で切り出したりしても、コピーされるのはヘッダだけだ。同ブログは「slicing does not copy the slice's data」と明言している。<code>t[0] = 9</code> と書けば、同じ配列を指す <code>s</code> からも 9 が見える。</p>
-        <pre class="diagram">s := make([]int, 3, 4)
-t := s
-
- s ヘッダ  ptr ─┐ len=3 cap=4
-                │
- t ヘッダ  ptr ─┤ len=3 cap=4
-                ▼
- 基底配列      ┌──┬──┬──┬──┐
-               │0 │0 │0 │  │◀ 空き
-               └──┴──┴──┴──┘
-  （ヘッダは 2 つ、配列は 1 つ）</pre>
-        <p>関数に slice を渡したときも同じである。公式ブログの言い方では、関数が受け取るのは「slice ヘッダのコピー」だ。中の要素を書き換えれば呼び出し元にも見えるが、呼び出し先で長さを伸ばしても、呼び出し元のヘッダの <code>len</code> は変わらない。</p>
-      </section>
-
-      <section class="body-section">
-        <h3>append は容量に空きがあれば上書きする</h3>
-        <p>言語仕様は <code>append</code> の挙動を 2 つに分けて書いている。容量が足りなければ「新しい、十分な大きさの基底配列を確保」する。そうでなければ「基底配列を再利用する」。<code>append</code> は新しい slice ヘッダを返す。しかし、その中のポインタが新しい配列を指すとは限らない。</p>
-        <p>冒頭のバグはこの「再利用」の側で起きている。<code>path</code> は <code>make([]int, 0, 4)</code> で長さ 0・容量 4 だった。<code>append(path, 1)</code> は空きの先頭、つまり配列の 0 番目に 1 を書いて、長さ 1 のヘッダを返す。次の <code>append(path, 2)</code> も、<code>path</code> の長さは 0 のままなので同じ 0 番目に 2 を書く。<code>res</code> に入った 3 つの slice は全部同じ配列の 0 番目を見ているので、最後に書いた 3 が 3 回並ぶ。</p>
-        <pre class="code">path := make([]int, 0, 4)
-for _, x := range []int{1, 2, 3} {
-    res = append(res, append(path, x))
-}
-fmt.Println(res) // [[3] [3] [3]]</pre>
-        <p>直感では「<code>append</code> は配列を伸ばす操作」に見える。しかし実際に <code>append</code> がしているのは「<code>len</code> の位置に書き、<code>len</code> を 1 つ増やしたヘッダを返す」ことだけだ。その位置が他の slice からも見えるかどうかを、<code>append</code> は気にしない。</p>
+        <h3>証明書は 1 枚ではなく「鎖」で信頼される</h3>
+        <p>TLS でクライアントがサーバーを信用する仕組みは、ブラウザや OS に最初から入っている<strong>ルート証明書</strong>（信頼の起点として手元に保存された CA の証明書）を出発点にしている。ただし、ルート CA の秘密鍵で個々のサイトの証明書に直接署名することはまずない。ルートの鍵はオフラインで厳重に保管され、日々の発行にはルートが署名した<strong>中間証明書</strong>（ルートと個々のサイトの間に立つ CA の証明書）の鍵が使われる。</p>
+        <p>そのため、クライアントは「サイトの証明書 → それに署名した中間 CA → それに署名したルート」と、発行者（issuer）を辿って手元のルートに行き着くかを確かめる。この並びを<strong>証明書チェーン</strong>と呼ぶ。手元にあるのはルートだけなので、途中の中間証明書はどこかから手に入れなければ鎖が繋がらない。</p>
+        <p>TLS 1.3 の仕様（RFC 8446 §4.4.2）は、サーバーが送る証明書リストの先頭に自分の証明書を置き、続く各証明書は直前のものを署名した証明書であるべきだと定めている。手元にあるはずのルート自体は省略してよい。中間証明書を届けるのはサーバーの責任である。</p>
+        <pre class="diagram"> サーバーが送る Certificate
+┌──────────────────────────┐
+│ #0 *.example.com         │
+│    issuer: Intermediate  │
+├──────────────────────────┤
+│ #1 Intermediate CA       │
+│    issuer: Root CA       │
+└────────────┬─────────────┘
+             ▼ issuer を辿る
+┌──────────────────────────┐
+│ Root CA (not sent)       │
+│ built into OS/browser    │
+└──────────────────────────┘</pre>
       </section>
 
       <div class="analogy">
         <div class="box-title">🍱 たとえるなら</div>
-        <p>1 冊のノートを複数人で共有し、各自が「自分は何ページ目まで書いたか」を付箋で持っている状態だ。付箋（slice ヘッダ）は人ごとに別々でも、ノート（基底配列）は 1 冊しかない。A さんの付箋が 3 ページ目、B さんの付箋も 3 ページ目なら、2 人とも「次は 4 ページ目」に書き込み、後から書いたほうが残る。ノートが最後のページまで埋まったときだけ、書き手は新しいノートに全部写してから書き足す。</p>
+        <p>紹介状の束に近い。初対面の相手（サイト）が「A 社の部長の紹介です」と書いた紹介状を持ってきても、あなたが知っているのは A 社の社長だけだ。部長宛てに社長が書いた推薦状も一緒に出してもらえれば「社長 → 部長 → この人」と繋がる。部長の推薦状を持ってこなかった場合、前にその部長に会ったことがある人なら通してしまうが、初めての人は門前払いにする。</p>
       </div>
 
       <section class="body-section">
-        <h3>「たまにしか壊れない」のは再確保が起きるかどうかで分かれるから</h3>
-        <p>この種のバグが厄介なのは、容量が足りなくなった瞬間に症状が消えることだ。容量を超える <code>append</code> は新しい配列に要素を写すため、そこから先は元の slice と縁が切れる。同じコードでも、元の slice の容量にたまたま空きがあれば共有が起き、ちょうど満杯なら起きない。</p>
-        <p>再確保のときに容量をいくつにするかは、言語仕様では決まっていない。Go 1.18 のリリースノートも「append が新しい配列を確保するときの成長の計算式を少し変えた」と書くだけで、式そのものは仕様として約束していない。そのため「容量は毎回 2 倍になるから、ここでは必ず再確保される」という前提でコードを書くと、バージョンや要素数が変わったときに挙動が変わりうる。</p>
-        <p>共有は切り出しでも起きる。<code>head := s[:2]</code> の容量は <code>s</code> の末尾までなので、<code>append(head, 99)</code> は <code>s[2]</code> を上書きする。「先頭 2 件だけ取り出して加工したつもりが、元のデータの 3 件目が消えていた」という形で表に出る。</p>
+        <h3>ブラウザは「送り忘れ」を黙って補ってしまう</h3>
+        <p>中間証明書が欠けたら、どのクライアントでも同じように失敗しそうに思える。しかし実際はブラウザの多くが穴を自力で埋める。nginx の公式ドキュメントも、よく使われているブラウザは受け取った中間証明書を保存しておくため、チェーンを付け忘れた証明書でもエラーにならないことがあると注意している。</p>
+        <p>補う手段はほかにもある。証明書には <strong>AIA（Authority Information Access）</strong>という拡張があり、「この証明書の発行者の証明書はこの URL で取れる」という情報（CA Issuers）が入っている。Chromium にはこの URL から欠けた中間証明書を取りに行く処理が実装されている。Firefox は別の方式で、信頼された中間 CA 証明書をあらかじめ一括ダウンロードしておく（Mozilla によれば Firefox 68 で導入）。</p>
+        <p>一方、curl が Linux で使う OpenSSL は AIA を辿って取りに行かない。curl にはこれを求める機能要望（issue #2793）が立っているが、OpenSSL ビルドの curl はサーバーが送ってきた証明書と手元のルートだけでチェーンを組もうとし、繋がらなければ <code>unable to get local issuer certificate</code>（発行者が見つからない）で止まる。Ruby の <code>Net::HTTP</code> や Python の <code>requests</code> のように OpenSSL で検証する HTTP クライアントも同じ側にいる。これが冒頭の「ブラウザでは平気なのに Webhook が落ちる」の正体だ。</p>
       </section>
 
       <section class="body-section">
-        <h3>容量を絞れば、次の append は新しい配列に書く</h3>
-        <p>言語仕様には <strong>full slice expression</strong>（3 つ目の添字で容量まで指定する切り出し）がある。<code>a[low:high:max]</code> は <code>a[low:high]</code> と同じ要素を持ち、容量を <code>max - low</code> にする。<code>max</code> を <code>high</code> と同じにすると容量が長さに一致し、空きがゼロになる。空きがなければ次の <code>append</code> は新しい配列を確保するので、元の配列には触れない。</p>
-        <pre class="code">// 容量 = 長さ にしてから渡す
-res = append(res, append(path[:len(path):len(path)], x))
+        <h3>設定ミスの多くは「ファイルの選び間違い」</h3>
+        <p>チェーン欠けは、証明書ファイルの選び方で起きることが多い。Let's Encrypt の certbot は 4 つのファイルを作り、公式ドキュメントによれば <code>cert.pem</code> はサーバー証明書単体、<code>chain.pem</code> は中間証明書、<code>fullchain.pem</code> はサーバー証明書を先頭に中間証明書を続けたもの、<code>privkey.pem</code> は秘密鍵である。nginx の <code>ssl_certificate</code> に必要なのは <code>fullchain.pem</code> だと明記されている。</p>
+        <pre class="code"># nginx: ssl_certificate には中間まで含むファイルを渡す
+ssl_certificate     /etc/letsencrypt/live/example.com/fullchain.pem;
+ssl_certificate_key /etc/letsencrypt/live/example.com/privkey.pem;
 
-// Go 1.21+ の slices パッケージなら
-res = append(res, append(slices.Clip(path), x))
+# ✗ cert.pem を渡すと #0 しか送られない
+# ssl_certificate   /etc/letsencrypt/live/example.com/cert.pem;</pre>
+        <p><code>cert.pem</code> を指定しても nginx は普通に起動し、ブラウザでの確認も通ってしまうことがある。前の節のとおりブラウザが穴を埋めるからで、だから気づかれないまま本番に出る。有料 CA から証明書を受け取った場合も、サイト証明書とは別に「中間証明書バンドル」が渡されることがある。nginx のドキュメントは、サーバー証明書を先、バンドルを後に <code>cat</code> で 1 ファイルに連結する方法を示している。順序を逆にすると、nginx は先頭の証明書（中間 CA）と秘密鍵を組み合わせようとして <code>key values mismatch</code> で起動に失敗する。</p>
+        <p>Apache も同様で、certbot のドキュメントによれば 2.4.8 以降は <code>SSLCertificateFile</code> に <code>fullchain.pem</code> を渡す。それより古い版では <code>SSLCertificateFile</code> に <code>cert.pem</code>、<code>SSLCertificateChainFile</code> に <code>chain.pem</code> と分けて指定する。</p>
+      </section>
 
-// 呼び出し先に渡す前に丸ごと複製する
-safe := slices.Clone(head)</pre>
-        <p><code>slices.Clip(s)</code> の中身は <code>s[:len(s):len(s)]</code> だと公式ドキュメントに書かれている。<code>slices.Clone</code> は要素をコピーした別の slice を返す。ただし「浅いコピー」なので、要素がポインタや slice なら、その先は共有されたまま残る。</p>
-        <p>どちらを使うかは目的で決まる。「この slice に後から足されても元を壊さないでほしい」なら <code>Clip</code> で容量を絞れば足りる。「受け取った側が要素を書き換えるかもしれない」なら、<code>Clone</code> で配列ごと分けるしかない。</p>
+      <section class="body-section">
+        <h3>クライアント側で「直す」のは筋が悪い</h3>
+        <p>curl が失敗したとき、<code>-k</code>（<code>--insecure</code>）や <code>verify: false</code> で検証を切る手がまず目に入る。これは「繋がらない」を「誰とでも繋がる」に変えるだけで、中間者攻撃を検出する仕組みそのものを捨てる。チェーン欠けへの対処としては釣り合わない。</p>
+        <p>呼び出し側で欠けた中間証明書を CA バンドルに追加すれば一時的に通るが、これも勧めにくい。中間証明書は CA の都合で切り替わることがあり、追加した 1 枚が古くなった時点で再び壊れる。相手のサーバーを管理できない場合は先方に「チェーンが不完全です」と <code>openssl s_client</code> の出力を添えて連絡し、自分のサーバーならチェーンを送る設定に直すのが本来の対応だ。</p>
       </section>
 
       <div class="practical">
         <div class="box-title">💼 実務でどう出会うか</div>
-        <p>典型は 3 つある。1 つ目は冒頭のような再帰・バックトラックで、経路の slice を使い回して結果に追加するときに起きる。2 つ目は「共通のベース設定に項目を足す」処理で、<code>base := []string{"-v", "-x"}</code> を元に <code>append(base, "a")</code> と <code>append(base, "b")</code> を作ると、<code>base</code> の容量に空きがある場合だけ互いを上書きする。3 つ目はメモリで、Go 公式ブログは大きなファイルを読み込んだ <code>[]byte</code> から数バイトだけ切り出して返すと、ファイル全体の配列が GC されずに残り続けると注意している。対策はどれも同じで、必要な分だけ新しい slice に <code>copy</code>（または <code>slices.Clone</code>）してから返す。</p>
+        <p>典型は「証明書を手で入れ替えた直後から、決済代行や Slack などの Webhook・モバイルアプリ・バッチだけが失敗する」という報告だ。ブラウザで確認すると正常なので、原因がアプリ側だと誤解されやすい。サーバー間通信のエラーに <code>unable to get local issuer certificate</code> や <code>unable to verify the first certificate</code> が出ていたら、まず相手（または自分）のサーバーが送っている証明書の枚数を数える。ALB や CloudFront のようなマネージドサービスに証明書をインポートする場合も、チェーン用の入力欄に中間証明書を入れ忘れると同じことが起きうる。</p>
       </div>
 
       <div class="hands-on">
         <div class="box-title">⌨️ 手を動かす（5 分）</div>
-        <p>容量に空きがある slice に 2 回 <code>append</code> したときと、容量を絞ってから <code>append</code> したときの違いを確かめる。Go が入っていれば次をそのまま貼り付けて実行できる（入っていなければ Go Playground に <code>main.go</code> の中身を貼ってもよい）。</p>
-        <pre class="code">mkdir -p /tmp/slicedemo &amp;&amp; cd /tmp/slicedemo
-cat &gt; main.go &lt;&lt;'EOF'
-package main
+        <p>badssl.com が用意している「中間証明書をわざと送らないサーバー」と、正しく送るサーバーを比べる。</p>
+        <pre class="code"># 1) チェーンが欠けたサーバー: 届く証明書の数を見る
+echo | openssl s_client -connect incomplete-chain.badssl.com:443 \
+  -servername incomplete-chain.badssl.com -showcerts 2>/dev/null \
+  | grep -E '^ *[0-9]+ s:|Verify return code'
 
-import "fmt"
+# 2) 正しいサーバー
+echo | openssl s_client -connect badssl.com:443 \
+  -servername badssl.com -showcerts 2>/dev/null \
+  | grep -E '^ *[0-9]+ s:|Verify return code'
 
-func main() {
-	a := make([]int, 3, 4)
-	b := append(a, 1)
-	c := append(a, 2)
-	fmt.Println("b:", b, "c:", c)
+# 3) 欠けた方の証明書に書かれた AIA（発行者の取得先）
+echo | openssl s_client -connect incomplete-chain.badssl.com:443 \
+  -servername incomplete-chain.badssl.com 2>/dev/null \
+  | openssl x509 -noout -ext authorityInfoAccess
 
-	d := append(a[:3:3], 1)
-	e := append(a[:3:3], 2)
-	fmt.Println("d:", d, "e:", e)
-
-	s := []int{1, 2, 3, 4}
-	head := s[:2]
-	head = append(head, 99)
-	fmt.Println("s:", s, "head:", head)
-}
-EOF
-go run main.go</pre>
-        <p><code>b: [0 0 0 2] c: [0 0 0 2]</code> と出るはずだ。<code>b</code> に入れたはずの 1 が、後の <code>append(a, 2)</code> に上書きされている。容量を 3 に絞った <code>d</code> と <code>e</code> は <code>[0 0 0 1]</code> と <code>[0 0 0 2]</code> に分かれる。最後の行では <code>s</code> が <code>[1 2 99 4]</code> になり、切り出しへの <code>append</code> が元の 3 件目を書き換えたことが分かる。</p>
+# 4) curl で叩く
+curl -sS -o /dev/null https://incomplete-chain.badssl.com/</pre>
+        <p>1) では <code>0 s:</code> の 1 行しか出ず、検証結果は <code>unable to verify the first certificate</code> になる。2) では <code>0</code>・<code>1</code>…と中間証明書まで並び <code>0 (ok)</code> になる。3) には <code>CA Issuers - URI:</code> として中間証明書の取得先が出る。ブラウザが辿りうるのはこの URL だ。4) は OpenSSL ビルドの curl なら証明書エラーで終わる（macOS 標準の curl はビルドが異なるため結果が違う可能性がある）。同じ URL を Chrome で開いて結果を比べるとよい。</p>
       </div>
 
       <div class="misconceptions">
         <div class="box-title">🙅 よくある誤解</div>
         <ul>
-          <li><span class="wrong">append は常に新しい slice（新しい配列）を作って返す</span> — 返るのは新しいヘッダだが、容量に空きがあれば中のポインタは元と同じ配列を指す。新しい配列が確保されるのは容量が足りないときだけだ。</li>
-          <li><span class="wrong">slice は参照型だから、関数内で append すれば呼び出し元にも要素が増える</span> — 関数が受け取るのはヘッダのコピーなので、呼び出し元の <code>len</code> は伸びない。だから <code>s = append(s, x)</code> のように戻り値を受け取る必要がある。</li>
-          <li><span class="wrong">容量は毎回 2 倍に増えるので、再確保のタイミングは予測できる</span> — 成長の計算式は仕様で決まっておらず、Go 1.18 でも変更された。共有の有無を再確保のタイミングに頼らず、<code>Clip</code> や <code>Clone</code> で明示する。</li>
+          <li><span class="wrong">ブラウザで鍵マークが出ているから証明書の設定は正しい</span> — ブラウザはキャッシュや AIA・事前ダウンロードで欠けた中間証明書を補うことがある。設定の確認は <code>openssl s_client</code> で届いた枚数を見て行う。</li>
+          <li><span class="wrong">curl の証明書エラーは手元の CA バンドルが古いせいだ</span> — それが原因のこともあるが、<code>s_client</code> で 1 枚しか届いていなければサーバー側のチェーン欠けである。CA バンドルを更新しても直らない。</li>
+          <li><span class="wrong">ルート証明書まで全部送るのが一番安全だ</span> — ルートはクライアントが手元に持っている前提で、RFC 8446 でも省略してよいとされている。送るべきは自分の証明書と中間証明書で、ルートを足しても信頼は増えない。</li>
         </ul>
       </div>
 
       <div class="glossary">
         <div class="box-title">📖 用語ミニ辞典</div>
         <dl>
-          <dt>slice ヘッダ</dt><dd>基底配列へのポインタ・長さ・容量の 3 つ組。代入や関数呼び出しではこれだけがコピーされる。</dd>
-          <dt>基底配列</dt><dd>slice が指している要素の実体が並ぶメモリ領域。複数の slice が同じ基底配列を共有しうる。</dd>
-          <dt>容量（cap）</dt><dd>slice の先頭から基底配列の末尾までの要素数。<code>append</code> が再確保せずに書き込める上限を決める。</dd>
-          <dt>full slice expression</dt><dd><code>a[low:high:max]</code> の形の切り出し。結果の容量を <code>max - low</code> に制限する。</dd>
-          <dt>slices.Clip</dt><dd>slice の容量を長さに揃えて返す関数。中身は <code>s[:len(s):len(s)]</code>。</dd>
+          <dt>ルート証明書</dt><dd>OS やブラウザに最初から入っている、信頼の起点となる CA の自己署名証明書。</dd>
+          <dt>中間証明書</dt><dd>ルート CA が署名し、サイトの証明書に署名する CA の証明書。サーバーが送る責任を持つ。</dd>
+          <dt>証明書チェーン</dt><dd>サイト証明書から発行者を辿ってルートに至る証明書の並び。</dd>
+          <dt>AIA（Authority Information Access）</dt><dd>発行者の証明書の取得先 URL などを記した証明書の拡張。</dd>
+          <dt>fullchain.pem</dt><dd>certbot が作る、サーバー証明書の後ろに中間証明書を続けたファイル。</dd>
         </dl>
       </div>
 
       <div class="further-reading">
         <div class="box-title">🔗 もっと深く</div>
         <ul>
-          <li><a href="https://go.dev/blog/slices-intro">Go Slices: usage and internals</a> — slice ヘッダの図解と、小さな切り出しが大きな配列を GC させない落とし穴の実例がある。</li>
-          <li><a href="https://go.dev/blog/slices">Arrays, slices (and strings): The mechanics of 'append'</a> — <code>append</code> を自作しながら、なぜ戻り値を受け取らなければならないのかを順に示す。</li>
-          <li><a href="https://go.dev/ref/spec#Appending_and_copying_slices">The Go Programming Language Specification: Appending to and copying slices</a> — 再利用と再確保の条件を定める一次ソース。full slice expression の定義は同じ仕様書の Slice expressions の節にある。</li>
-          <li><a href="https://pkg.go.dev/slices#Clip">slices.Clip（pkg.go.dev）</a> — <code>Clip</code> と <code>Clone</code> の正確な定義。</li>
+          <li><a href="https://nginx.org/en/docs/http/configuring_https_servers.html#chains">Configuring HTTPS servers — SSL certificate chains（nginx）</a> — ブラウザごとに結果が割れる理由、連結の順序、<code>s_client</code> での確認手順が公式に揃っている。</li>
+          <li><a href="https://eff-certbot.readthedocs.io/en/stable/using.html#where-are-my-certificates">Where are my certificates?（certbot）</a> — <code>cert.pem</code>・<code>chain.pem</code>・<code>fullchain.pem</code> の中身と、nginx・Apache それぞれに渡すべきファイル。</li>
+          <li><a href="https://blog.mozilla.org/security/2020/11/13/preloading-intermediate-ca-certificates-into-firefox/">Preloading Intermediate CA Certificates into Firefox（Mozilla Security Blog）</a> — ブラウザがサーバーの設定ミスをどう肩代わりしているかの一例。</li>
+          <li><a href="https://www.rfc-editor.org/rfc/rfc8446#section-4.4.2">RFC 8446 §4.4.2 Certificate</a> — サーバーが送る証明書リストの順序とルートを省略してよいことの一次ソース。</li>
         </ul>
       </div>
     </article>
@@ -161,6 +149,11 @@ go run main.go</pre>
     <!-- recent:start -->
     <section class="section recent-articles">
       <div class="section-title">最近の記事</div>
+      <div class="card">
+        <h3><a href="archive/2026-11-07.html">b に append しただけなのに、なぜ別の変数 c の中身まで変わるのか？</a></h3>
+        <div class="summary">Go の slice はヘッダ（ポインタ・長さ・容量）にすぎず、append は容量に空きがあれば共有中の基底配列に上書きする。再帰で結果が全部同じ値になる理由と、full slice expression・slices.Clip・slices.Clone で共有を断つ方法を解説。</div>
+        <div class="meta"><span class="tag tag-lang">Lang</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-07</span></div>
+      </div>
       <div class="card">
         <h3><a href="archive/2026-11-06.html">-p 3000:3000 と書いたのに、なぜコンテナのアプリに繋がらないのか？</a></h3>
         <div class="summary">コンテナ内の localhost はコンテナ自身だけを指し、-p の転送は eth0 側に届く。127.0.0.1 で待つアプリには繋がらないので 0.0.0.0 にバインドし、公開範囲は -p のホスト側で絞る。</div>
@@ -175,11 +168,6 @@ go run main.go</pre>
         <h3><a href="archive/2026-11-04.html">同じ 20 件を取るだけなのに、なぜ 5 万ページ目は 1 ページ目より何百倍も遅いのか？</a></h3>
         <div class="summary">OFFSET は捨てる行も読むため深いページほど遅くなる。前ページ最後のキー値から読む keyset ページネーションの仕組みと、行値比較・find_each・結果のずれまで解説。</div>
         <div class="meta"><span class="tag tag-db">DB</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-04</span></div>
-      </div>
-      <div class="card">
-        <h3><a href="archive/2026-11-03.html">Mac では動いたイメージなのに、なぜ本番サーバーでは exec format error で起動しないのか？</a></h3>
-        <div class="summary">Apple Silicon で普通に build したイメージは arm64 専用になり、amd64 サーバーではカーネルが機械語を拒否して exec format error になる。イメージインデックスの仕組み、Mac で amd64 が動く binfmt_misc/QEMU の裏側、--platform と BUILDPLATFORM/TARGETARCH での対策を解説。</div>
-        <div class="meta"><span class="tag tag-container">Container</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-03</span></div>
       </div>
       <div class="recent-more"><a href="archive/">アーカイブですべて見る →</a></div>
     </section>

@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-11-08.html",
+    "date": "2026-11-08",
+    "title": "ブラウザでは鍵マークが付くのに、なぜ curl だけ証明書エラーになるのか？",
+    "summary": "サーバー証明書はルートに直接繋がらず、間の中間証明書をサーバーが一緒に送る決まりがある。送り忘れてもブラウザはキャッシュや AIA で補うため気づかれにくく、OpenSSL ベースの curl やサーバー間通信だけが失敗する。fullchain.pem の指定と openssl s_client での確認方法を解説。",
+    "category": "network",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": ["ルート証明書", "中間証明書", "証明書チェーン", "AIA（Authority Information Access）", "fullchain.pem"]
+  },
+  {
     "file": "2026-11-07.html",
     "date": "2026-11-07",
     "title": "b に append しただけなのに、なぜ別の変数 c の中身まで変わるのか？",
