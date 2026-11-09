@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tech Learning Daily — ターミナルでは 1 行ずつ出るのに、なぜパイプや docker logs に通すとログがまとめて遅れて届くのか？</title>
+  <link rel="stylesheet" href="../style.css">
+  <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="../feed.xml">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Tech Learning Daily</h1>
+      <div class="date">2026-11-09 (Mon) — 第 115 号</div>
+      <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
+    </header>
+
+    <article class="article">
+      <div class="meta-bar">
+        <span class="tag tag-lang">Lang</span>
+        <span class="difficulty">🌿 基礎</span>
+        <span class="read-time">⏱ 約 7 分</span>
+      </div>
+      <h2 class="article-title">ターミナルでは 1 行ずつ出るのに、なぜパイプや docker logs に通すとログがまとめて遅れて届くのか？</h2>
+      <p class="lead">手元で <code>python worker.py</code> を動かすと進捗が 1 行ずつ流れる。ところが同じスクリプトを <code>| grep</code> に通したり、コンテナに入れて <code>docker logs -f</code> で眺めたりすると、しばらく何も出ず、ある瞬間に数十行がどっと届く。コードは 1 文字も変えていないのに、出力先が変わっただけで挙動が変わるのはなぜだろうか。</p>
+
+      <div class="tldr">
+        <div class="box-title">🎯 3 行まとめ</div>
+        <ul>
+          <li><code>print</code> や <code>printf</code> はすぐ OS に書き込まず、プロセス内のバッファに溜めてからまとめて <code>write</code> する。</li>
+          <li>C の stdio や Python は「出力先が端末なら行単位、パイプやファイルならバッファが一杯になるまで」と、出力先を見て溜め方を切り替える。</li>
+          <li>リアルタイムに流したいログは <code>PYTHONUNBUFFERED=1</code>・<code>$stdout.sync = true</code>・<code>grep --line-buffered</code> などで明示的に溜めない設定にする。</li>
+        </ul>
+      </div>
+
+      <section class="body-section">
+        <h3>print は「OS に書く」命令ではない</h3>
+        <p>プログラムが画面やファイルに何かを出すとき、最終的には <code>write</code> という<strong>システムコール</strong>（プロセスがカーネルに処理を頼む呼び出し）が実行される。システムコールはユーザー空間からカーネルへの切り替えを伴うため、1 文字ごとに呼ぶと出力量に比例してこの切り替えコストが積み上がる。</p>
+        <p>そこで C の標準入出力ライブラリ（<strong>stdio</strong>。<code>printf</code> や <code>fputs</code> を提供する層）や Python・Ruby の I/O 層は、プロセス内のメモリに<strong>出力バッファ</strong>を持つ。<code>print</code> はこのバッファに文字列を追記するだけで戻り、ある条件を満たしたときにバッファの中身を 1 回の <code>write</code> でまとめて OS に渡す。この「OS に渡す」操作を <strong>flush</strong> と呼ぶ。</p>
+        <pre class="diagram">  あなたのプロセス
+┌──────────────────────────┐
+│ print("tick 0")          │
+│ print("tick 1")          │
+│      │                   │
+│      ▼                   │
+│ ┌──────────────────────┐ │
+│ │出力バッファ(未送信)  │ │
+│ └──────────────────────┘ │
+└──────┬───────────────────┘
+       │ flush の条件を満たした時だけ
+       ▼ write(2) システムコール
+┌──────────────────────────┐
+│ カーネル                 │
+│ 端末 / パイプ / ファイル │
+└──────┬───────────────────┘
+       ▼
+  grep / docker logs / 画面</pre>
+        <p>つまり「print を実行した時刻」と「受け手がその行を受け取る時刻」は一致しない。受け手から見えるのは、バッファが flush された瞬間だけである。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>flush の条件は「出力先が端末かどうか」で変わる</h3>
+        <p>Linux の <code>setbuf(3)</code> の man ページは、ストリームのバッファリングを 3 種類に分けている。書いた瞬間に出る<strong>アンバッファ</strong>、改行が出力されるまで溜める<strong>行バッファ</strong>、一定量をまとめてブロックとして書く<strong>ブロックバッファ</strong>（フルバッファとも呼ぶ）だ。そして stdout が端末を指している場合は行バッファ、stderr は既定でアンバッファだと述べている。</p>
+        <p>ここで素朴に予想すると、「stdout は行バッファなのだから、パイプに流しても改行ごとに出るはずだ」と思える。しかし実際は違う。行バッファになるのは<strong>出力先が端末のとき</strong>に限られ、パイプやファイルにつながっているとブロックバッファに切り替わる。プログラムは起動時に「自分の stdout は端末か」を調べ（<code>isatty</code> という関数で判定できる）、その結果で溜め方を決めている。</p>
+        <p>Python の公式ドキュメントも同じ方針を明記している。対話的（端末）なら stdout は行バッファ、そうでなければ通常のテキストファイルと同じブロックバッファになる。stderr はどちらの場合も行バッファで、非対話時の stderr が行バッファになったのは Python 3.9 からだ。冒頭の現象は、端末からパイプに出力先が変わったことで、Python が改行ごとの flush をやめただけなのである。</p>
+        <p>この切り替えには理由がある。人が端末を見ているなら 1 行ごとに表示されないと困るが、ファイルやパイプの先にいるのは多くの場合プログラムで、表示の即時性よりも <code>write</code> の回数を減らすスループットの方が効く。出力先によって「誰が読んでいるか」を推測し、既定値を変えているわけだ。</p>
+      </section>
+
+      <div class="analogy">
+        <div class="box-title">🍱 たとえるなら</div>
+        <p>社内便の担当者だ。目の前で受け取りを待っている人（端末）がいれば、書類が 1 枚できるたびに手渡す。宛先が別フロアの郵便受け（パイプ・ファイル）だと、往復の手間を省くために箱が一杯になるまで溜めてから運ぶ。書類を書く速さは同じでも、受け取る側が書類を目にするタイミングは「運ぶ規則」で決まる。担当者が途中で倒れれば（プロセスの強制終了）、箱の中の書類は届かない。</p>
+      </div>
+
+      <section class="body-section">
+        <h3>docker logs も「パイプの先」である</h3>
+        <p>コンテナで同じ現象が起きるのは、<code>docker run</code> を <code>-t</code> なしで起動すると、コンテナの stdout が端末ではなくログを収集する側につながるからだ。プロセスから見れば出力先は端末ではないので、Python はブロックバッファを選ぶ。Kubernetes の <code>kubectl logs</code> でも、コンテナの stdout が端末でない点は同じなので、同様の遅延が起きうる。</p>
+        <p>Docker のリファレンスによれば、<code>-t</code>（<code>--tty</code>）はコンテナに<strong>疑似端末</strong>（pseudo-TTY。プログラムからは本物の端末に見える仮想デバイス）を割り当てる。<code>-t</code> を付けると出力が即座に見えるようになることがあるのはこのためだが、ログの即時性のためだけに疑似端末を付けるのは筋が良くない。アプリ側で「溜めない」と宣言する方が、どの実行環境でも同じ挙動になる。</p>
+        <p>遅延よりも深刻なのが、ログの消失だ。バッファは通常、プロセスが正常に終了する際に flush される。しかし <code>SIGKILL</code> で強制終了された場合や、Python の <code>os._exit()</code> のように後始末を飛ばして終了した場合は、バッファに残った行は <code>write</code> されないまま消える。OOM killer に殺されたコンテナの最後のログが欠けているとき、その直前の数行はまさにバッファの中にあった可能性がある。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>言語・ツールごとの「溜めない」設定</h3>
+        <p>最初に触るべきは Python の設定だ。<code>python -u</code> か環境変数 <code>PYTHONUNBUFFERED</code> を設定すると、stdout と stderr の両方がアンバッファになる。Dockerfile に書いておけば、コードを変えずにコンテナ内のすべての Python プロセスに効く。個別の行だけ即座に出したいなら <code>print(..., flush=True)</code> を使う。</p>
+        <pre class="code"># Dockerfile
+ENV PYTHONUNBUFFERED=1
+
+# 個別に flush する場合
+print("job started", flush=True)</pre>
+        <p>Ruby では <code>$stdout.sync = true</code> を設定すると、出力が内部でバッファされずにすぐ OS に渡されるモードになる。設定しないと <code>sync</code> は <code>false</code> で、出力は内部でバッファされうる。Rails ならログを stdout に出す構成で、起動処理の早い段階に 1 行置けばよい。</p>
+        <pre class="code"># config/boot.rb などの起動時
+$stdout.sync = true</pre>
+        <p>Go は事情が異なる。<code>os.Stdout</code> は <code>*os.File</code> で、<code>fmt.Println</code> は呼ぶたびにそのまま <code>write</code> する。Go で溜めたいときは自分で <code>bufio.Writer</code> を挟むので、逆に「<code>Flush</code> を呼び忘れて最後の出力が消える」形でこの問題に出会う。</p>
+        <p>パイプの途中にいるコマンドも見落としやすい。<code>tail -f app.log | grep ERROR | sed ...</code> のように繋ぐと、<code>grep</code> 自身の出力先がパイプなので <code>grep</code> がブロックバッファで溜める。GNU grep の <code>--line-buffered</code> を付けると行ごとに flush する。オプションを持たない C プログラムには GNU coreutils の <code>stdbuf -oL</code> が使えるが、マニュアルにある通り stdio の <code>FILE</code> ストリームを使い、自前でバッファ設定を変えないプログラムにしか効かない。</p>
+        <pre class="code">tail -f app.log | grep --line-buffered ERROR | sed 's/^/[!] /'
+stdbuf -oL ./legacy-tool | grep WARN</pre>
+      </section>
+
+      <div class="practical">
+        <div class="box-title">💼 実務でどう出会うか</div>
+        <p>典型は「ローカルでは進捗が見えるのに、ECS や Kubernetes にデプロイしたバッチのログが終わるまで出てこない」という相談だ。まず Dockerfile に <code>PYTHONUNBUFFERED=1</code> があるか、Ruby なら <code>$stdout.sync</code> を設定しているかを確認する。もう一つは、<code>&gt; out.log 2&gt;&amp;1</code> でまとめたログで stdout と stderr の順番が前後して見える現象だ。stderr は行単位以下で即座に書かれ、stdout はブロック単位で後から書かれるため、ファイル上ではエラーメッセージが、それより前に print した行より先に並ぶ。ログの順序を手がかりに原因を追うときは、この並び替えを疑う。</p>
+      </div>
+
+      <div class="hands-on">
+        <div class="box-title">⌨️ 手を動かす（5 分）</div>
+        <p>1 秒ごとに 1 行出す Python を、パイプ越しに受け取って「受信時刻」を付ける。<code>-u</code> の有無で受信時刻がどう変わるかを比べる。</p>
+        <pre class="code">python3 -c 'import time
+for i in range(3):
+    print("tick", i); time.sleep(1)' \
+  | while read l; do echo "$(date +%T) $l"; done
+
+python3 -u -c 'import time
+for i in range(3):
+    print("tick", i); time.sleep(1)' \
+  | while read l; do echo "$(date +%T) $l"; done
+
+python3 -c 'import os; print("lost?"); os._exit(0)' | cat</pre>
+        <p>1 つ目は 3 秒待ったあと 3 行が同じ時刻で届き、2 つ目は 1 秒ずつ時刻がずれて届くはずだ。3 つ目は何も表示されない。<code>os._exit()</code> が flush を飛ばして終了し、バッファ内の行が捨てられたからだ。<code>| cat</code> を外して端末に直接出すと、行バッファなので <code>lost?</code> が表示されることも確かめてみるとよい。</p>
+      </div>
+
+      <div class="misconceptions">
+        <div class="box-title">🙅 よくある誤解</div>
+        <ul>
+          <li><span class="wrong">stdout は行バッファだから、改行さえ出せばすぐ届く</span> — 行バッファになるのは出力先が端末のときだけ。パイプやファイル、コンテナのログ収集先ではブロックバッファになり、改行では flush されない。</li>
+          <li><span class="wrong">ログが遅れて出るのは docker や kubectl logs の収集が遅いからだ</span> — 多くの場合、遅れているのはアプリのプロセス内バッファで、収集側にはまだ何も <code>write</code> されていない。<code>PYTHONUNBUFFERED=1</code> で直るなら原因はアプリ側だ。</li>
+          <li><span class="wrong">print したのだから、プロセスが落ちてもその行はどこかに残っている</span> — flush 前に <code>SIGKILL</code> などで終了すると、バッファの中身は OS に渡らずに消える。最後のログが欠けていても、そこまでコードが実行されなかったとは限らない。</li>
+        </ul>
+      </div>
+
+      <div class="glossary">
+        <div class="box-title">📖 用語ミニ辞典</div>
+        <dl>
+          <dt>出力バッファ</dt><dd>OS に書き込む前の出力を一時的に溜めておく、プロセス内のメモリ領域。</dd>
+          <dt>flush</dt><dd>バッファに溜まった内容を <code>write</code> システムコールで OS に渡し、バッファを空にすること。</dd>
+          <dt>行バッファ</dt><dd>改行が出力されるまで溜め、改行のたびに flush するモード。端末向け stdout の既定。</dd>
+          <dt>ブロックバッファ</dt><dd>バッファが一杯になるか明示的に flush されるまで溜めるモード。パイプ・ファイル向けの既定。</dd>
+          <dt>isatty</dt><dd>ファイルディスクリプタが端末を指しているかを判定する関数。バッファリング方式の切り替えに使われる。</dd>
+          <dt>疑似端末（pseudo-TTY）</dt><dd>プログラムからは本物の端末に見える仮想デバイス。<code>docker run -t</code> で割り当てられる。</dd>
+        </dl>
+      </div>
+
+      <div class="further-reading">
+        <div class="box-title">🔗 もっと深く</div>
+        <ul>
+          <li><a href="https://man7.org/linux/man-pages/man3/setbuf.3.html">setbuf(3) — Linux manual page</a> — 3 種類のバッファリングと stdout・stderr の既定を定義している一次資料。</li>
+          <li><a href="https://docs.python.org/3/library/sys.html#sys.stdout">Python: sys.stdout / sys.stderr</a> — 対話時・非対話時のバッファリングと <code>-u</code>・<code>PYTHONUNBUFFERED</code>、3.9 の変更点が一段落で読める。</li>
+          <li><a href="https://www.gnu.org/software/coreutils/manual/html_node/stdbuf-invocation.html">GNU coreutils: stdbuf invocation</a> — 外からバッファを変える方法と、効かないプログラムの条件。</li>
+          <li><a href="https://docs.docker.com/reference/cli/docker/container/run/">Docker: docker container run</a> — <code>-t</code> が疑似端末を割り当てることと、ログに stdout・stderr が記録される仕組み。</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- recent:start -->
+    <!-- recent:end -->
+
+    <footer>
+      <p>Generated by Claude Code (GitHub Actions)</p>
+      <a href="./" class="archive-link">過去の記事</a>
+    </footer>
+  </div>
+</body>
+</html>

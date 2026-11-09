@@ -33,7 +33,7 @@
         <button class="chip" data-cat="container">Container <span class="chip-count">18</span></button>
         <button class="chip" data-cat="network">Network <span class="chip-count">18</span></button>
         <button class="chip" data-cat="db">DB <span class="chip-count">14</span></button>
-        <button class="chip" data-cat="lang">Lang <span class="chip-count">12</span></button>
+        <button class="chip" data-cat="lang">Lang <span class="chip-count">13</span></button>
         <button class="chip" data-cat="arch">Arch <span class="chip-count">9</span></button>
         <button class="chip" data-cat="security">Security <span class="chip-count">9</span></button>
         <button class="chip" data-cat="ai">AI <span class="chip-count">8</span></button>
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-11">
       <div class="section-title">2026 年 11 月 <span class="count"></span></div>
+      <div class="card" data-cat="lang" data-diff="基礎"
+           data-search="ターミナルでは 1 行ずつ出るのに、なぜパイプや docker logs に通すとログがまとめて遅れて届くのか？ print はすぐ os に書かずプロセス内バッファに溜める。出力先が端末なら行単位、パイプやファイルならブロック単位で溜めるため、パイプや docker logs ではログがまとめて遅れて届き、強制終了時には消える。" data-terms="出力バッファ / flush / 行バッファ / ブロックバッファ / isatty / 疑似端末（pseudo-TTY）">
+        <h3><a href="2026-11-09.html">ターミナルでは 1 行ずつ出るのに、なぜパイプや docker logs に通すとログがまとめて遅れて届くのか？</a></h3>
+        <div class="summary">print はすぐ OS に書かずプロセス内バッファに溜める。出力先が端末なら行単位、パイプやファイルならブロック単位で溜めるため、パイプや docker logs ではログがまとめて遅れて届き、強制終了時には消える。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-lang">Lang</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-09</span></div>
+      </div>
       <div class="card" data-cat="network" data-diff="基礎"
            data-search="ブラウザでは鍵マークが付くのに、なぜ curl だけ証明書エラーになるのか？ サーバー証明書はルートに直接繋がらず、間の中間証明書をサーバーが一緒に送る決まりがある。送り忘れてもブラウザはキャッシュや aia で補うため気づかれにくく、openssl ベースの curl やサーバー間通信だけが失敗する。fullchain.pem の指定と openssl s_client での確認方法を解説。" data-terms="ルート証明書 / 中間証明書 / 証明書チェーン / AIA（Authority Information Access） / fullchain.pem">
         <h3><a href="2026-11-08.html">ブラウザでは鍵マークが付くのに、なぜ curl だけ証明書エラーになるのか？</a></h3>

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tech Learning Daily — ブラウザでは鍵マークが付くのに、なぜ curl だけ証明書エラーになるのか？</title>
+  <title>Tech Learning Daily — ターミナルでは 1 行ずつ出るのに、なぜパイプや docker logs に通すとログがまとめて遅れて届くのか？</title>
   <link rel="stylesheet" href="style.css">
   <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="feed.xml">
   <link rel="icon" href="/favicon.ico" sizes="48x48">
@@ -14,134 +14,140 @@
   <div class="container">
     <header>
       <h1>Tech Learning Daily</h1>
-      <div class="date">2026-11-08 (Sun) — 第 114 号</div>
+      <div class="date">2026-11-09 (Mon) — 第 115 号</div>
       <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
     </header>
 
     <article class="article">
       <div class="meta-bar">
-        <span class="tag tag-network">Network</span>
+        <span class="tag tag-lang">Lang</span>
         <span class="difficulty">🌿 基礎</span>
         <span class="read-time">⏱ 約 7 分</span>
       </div>
-      <h2 class="article-title">ブラウザでは鍵マークが付くのに、なぜ curl だけ証明書エラーになるのか？</h2>
-      <p class="lead">証明書を更新した翌日、外部サービスからの Webhook が全部失敗し始めた。ブラウザで開くと鍵マークは正常で、証明書も期限内だ。ところがサーバーから <code>curl</code> を叩くと <code>unable to get local issuer certificate</code> と言われる。同じ URL・同じ証明書なのに、なぜクライアントによって結果が割れるのだろうか。</p>
+      <h2 class="article-title">ターミナルでは 1 行ずつ出るのに、なぜパイプや docker logs に通すとログがまとめて遅れて届くのか？</h2>
+      <p class="lead">手元で <code>python worker.py</code> を動かすと進捗が 1 行ずつ流れる。ところが同じスクリプトを <code>| grep</code> に通したり、コンテナに入れて <code>docker logs -f</code> で眺めたりすると、しばらく何も出ず、ある瞬間に数十行がどっと届く。コードは 1 文字も変えていないのに、出力先が変わっただけで挙動が変わるのはなぜだろうか。</p>
 
       <div class="tldr">
         <div class="box-title">🎯 3 行まとめ</div>
         <ul>
-          <li>サーバー証明書はルート CA が直接署名したものではなく、間の「中間証明書」を経由してルートに繋がる。この中間証明書はサーバーが TLS ハンドシェイクで一緒に送る決まりになっている。</li>
-          <li>中間証明書を送り忘れても、ブラウザは過去に見た中間証明書のキャッシュや AIA による取得で穴を埋めてしまうことがある。OpenSSL ベースの curl や多くのアプリはそれをしないので失敗する。</li>
-          <li>直し方はクライアント側ではなくサーバー側にある。nginx なら <code>ssl_certificate</code> に <code>cert.pem</code> ではなく <code>fullchain.pem</code> を指定し、<code>openssl s_client</code> で 2 枚以上届いているか確かめる。</li>
+          <li><code>print</code> や <code>printf</code> はすぐ OS に書き込まず、プロセス内のバッファに溜めてからまとめて <code>write</code> する。</li>
+          <li>C の stdio や Python は「出力先が端末なら行単位、パイプやファイルならバッファが一杯になるまで」と、出力先を見て溜め方を切り替える。</li>
+          <li>リアルタイムに流したいログは <code>PYTHONUNBUFFERED=1</code>・<code>$stdout.sync = true</code>・<code>grep --line-buffered</code> などで明示的に溜めない設定にする。</li>
         </ul>
       </div>
 
       <section class="body-section">
-        <h3>証明書は 1 枚ではなく「鎖」で信頼される</h3>
-        <p>TLS でクライアントがサーバーを信用する仕組みは、ブラウザや OS に最初から入っている<strong>ルート証明書</strong>（信頼の起点として手元に保存された CA の証明書）を出発点にしている。ただし、ルート CA の秘密鍵で個々のサイトの証明書に直接署名することはまずない。ルートの鍵はオフラインで厳重に保管され、日々の発行にはルートが署名した<strong>中間証明書</strong>（ルートと個々のサイトの間に立つ CA の証明書）の鍵が使われる。</p>
-        <p>そのため、クライアントは「サイトの証明書 → それに署名した中間 CA → それに署名したルート」と、発行者（issuer）を辿って手元のルートに行き着くかを確かめる。この並びを<strong>証明書チェーン</strong>と呼ぶ。手元にあるのはルートだけなので、途中の中間証明書はどこかから手に入れなければ鎖が繋がらない。</p>
-        <p>TLS 1.3 の仕様（RFC 8446 §4.4.2）は、サーバーが送る証明書リストの先頭に自分の証明書を置き、続く各証明書は直前のものを署名した証明書であるべきだと定めている。手元にあるはずのルート自体は省略してよい。中間証明書を届けるのはサーバーの責任である。</p>
-        <pre class="diagram"> サーバーが送る Certificate
+        <h3>print は「OS に書く」命令ではない</h3>
+        <p>プログラムが画面やファイルに何かを出すとき、最終的には <code>write</code> という<strong>システムコール</strong>（プロセスがカーネルに処理を頼む呼び出し）が実行される。システムコールはユーザー空間からカーネルへの切り替えを伴うため、1 文字ごとに呼ぶと出力量に比例してこの切り替えコストが積み上がる。</p>
+        <p>そこで C の標準入出力ライブラリ（<strong>stdio</strong>。<code>printf</code> や <code>fputs</code> を提供する層）や Python・Ruby の I/O 層は、プロセス内のメモリに<strong>出力バッファ</strong>を持つ。<code>print</code> はこのバッファに文字列を追記するだけで戻り、ある条件を満たしたときにバッファの中身を 1 回の <code>write</code> でまとめて OS に渡す。この「OS に渡す」操作を <strong>flush</strong> と呼ぶ。</p>
+        <pre class="diagram">  あなたのプロセス
 ┌──────────────────────────┐
-│ #0 *.example.com         │
-│    issuer: Intermediate  │
-├──────────────────────────┤
-│ #1 Intermediate CA       │
-│    issuer: Root CA       │
-└────────────┬─────────────┘
-             ▼ issuer を辿る
+│ print("tick 0")          │
+│ print("tick 1")          │
+│      │                   │
+│      ▼                   │
+│ ┌──────────────────────┐ │
+│ │出力バッファ(未送信)  │ │
+│ └──────────────────────┘ │
+└──────┬───────────────────┘
+       │ flush の条件を満たした時だけ
+       ▼ write(2) システムコール
 ┌──────────────────────────┐
-│ Root CA (not sent)       │
-│ built into OS/browser    │
-└──────────────────────────┘</pre>
+│ カーネル                 │
+│ 端末 / パイプ / ファイル │
+└──────┬───────────────────┘
+       ▼
+  grep / docker logs / 画面</pre>
+        <p>つまり「print を実行した時刻」と「受け手がその行を受け取る時刻」は一致しない。受け手から見えるのは、バッファが flush された瞬間だけである。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>flush の条件は「出力先が端末かどうか」で変わる</h3>
+        <p>Linux の <code>setbuf(3)</code> の man ページは、ストリームのバッファリングを 3 種類に分けている。書いた瞬間に出る<strong>アンバッファ</strong>、改行が出力されるまで溜める<strong>行バッファ</strong>、一定量をまとめてブロックとして書く<strong>ブロックバッファ</strong>（フルバッファとも呼ぶ）だ。そして stdout が端末を指している場合は行バッファ、stderr は既定でアンバッファだと述べている。</p>
+        <p>ここで素朴に予想すると、「stdout は行バッファなのだから、パイプに流しても改行ごとに出るはずだ」と思える。しかし実際は違う。行バッファになるのは<strong>出力先が端末のとき</strong>に限られ、パイプやファイルにつながっているとブロックバッファに切り替わる。プログラムは起動時に「自分の stdout は端末か」を調べ（<code>isatty</code> という関数で判定できる）、その結果で溜め方を決めている。</p>
+        <p>Python の公式ドキュメントも同じ方針を明記している。対話的（端末）なら stdout は行バッファ、そうでなければ通常のテキストファイルと同じブロックバッファになる。stderr はどちらの場合も行バッファで、非対話時の stderr が行バッファになったのは Python 3.9 からだ。冒頭の現象は、端末からパイプに出力先が変わったことで、Python が改行ごとの flush をやめただけなのである。</p>
+        <p>この切り替えには理由がある。人が端末を見ているなら 1 行ごとに表示されないと困るが、ファイルやパイプの先にいるのは多くの場合プログラムで、表示の即時性よりも <code>write</code> の回数を減らすスループットの方が効く。出力先によって「誰が読んでいるか」を推測し、既定値を変えているわけだ。</p>
       </section>
 
       <div class="analogy">
         <div class="box-title">🍱 たとえるなら</div>
-        <p>紹介状の束に近い。初対面の相手（サイト）が「A 社の部長の紹介です」と書いた紹介状を持ってきても、あなたが知っているのは A 社の社長だけだ。部長宛てに社長が書いた推薦状も一緒に出してもらえれば「社長 → 部長 → この人」と繋がる。部長の推薦状を持ってこなかった場合、前にその部長に会ったことがある人なら通してしまうが、初めての人は門前払いにする。</p>
+        <p>社内便の担当者だ。目の前で受け取りを待っている人（端末）がいれば、書類が 1 枚できるたびに手渡す。宛先が別フロアの郵便受け（パイプ・ファイル）だと、往復の手間を省くために箱が一杯になるまで溜めてから運ぶ。書類を書く速さは同じでも、受け取る側が書類を目にするタイミングは「運ぶ規則」で決まる。担当者が途中で倒れれば（プロセスの強制終了）、箱の中の書類は届かない。</p>
       </div>
 
       <section class="body-section">
-        <h3>ブラウザは「送り忘れ」を黙って補ってしまう</h3>
-        <p>中間証明書が欠けたら、どのクライアントでも同じように失敗しそうに思える。しかし実際はブラウザの多くが穴を自力で埋める。nginx の公式ドキュメントも、よく使われているブラウザは受け取った中間証明書を保存しておくため、チェーンを付け忘れた証明書でもエラーにならないことがあると注意している。</p>
-        <p>補う手段はほかにもある。証明書には <strong>AIA（Authority Information Access）</strong>という拡張があり、「この証明書の発行者の証明書はこの URL で取れる」という情報（CA Issuers）が入っている。Chromium にはこの URL から欠けた中間証明書を取りに行く処理が実装されている。Firefox は別の方式で、信頼された中間 CA 証明書をあらかじめ一括ダウンロードしておく（Mozilla によれば Firefox 68 で導入）。</p>
-        <p>一方、curl が Linux で使う OpenSSL は AIA を辿って取りに行かない。curl にはこれを求める機能要望（issue #2793）が立っているが、OpenSSL ビルドの curl はサーバーが送ってきた証明書と手元のルートだけでチェーンを組もうとし、繋がらなければ <code>unable to get local issuer certificate</code>（発行者が見つからない）で止まる。Ruby の <code>Net::HTTP</code> や Python の <code>requests</code> のように OpenSSL で検証する HTTP クライアントも同じ側にいる。これが冒頭の「ブラウザでは平気なのに Webhook が落ちる」の正体だ。</p>
+        <h3>docker logs も「パイプの先」である</h3>
+        <p>コンテナで同じ現象が起きるのは、<code>docker run</code> を <code>-t</code> なしで起動すると、コンテナの stdout が端末ではなくログを収集する側につながるからだ。プロセスから見れば出力先は端末ではないので、Python はブロックバッファを選ぶ。Kubernetes の <code>kubectl logs</code> でも、コンテナの stdout が端末でない点は同じなので、同様の遅延が起きうる。</p>
+        <p>Docker のリファレンスによれば、<code>-t</code>（<code>--tty</code>）はコンテナに<strong>疑似端末</strong>（pseudo-TTY。プログラムからは本物の端末に見える仮想デバイス）を割り当てる。<code>-t</code> を付けると出力が即座に見えるようになることがあるのはこのためだが、ログの即時性のためだけに疑似端末を付けるのは筋が良くない。アプリ側で「溜めない」と宣言する方が、どの実行環境でも同じ挙動になる。</p>
+        <p>遅延よりも深刻なのが、ログの消失だ。バッファは通常、プロセスが正常に終了する際に flush される。しかし <code>SIGKILL</code> で強制終了された場合や、Python の <code>os._exit()</code> のように後始末を飛ばして終了した場合は、バッファに残った行は <code>write</code> されないまま消える。OOM killer に殺されたコンテナの最後のログが欠けているとき、その直前の数行はまさにバッファの中にあった可能性がある。</p>
       </section>
 
       <section class="body-section">
-        <h3>設定ミスの多くは「ファイルの選び間違い」</h3>
-        <p>チェーン欠けは、証明書ファイルの選び方で起きることが多い。Let's Encrypt の certbot は 4 つのファイルを作り、公式ドキュメントによれば <code>cert.pem</code> はサーバー証明書単体、<code>chain.pem</code> は中間証明書、<code>fullchain.pem</code> はサーバー証明書を先頭に中間証明書を続けたもの、<code>privkey.pem</code> は秘密鍵である。nginx の <code>ssl_certificate</code> に必要なのは <code>fullchain.pem</code> だと明記されている。</p>
-        <pre class="code"># nginx: ssl_certificate には中間まで含むファイルを渡す
-ssl_certificate     /etc/letsencrypt/live/example.com/fullchain.pem;
-ssl_certificate_key /etc/letsencrypt/live/example.com/privkey.pem;
+        <h3>言語・ツールごとの「溜めない」設定</h3>
+        <p>最初に触るべきは Python の設定だ。<code>python -u</code> か環境変数 <code>PYTHONUNBUFFERED</code> を設定すると、stdout と stderr の両方がアンバッファになる。Dockerfile に書いておけば、コードを変えずにコンテナ内のすべての Python プロセスに効く。個別の行だけ即座に出したいなら <code>print(..., flush=True)</code> を使う。</p>
+        <pre class="code"># Dockerfile
+ENV PYTHONUNBUFFERED=1
 
-# ✗ cert.pem を渡すと #0 しか送られない
-# ssl_certificate   /etc/letsencrypt/live/example.com/cert.pem;</pre>
-        <p><code>cert.pem</code> を指定しても nginx は普通に起動し、ブラウザでの確認も通ってしまうことがある。前の節のとおりブラウザが穴を埋めるからで、だから気づかれないまま本番に出る。有料 CA から証明書を受け取った場合も、サイト証明書とは別に「中間証明書バンドル」が渡されることがある。nginx のドキュメントは、サーバー証明書を先、バンドルを後に <code>cat</code> で 1 ファイルに連結する方法を示している。順序を逆にすると、nginx は先頭の証明書（中間 CA）と秘密鍵を組み合わせようとして <code>key values mismatch</code> で起動に失敗する。</p>
-        <p>Apache も同様で、certbot のドキュメントによれば 2.4.8 以降は <code>SSLCertificateFile</code> に <code>fullchain.pem</code> を渡す。それより古い版では <code>SSLCertificateFile</code> に <code>cert.pem</code>、<code>SSLCertificateChainFile</code> に <code>chain.pem</code> と分けて指定する。</p>
-      </section>
-
-      <section class="body-section">
-        <h3>クライアント側で「直す」のは筋が悪い</h3>
-        <p>curl が失敗したとき、<code>-k</code>（<code>--insecure</code>）や <code>verify: false</code> で検証を切る手がまず目に入る。これは「繋がらない」を「誰とでも繋がる」に変えるだけで、中間者攻撃を検出する仕組みそのものを捨てる。チェーン欠けへの対処としては釣り合わない。</p>
-        <p>呼び出し側で欠けた中間証明書を CA バンドルに追加すれば一時的に通るが、これも勧めにくい。中間証明書は CA の都合で切り替わることがあり、追加した 1 枚が古くなった時点で再び壊れる。相手のサーバーを管理できない場合は先方に「チェーンが不完全です」と <code>openssl s_client</code> の出力を添えて連絡し、自分のサーバーならチェーンを送る設定に直すのが本来の対応だ。</p>
+# 個別に flush する場合
+print("job started", flush=True)</pre>
+        <p>Ruby では <code>$stdout.sync = true</code> を設定すると、出力が内部でバッファされずにすぐ OS に渡されるモードになる。設定しないと <code>sync</code> は <code>false</code> で、出力は内部でバッファされうる。Rails ならログを stdout に出す構成で、起動処理の早い段階に 1 行置けばよい。</p>
+        <pre class="code"># config/boot.rb などの起動時
+$stdout.sync = true</pre>
+        <p>Go は事情が異なる。<code>os.Stdout</code> は <code>*os.File</code> で、<code>fmt.Println</code> は呼ぶたびにそのまま <code>write</code> する。Go で溜めたいときは自分で <code>bufio.Writer</code> を挟むので、逆に「<code>Flush</code> を呼び忘れて最後の出力が消える」形でこの問題に出会う。</p>
+        <p>パイプの途中にいるコマンドも見落としやすい。<code>tail -f app.log | grep ERROR | sed ...</code> のように繋ぐと、<code>grep</code> 自身の出力先がパイプなので <code>grep</code> がブロックバッファで溜める。GNU grep の <code>--line-buffered</code> を付けると行ごとに flush する。オプションを持たない C プログラムには GNU coreutils の <code>stdbuf -oL</code> が使えるが、マニュアルにある通り stdio の <code>FILE</code> ストリームを使い、自前でバッファ設定を変えないプログラムにしか効かない。</p>
+        <pre class="code">tail -f app.log | grep --line-buffered ERROR | sed 's/^/[!] /'
+stdbuf -oL ./legacy-tool | grep WARN</pre>
       </section>
 
       <div class="practical">
         <div class="box-title">💼 実務でどう出会うか</div>
-        <p>典型は「証明書を手で入れ替えた直後から、決済代行や Slack などの Webhook・モバイルアプリ・バッチだけが失敗する」という報告だ。ブラウザで確認すると正常なので、原因がアプリ側だと誤解されやすい。サーバー間通信のエラーに <code>unable to get local issuer certificate</code> や <code>unable to verify the first certificate</code> が出ていたら、まず相手（または自分）のサーバーが送っている証明書の枚数を数える。ALB や CloudFront のようなマネージドサービスに証明書をインポートする場合も、チェーン用の入力欄に中間証明書を入れ忘れると同じことが起きうる。</p>
+        <p>典型は「ローカルでは進捗が見えるのに、ECS や Kubernetes にデプロイしたバッチのログが終わるまで出てこない」という相談だ。まず Dockerfile に <code>PYTHONUNBUFFERED=1</code> があるか、Ruby なら <code>$stdout.sync</code> を設定しているかを確認する。もう一つは、<code>&gt; out.log 2&gt;&amp;1</code> でまとめたログで stdout と stderr の順番が前後して見える現象だ。stderr は行単位以下で即座に書かれ、stdout はブロック単位で後から書かれるため、ファイル上ではエラーメッセージが、それより前に print した行より先に並ぶ。ログの順序を手がかりに原因を追うときは、この並び替えを疑う。</p>
       </div>
 
       <div class="hands-on">
         <div class="box-title">⌨️ 手を動かす（5 分）</div>
-        <p>badssl.com が用意している「中間証明書をわざと送らないサーバー」と、正しく送るサーバーを比べる。</p>
-        <pre class="code"># 1) チェーンが欠けたサーバー: 届く証明書の数を見る
-echo | openssl s_client -connect incomplete-chain.badssl.com:443 \
-  -servername incomplete-chain.badssl.com -showcerts 2>/dev/null \
-  | grep -E '^ *[0-9]+ s:|Verify return code'
+        <p>1 秒ごとに 1 行出す Python を、パイプ越しに受け取って「受信時刻」を付ける。<code>-u</code> の有無で受信時刻がどう変わるかを比べる。</p>
+        <pre class="code">python3 -c 'import time
+for i in range(3):
+    print("tick", i); time.sleep(1)' \
+  | while read l; do echo "$(date +%T) $l"; done
 
-# 2) 正しいサーバー
-echo | openssl s_client -connect badssl.com:443 \
-  -servername badssl.com -showcerts 2>/dev/null \
-  | grep -E '^ *[0-9]+ s:|Verify return code'
+python3 -u -c 'import time
+for i in range(3):
+    print("tick", i); time.sleep(1)' \
+  | while read l; do echo "$(date +%T) $l"; done
 
-# 3) 欠けた方の証明書に書かれた AIA（発行者の取得先）
-echo | openssl s_client -connect incomplete-chain.badssl.com:443 \
-  -servername incomplete-chain.badssl.com 2>/dev/null \
-  | openssl x509 -noout -ext authorityInfoAccess
-
-# 4) curl で叩く
-curl -sS -o /dev/null https://incomplete-chain.badssl.com/</pre>
-        <p>1) では <code>0 s:</code> の 1 行しか出ず、検証結果は <code>unable to verify the first certificate</code> になる。2) では <code>0</code>・<code>1</code>…と中間証明書まで並び <code>0 (ok)</code> になる。3) には <code>CA Issuers - URI:</code> として中間証明書の取得先が出る。ブラウザが辿りうるのはこの URL だ。4) は OpenSSL ビルドの curl なら証明書エラーで終わる（macOS 標準の curl はビルドが異なるため結果が違う可能性がある）。同じ URL を Chrome で開いて結果を比べるとよい。</p>
+python3 -c 'import os; print("lost?"); os._exit(0)' | cat</pre>
+        <p>1 つ目は 3 秒待ったあと 3 行が同じ時刻で届き、2 つ目は 1 秒ずつ時刻がずれて届くはずだ。3 つ目は何も表示されない。<code>os._exit()</code> が flush を飛ばして終了し、バッファ内の行が捨てられたからだ。<code>| cat</code> を外して端末に直接出すと、行バッファなので <code>lost?</code> が表示されることも確かめてみるとよい。</p>
       </div>
 
       <div class="misconceptions">
         <div class="box-title">🙅 よくある誤解</div>
         <ul>
-          <li><span class="wrong">ブラウザで鍵マークが出ているから証明書の設定は正しい</span> — ブラウザはキャッシュや AIA・事前ダウンロードで欠けた中間証明書を補うことがある。設定の確認は <code>openssl s_client</code> で届いた枚数を見て行う。</li>
-          <li><span class="wrong">curl の証明書エラーは手元の CA バンドルが古いせいだ</span> — それが原因のこともあるが、<code>s_client</code> で 1 枚しか届いていなければサーバー側のチェーン欠けである。CA バンドルを更新しても直らない。</li>
-          <li><span class="wrong">ルート証明書まで全部送るのが一番安全だ</span> — ルートはクライアントが手元に持っている前提で、RFC 8446 でも省略してよいとされている。送るべきは自分の証明書と中間証明書で、ルートを足しても信頼は増えない。</li>
+          <li><span class="wrong">stdout は行バッファだから、改行さえ出せばすぐ届く</span> — 行バッファになるのは出力先が端末のときだけ。パイプやファイル、コンテナのログ収集先ではブロックバッファになり、改行では flush されない。</li>
+          <li><span class="wrong">ログが遅れて出るのは docker や kubectl logs の収集が遅いからだ</span> — 多くの場合、遅れているのはアプリのプロセス内バッファで、収集側にはまだ何も <code>write</code> されていない。<code>PYTHONUNBUFFERED=1</code> で直るなら原因はアプリ側だ。</li>
+          <li><span class="wrong">print したのだから、プロセスが落ちてもその行はどこかに残っている</span> — flush 前に <code>SIGKILL</code> などで終了すると、バッファの中身は OS に渡らずに消える。最後のログが欠けていても、そこまでコードが実行されなかったとは限らない。</li>
         </ul>
       </div>
 
       <div class="glossary">
         <div class="box-title">📖 用語ミニ辞典</div>
         <dl>
-          <dt>ルート証明書</dt><dd>OS やブラウザに最初から入っている、信頼の起点となる CA の自己署名証明書。</dd>
-          <dt>中間証明書</dt><dd>ルート CA が署名し、サイトの証明書に署名する CA の証明書。サーバーが送る責任を持つ。</dd>
-          <dt>証明書チェーン</dt><dd>サイト証明書から発行者を辿ってルートに至る証明書の並び。</dd>
-          <dt>AIA（Authority Information Access）</dt><dd>発行者の証明書の取得先 URL などを記した証明書の拡張。</dd>
-          <dt>fullchain.pem</dt><dd>certbot が作る、サーバー証明書の後ろに中間証明書を続けたファイル。</dd>
+          <dt>出力バッファ</dt><dd>OS に書き込む前の出力を一時的に溜めておく、プロセス内のメモリ領域。</dd>
+          <dt>flush</dt><dd>バッファに溜まった内容を <code>write</code> システムコールで OS に渡し、バッファを空にすること。</dd>
+          <dt>行バッファ</dt><dd>改行が出力されるまで溜め、改行のたびに flush するモード。端末向け stdout の既定。</dd>
+          <dt>ブロックバッファ</dt><dd>バッファが一杯になるか明示的に flush されるまで溜めるモード。パイプ・ファイル向けの既定。</dd>
+          <dt>isatty</dt><dd>ファイルディスクリプタが端末を指しているかを判定する関数。バッファリング方式の切り替えに使われる。</dd>
+          <dt>疑似端末（pseudo-TTY）</dt><dd>プログラムからは本物の端末に見える仮想デバイス。<code>docker run -t</code> で割り当てられる。</dd>
         </dl>
       </div>
 
       <div class="further-reading">
         <div class="box-title">🔗 もっと深く</div>
         <ul>
-          <li><a href="https://nginx.org/en/docs/http/configuring_https_servers.html#chains">Configuring HTTPS servers — SSL certificate chains（nginx）</a> — ブラウザごとに結果が割れる理由、連結の順序、<code>s_client</code> での確認手順が公式に揃っている。</li>
-          <li><a href="https://eff-certbot.readthedocs.io/en/stable/using.html#where-are-my-certificates">Where are my certificates?（certbot）</a> — <code>cert.pem</code>・<code>chain.pem</code>・<code>fullchain.pem</code> の中身と、nginx・Apache それぞれに渡すべきファイル。</li>
-          <li><a href="https://blog.mozilla.org/security/2020/11/13/preloading-intermediate-ca-certificates-into-firefox/">Preloading Intermediate CA Certificates into Firefox（Mozilla Security Blog）</a> — ブラウザがサーバーの設定ミスをどう肩代わりしているかの一例。</li>
-          <li><a href="https://www.rfc-editor.org/rfc/rfc8446#section-4.4.2">RFC 8446 §4.4.2 Certificate</a> — サーバーが送る証明書リストの順序とルートを省略してよいことの一次ソース。</li>
+          <li><a href="https://man7.org/linux/man-pages/man3/setbuf.3.html">setbuf(3) — Linux manual page</a> — 3 種類のバッファリングと stdout・stderr の既定を定義している一次資料。</li>
+          <li><a href="https://docs.python.org/3/library/sys.html#sys.stdout">Python: sys.stdout / sys.stderr</a> — 対話時・非対話時のバッファリングと <code>-u</code>・<code>PYTHONUNBUFFERED</code>、3.9 の変更点が一段落で読める。</li>
+          <li><a href="https://www.gnu.org/software/coreutils/manual/html_node/stdbuf-invocation.html">GNU coreutils: stdbuf invocation</a> — 外からバッファを変える方法と、効かないプログラムの条件。</li>
+          <li><a href="https://docs.docker.com/reference/cli/docker/container/run/">Docker: docker container run</a> — <code>-t</code> が疑似端末を割り当てることと、ログに stdout・stderr が記録される仕組み。</li>
         </ul>
       </div>
     </article>
@@ -149,6 +155,11 @@ curl -sS -o /dev/null https://incomplete-chain.badssl.com/</pre>
     <!-- recent:start -->
     <section class="section recent-articles">
       <div class="section-title">最近の記事</div>
+      <div class="card">
+        <h3><a href="archive/2026-11-08.html">ブラウザでは鍵マークが付くのに、なぜ curl だけ証明書エラーになるのか？</a></h3>
+        <div class="summary">サーバー証明書はルートに直接繋がらず、間の中間証明書をサーバーが一緒に送る決まりがある。送り忘れてもブラウザはキャッシュや AIA で補うため気づかれにくく、OpenSSL ベースの curl やサーバー間通信だけが失敗する。fullchain.pem の指定と openssl s_client での確認方法を解説。</div>
+        <div class="meta"><span class="tag tag-network">Network</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-08</span></div>
+      </div>
       <div class="card">
         <h3><a href="archive/2026-11-07.html">b に append しただけなのに、なぜ別の変数 c の中身まで変わるのか？</a></h3>
         <div class="summary">Go の slice はヘッダ（ポインタ・長さ・容量）にすぎず、append は容量に空きがあれば共有中の基底配列に上書きする。再帰で結果が全部同じ値になる理由と、full slice expression・slices.Clip・slices.Clone で共有を断つ方法を解説。</div>
@@ -163,11 +174,6 @@ curl -sS -o /dev/null https://incomplete-chain.badssl.com/</pre>
         <h3><a href="archive/2026-11-05.html">アプリは一度も落ちていないのに、なぜ ALB はたまに 502 を返すのか？</a></h3>
         <div class="summary">ALB とアプリはそれぞれ別の idle timeout で keep-alive 接続を閉じる。アプリ側が短いと閉じる合図と次のリクエストがすれ違い、アプリに届かないまま ALB が 502 を返す。Node.js 既定 5 秒・Puma・Go の IdleTimeout の落とし穴と、受ける側を長くする設定ルール。</div>
         <div class="meta"><span class="tag tag-network">Network</span><span>🌿 基礎</span><span>⏱ 約 8 分</span><span>2026-11-05</span></div>
-      </div>
-      <div class="card">
-        <h3><a href="archive/2026-11-04.html">同じ 20 件を取るだけなのに、なぜ 5 万ページ目は 1 ページ目より何百倍も遅いのか？</a></h3>
-        <div class="summary">OFFSET は捨てる行も読むため深いページほど遅くなる。前ページ最後のキー値から読む keyset ページネーションの仕組みと、行値比較・find_each・結果のずれまで解説。</div>
-        <div class="meta"><span class="tag tag-db">DB</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-04</span></div>
       </div>
       <div class="recent-more"><a href="archive/">アーカイブですべて見る →</a></div>
     </section>

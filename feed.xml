@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-11-08T09:51:19+09:00</updated>
+  <updated>2026-11-09T10:05:03+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>ターミナルでは 1 行ずつ出るのに、なぜパイプや docker logs に通すとログがまとめて遅れて届くのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-11-09.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-11-09.html</id>
+    <updated>2026-11-09T10:05:03+09:00</updated>
+    <summary>print は出力をプロセス内バッファに溜めてから write する。端末なら行単位、パイプやファイルならブロック単位で溜めるため、docker logs ではまとめて遅れて届く。PYTHONUNBUFFERED や $stdout.sync で溜めない設定にする。</summary>
+  </entry>
   <entry>
     <title>ブラウザでは鍵マークが付くのに、なぜ curl だけ証明書エラーになるのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-11-08.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-10-27.html</id>
     <updated>2026-10-27T09:35:08+09:00</updated>
     <summary>Go の interface 値は動的な型と値の 2 欄を持ち、== nil は両方空のときだけ true。nil の *MyError を error で返すと型の欄が埋まり non-nil になる。素の nil を返し、戻り値は error 型にする。</summary>
-  </entry>
-  <entry>
-    <title>メモリリークはしていないのに、なぜ Rails のプロセスは日に日に太っていくのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-10-26.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-10-26.html</id>
-    <updated>2026-10-26T08:23:47+09:00</updated>
-    <summary>free した領域は上端に使用中が残る限り OS に返らず、glibc malloc はスレッド競合を避けてアリーナを最大コア数の 8 倍まで増やすため空きが分散する。MALLOC_ARENA_MAX=2 か jemalloc で抑える。</summary>
   </entry>
 </feed>
