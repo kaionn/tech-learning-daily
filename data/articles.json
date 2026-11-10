@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-11-10.html",
+    "date": "2026-11-10",
+    "title": "ラベルを 1 つ足しただけなのに、なぜ Prometheus のメモリが溢れるのか？",
+    "summary": "Prometheus はラベル値の組み合わせごとに時系列を作るため、生の URL やユーザー ID をラベルに入れると系列数が掛け算で増えてメモリを圧迫する。仕組みと、計測側・取り込み側での防ぎ方を解説する。",
+    "category": "obs",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": ["時系列", "ラベル", "カーディナリティ", "head block", "metric_relabel_configs", "sample_limit"]
+  },
+  {
     "file": "2026-11-09.html",
     "date": "2026-11-09",
     "title": "ターミナルでは 1 行ずつ出るのに、なぜパイプや docker logs に通すとログがまとめて遅れて届くのか？",

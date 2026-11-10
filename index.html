@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tech Learning Daily — ターミナルでは 1 行ずつ出るのに、なぜパイプや docker logs に通すとログがまとめて遅れて届くのか？</title>
+  <title>Tech Learning Daily — ラベルを 1 つ足しただけなのに、なぜ Prometheus のメモリが溢れるのか？</title>
   <link rel="stylesheet" href="style.css">
   <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="feed.xml">
   <link rel="icon" href="/favicon.ico" sizes="48x48">
@@ -14,140 +14,142 @@
   <div class="container">
     <header>
       <h1>Tech Learning Daily</h1>
-      <div class="date">2026-11-09 (Mon) — 第 115 号</div>
+      <div class="date">2026-11-10 (Tue) — 第 116 号</div>
       <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
     </header>
 
     <article class="article">
       <div class="meta-bar">
-        <span class="tag tag-lang">Lang</span>
+        <span class="tag tag-obs">Obs</span>
         <span class="difficulty">🌿 基礎</span>
         <span class="read-time">⏱ 約 7 分</span>
       </div>
-      <h2 class="article-title">ターミナルでは 1 行ずつ出るのに、なぜパイプや docker logs に通すとログがまとめて遅れて届くのか？</h2>
-      <p class="lead">手元で <code>python worker.py</code> を動かすと進捗が 1 行ずつ流れる。ところが同じスクリプトを <code>| grep</code> に通したり、コンテナに入れて <code>docker logs -f</code> で眺めたりすると、しばらく何も出ず、ある瞬間に数十行がどっと届く。コードは 1 文字も変えていないのに、出力先が変わっただけで挙動が変わるのはなぜだろうか。</p>
+      <h2 class="article-title">ラベルを 1 つ足しただけなのに、なぜ Prometheus のメモリが溢れるのか？</h2>
+      <p class="lead">「どのエンドポイントが遅いか見たい」と思い、レイテンシのメトリクスに <code>path</code> ラベルを 1 つ足してデプロイした。数日後、Prometheus のメモリ使用量が跳ね上がり、OOM で再起動を繰り返し始める。リクエスト数は何も変わっていないのに、たった 1 つのラベルがなぜ監視サーバーを倒すのだろうか。</p>
 
       <div class="tldr">
         <div class="box-title">🎯 3 行まとめ</div>
         <ul>
-          <li><code>print</code> や <code>printf</code> はすぐ OS に書き込まず、プロセス内のバッファに溜めてからまとめて <code>write</code> する。</li>
-          <li>C の stdio や Python は「出力先が端末なら行単位、パイプやファイルならバッファが一杯になるまで」と、出力先を見て溜め方を切り替える。</li>
-          <li>リアルタイムに流したいログは <code>PYTHONUNBUFFERED=1</code>・<code>$stdout.sync = true</code>・<code>grep --line-buffered</code> などで明示的に溜めない設定にする。</li>
+          <li>Prometheus は「メトリクス名 + ラベルの値の組み合わせ」ごとに別々の時系列を作り、その本数（カーディナリティ）がメモリ・CPU・ディスクのコストを決める。</li>
+          <li>ラベルの種類数は足し算ではなく掛け算で効き、<code>/users/123</code> のような生の URL やユーザー ID を値に入れると系列が際限なく増える。</li>
+          <li>対策の主役は計測側でラベル値を有限に保つことで、<code>metric_relabel_configs</code> の <code>labeldrop</code> や <code>sample_limit</code> は取り込み側の安全網になる。</li>
         </ul>
       </div>
 
       <section class="body-section">
-        <h3>print は「OS に書く」命令ではない</h3>
-        <p>プログラムが画面やファイルに何かを出すとき、最終的には <code>write</code> という<strong>システムコール</strong>（プロセスがカーネルに処理を頼む呼び出し）が実行される。システムコールはユーザー空間からカーネルへの切り替えを伴うため、1 文字ごとに呼ぶと出力量に比例してこの切り替えコストが積み上がる。</p>
-        <p>そこで C の標準入出力ライブラリ（<strong>stdio</strong>。<code>printf</code> や <code>fputs</code> を提供する層）や Python・Ruby の I/O 層は、プロセス内のメモリに<strong>出力バッファ</strong>を持つ。<code>print</code> はこのバッファに文字列を追記するだけで戻り、ある条件を満たしたときにバッファの中身を 1 回の <code>write</code> でまとめて OS に渡す。この「OS に渡す」操作を <strong>flush</strong> と呼ぶ。</p>
-        <pre class="diagram">  あなたのプロセス
-┌──────────────────────────┐
-│ print("tick 0")          │
-│ print("tick 1")          │
-│      │                   │
-│      ▼                   │
-│ ┌──────────────────────┐ │
-│ │出力バッファ(未送信)  │ │
-│ └──────────────────────┘ │
-└──────┬───────────────────┘
-       │ flush の条件を満たした時だけ
-       ▼ write(2) システムコール
-┌──────────────────────────┐
-│ カーネル                 │
-│ 端末 / パイプ / ファイル │
-└──────┬───────────────────┘
-       ▼
-  grep / docker logs / 画面</pre>
-        <p>つまり「print を実行した時刻」と「受け手がその行を受け取る時刻」は一致しない。受け手から見えるのは、バッファが flush された瞬間だけである。</p>
+        <h3>1 本の時系列は「名前 + ラベルの組」で決まる</h3>
+        <p>Prometheus が保存する単位は<strong>時系列</strong>（time series。ある 1 つの対象について「時刻と値」の組を時間順に並べた列）である。<code>http_requests_total</code> というメトリクスがあっても、それ自体は 1 本の時系列ではない。</p>
+        <p>メトリクスには<strong>ラベル</strong>（<code>method="GET"</code> のように、測っている対象の性質を表すキーと値の組）を付けられる。公式ドキュメントは「キーと値のラベルの組み合わせが 1 つ異なるごとに新しい時系列になる」と明記している。つまり <code>method="GET"</code> と <code>method="POST"</code> は、同じメトリクス名でも保存上は別の 2 本である。</p>
+        <p>あるメトリクスが何本の時系列に展開されるかを、そのメトリクスの<strong>カーディナリティ</strong>（ラベル値の組み合わせの数）と呼ぶ。</p>
+        <pre class="diagram">http_requests_total
+├─{method="GET", status="200"}  ─▶ 系列1
+├─{method="GET", status="500"}  ─▶ 系列2
+├─{method="POST",status="200"}  ─▶ 系列3
+└─{method="POST",status="500"}  ─▶ 系列4
+
+path ラベルを追加（値が N 種類）
+        ▼
+4 本 × N 種類 = 4N 本の系列</pre>
       </section>
 
       <section class="body-section">
-        <h3>flush の条件は「出力先が端末かどうか」で変わる</h3>
-        <p>Linux の <code>setbuf(3)</code> の man ページは、ストリームのバッファリングを 3 種類に分けている。書いた瞬間に出る<strong>アンバッファ</strong>、改行が出力されるまで溜める<strong>行バッファ</strong>、一定量をまとめてブロックとして書く<strong>ブロックバッファ</strong>（フルバッファとも呼ぶ）だ。そして stdout が端末を指している場合は行バッファ、stderr は既定でアンバッファだと述べている。</p>
-        <p>ここで素朴に予想すると、「stdout は行バッファなのだから、パイプに流しても改行ごとに出るはずだ」と思える。しかし実際は違う。行バッファになるのは<strong>出力先が端末のとき</strong>に限られ、パイプやファイルにつながっているとブロックバッファに切り替わる。プログラムは起動時に「自分の stdout は端末か」を調べ（<code>isatty</code> という関数で判定できる）、その結果で溜め方を決めている。</p>
-        <p>Python の公式ドキュメントも同じ方針を明記している。対話的（端末）なら stdout は行バッファ、そうでなければ通常のテキストファイルと同じブロックバッファになる。stderr はどちらの場合も行バッファで、非対話時の stderr が行バッファになったのは Python 3.9 からだ。冒頭の現象は、端末からパイプに出力先が変わったことで、Python が改行ごとの flush をやめただけなのである。</p>
-        <p>この切り替えには理由がある。人が端末を見ているなら 1 行ごとに表示されないと困るが、ファイルやパイプの先にいるのは多くの場合プログラムで、表示の即時性よりも <code>write</code> の回数を減らすスループットの方が効く。出力先によって「誰が読んでいるか」を推測し、既定値を変えているわけだ。</p>
+        <h3>ラベルは足し算ではなく掛け算で効く</h3>
+        <p>ラベルを 1 つ足すのは、表に列を 1 つ足す程度の変更に思える。しかし実際は、既存の全組み合わせがそのラベルの値の数だけ複製される。<code>method</code> が 4 種類、<code>status</code> が 5 種類なら 20 本だが、ここに値が 20 種類の <code>path</code> を足すと 400 本になる。</p>
+        <p>問題は <code>path</code> の値が有限とは限らないことだ。ルーティングのテンプレート（<code>/users/:id</code>）ではなく実際のリクエスト URL（<code>/users/123</code>）を入れると、ユーザーが増えるたび、ボットが存在しない URL を叩くたびに新しい値が生まれる。公式ドキュメントはユーザー ID やメールアドレスのような「上限のない値の集合」をラベルに入れるなと注意している。</p>
+        <p>Histogram はこの掛け算をさらに大きくする。従来型の Histogram は値の分布を数えるために、上限値ごとの区間（<strong>バケット</strong>）を 1 本ずつ系列として持つからだ。Python クライアントの既定バケットは <code>+Inf</code> を含めて 15 個あり、そこに合計 <code>_sum</code> と件数 <code>_count</code> が加わる。つまりラベルの組み合わせ 1 つにつき 17 本以上の系列が生える。</p>
       </section>
 
       <div class="analogy">
         <div class="box-title">🍱 たとえるなら</div>
-        <p>社内便の担当者だ。目の前で受け取りを待っている人（端末）がいれば、書類が 1 枚できるたびに手渡す。宛先が別フロアの郵便受け（パイプ・ファイル）だと、往復の手間を省くために箱が一杯になるまで溜めてから運ぶ。書類を書く速さは同じでも、受け取る側が書類を目にするタイミングは「運ぶ規則」で決まる。担当者が途中で倒れれば（プロセスの強制終了）、箱の中の書類は届かない。</p>
+        <p>郵便局の私書箱に近い。宛名が 1 文字でも違えば別の箱を 1 つ借りる決まりで、手紙（サンプル）自体は小さく束ねて保管できる。ところが宛名に「部屋番号」を書き足すと、同じ建物の住人ごとに箱が増える。棚を圧迫するのは届く手紙の量ではなく、箱の数のほうだ。</p>
       </div>
 
       <section class="body-section">
-        <h3>docker logs も「パイプの先」である</h3>
-        <p>コンテナで同じ現象が起きるのは、<code>docker run</code> を <code>-t</code> なしで起動すると、コンテナの stdout が端末ではなくログを収集する側につながるからだ。プロセスから見れば出力先は端末ではないので、Python はブロックバッファを選ぶ。Kubernetes の <code>kubectl logs</code> でも、コンテナの stdout が端末でない点は同じなので、同様の遅延が起きうる。</p>
-        <p>Docker のリファレンスによれば、<code>-t</code>（<code>--tty</code>）はコンテナに<strong>疑似端末</strong>（pseudo-TTY。プログラムからは本物の端末に見える仮想デバイス）を割り当てる。<code>-t</code> を付けると出力が即座に見えるようになることがあるのはこのためだが、ログの即時性のためだけに疑似端末を付けるのは筋が良くない。アプリ側で「溜めない」と宣言する方が、どの実行環境でも同じ挙動になる。</p>
-        <p>遅延よりも深刻なのが、ログの消失だ。バッファは通常、プロセスが正常に終了する際に flush される。しかし <code>SIGKILL</code> で強制終了された場合や、Python の <code>os._exit()</code> のように後始末を飛ばして終了した場合は、バッファに残った行は <code>write</code> されないまま消える。OOM killer に殺されたコンテナの最後のログが欠けているとき、その直前の数行はまさにバッファの中にあった可能性がある。</p>
+        <h3>なぜ「本数」がメモリに直結するのか</h3>
+        <p>Prometheus の保存エンジンは、取り込んだばかりのサンプルを <strong>head block</strong>（直近のデータを保持するメモリ上の領域。クラッシュに備えて WAL というログにも書く）に置く。系列 1 本ごとにラベルの組や書き込み途中のデータを持つため、系列が増えるほど常駐メモリが増える。</p>
+        <p>一方、同じ系列の中のサンプルは時刻も値も前の点と似ているので、よく圧縮される。公式のストレージ解説は 1 サンプルあたり平均 1〜2 バイトとし、負荷を下げるならサンプル数より系列数を減らすほうが効果的だとしている。スクレイプ間隔を延ばしてもメモリがあまり減らないのはこのためだ。</p>
+        <p>規模の感覚は公式ドキュメントの例が分かりやすい。1 万台のノードに数十本ずつのファイルシステム系列なら約 10 万本で問題ない。しかしそこへユーザーごとのクォータを足し、1 万ユーザー × 1 万ノードにすると数千万本になり、「現在の実装には多すぎる」と書かれている。</p>
       </section>
 
       <section class="body-section">
-        <h3>言語・ツールごとの「溜めない」設定</h3>
-        <p>最初に触るべきは Python の設定だ。<code>python -u</code> か環境変数 <code>PYTHONUNBUFFERED</code> を設定すると、stdout と stderr の両方がアンバッファになる。Dockerfile に書いておけば、コードを変えずにコンテナ内のすべての Python プロセスに効く。個別の行だけ即座に出したいなら <code>print(..., flush=True)</code> を使う。</p>
-        <pre class="code"># Dockerfile
-ENV PYTHONUNBUFFERED=1
+        <h3>計測側で絞り、取り込み側で安全網を張る</h3>
+        <p>対策の第一は、アプリが出すラベル値を有限に保つことだ。Rails なら <code>request.path</code> ではなくルート定義、Go のルーターならマッチしたパターンをラベルに入れる。公式の目安は「多くのメトリクスはラベル無し、ラベルを使うものもカーディナリティは 10 未満、100 を超えそうなら次元を減らすか監視以外の仕組みへ移す」である。ユーザー単位の分析はログやトレースの役割になる。</p>
+        <p>アプリをすぐ直せないときは、Prometheus 側の <code>metric_relabel_configs</code> で取り込み直前にラベルを削れる。これは取り込み前の最後の段階で各サンプルに適用され、<code>labeldrop</code> は正規表現に一致した名前のラベルを取り除く。ただし系列の区別に使っていたラベルを落とすと、別々だった系列が同じラベルの組になって衝突しうるので、応急処置と考えたほうがよい。</p>
+        <pre class="code">scrape_configs:
+  - job_name: app
+    sample_limit: 50000
+    metric_relabel_configs:
+      - action: labeldrop
+        regex: user_id</pre>
+        <p><code>sample_limit</code> は 1 回のスクレイプで受け入れるサンプル数の上限で、既定値 0 は「無制限」を意味する。上限を超えると、relabel 後の数で判定したうえでそのスクレイプ全体が失敗扱いになる。データが一時的に欠けるので強い手段だが、1 つのアプリのラベル事故が Prometheus 全体を巻き込んで落とす事態は防げる。</p>
+      </section>
 
-# 個別に flush する場合
-print("job started", flush=True)</pre>
-        <p>Ruby では <code>$stdout.sync = true</code> を設定すると、出力が内部でバッファされずにすぐ OS に渡されるモードになる。設定しないと <code>sync</code> は <code>false</code> で、出力は内部でバッファされうる。Rails ならログを stdout に出す構成で、起動処理の早い段階に 1 行置けばよい。</p>
-        <pre class="code"># config/boot.rb などの起動時
-$stdout.sync = true</pre>
-        <p>Go は事情が異なる。<code>os.Stdout</code> は <code>*os.File</code> で、<code>fmt.Println</code> は呼ぶたびにそのまま <code>write</code> する。Go で溜めたいときは自分で <code>bufio.Writer</code> を挟むので、逆に「<code>Flush</code> を呼び忘れて最後の出力が消える」形でこの問題に出会う。</p>
-        <p>パイプの途中にいるコマンドも見落としやすい。<code>tail -f app.log | grep ERROR | sed ...</code> のように繋ぐと、<code>grep</code> 自身の出力先がパイプなので <code>grep</code> がブロックバッファで溜める。GNU grep の <code>--line-buffered</code> を付けると行ごとに flush する。オプションを持たない C プログラムには GNU coreutils の <code>stdbuf -oL</code> が使えるが、マニュアルにある通り stdio の <code>FILE</code> ストリームを使い、自前でバッファ設定を変えないプログラムにしか効かない。</p>
-        <pre class="code">tail -f app.log | grep --line-buffered ERROR | sed 's/^/[!] /'
-stdbuf -oL ./legacy-tool | grep WARN</pre>
+      <section class="body-section">
+        <h3>犯人のメトリクスを見つける</h3>
+        <p>メモリが増え始めたら、どのメトリクスが系列を生んでいるかを先に調べる。HTTP API の <code>/api/v1/status/tsdb</code> は、head block の系列数（<code>headStats.numSeries</code>）に加えて、メトリクス名ごとの系列数（<code>seriesCountByMetricName</code>）やラベル名ごとの値の種類数（<code>labelValueCountByLabelName</code>）を上位から返す。既定では各リスト 10 件で、<code>limit</code> パラメータで増やせる。</p>
+        <pre class="code">curl -s 'http://localhost:9090/api/v1/status/tsdb?limit=5' \
+  | jq '.data.labelValueCountByLabelName'</pre>
+        <p><code>path</code> や <code>user_id</code> のようなラベルが値の種類数で上位に並んでいれば、それが掛け算の起点である。</p>
       </section>
 
       <div class="practical">
         <div class="box-title">💼 実務でどう出会うか</div>
-        <p>典型は「ローカルでは進捗が見えるのに、ECS や Kubernetes にデプロイしたバッチのログが終わるまで出てこない」という相談だ。まず Dockerfile に <code>PYTHONUNBUFFERED=1</code> があるか、Ruby なら <code>$stdout.sync</code> を設定しているかを確認する。もう一つは、<code>&gt; out.log 2&gt;&amp;1</code> でまとめたログで stdout と stderr の順番が前後して見える現象だ。stderr は行単位以下で即座に書かれ、stdout はブロック単位で後から書かれるため、ファイル上ではエラーメッセージが、それより前に print した行より先に並ぶ。ログの順序を手がかりに原因を追うときは、この並び替えを疑う。</p>
+        <p>典型は「ミドルウェアで全リクエストのレイテンシを Histogram に記録し、ラベルに生の URL パスを入れた」ケースである。開発環境ではアクセスする URL が数十種類しかないので問題が見えず、本番で ID 付きの URL やクローラーのアクセスが流れ込んで初めて系列が増え続ける。Grafana のダッシュボードが遅くなる、Prometheus が OOM で再起動する、マネージド監視サービスの請求が系列数に応じて増える、といった症状で発覚することが多い。レビュー時に「このラベルの値は何種類になりうるか」を 1 つ質問するだけで、多くは事前に防げる。</p>
       </div>
 
       <div class="hands-on">
         <div class="box-title">⌨️ 手を動かす（5 分）</div>
-        <p>1 秒ごとに 1 行出す Python を、パイプ越しに受け取って「受信時刻」を付ける。<code>-u</code> の有無で受信時刻がどう変わるかを比べる。</p>
-        <pre class="code">python3 -c 'import time
-for i in range(3):
-    print("tick", i); time.sleep(1)' \
-  | while read l; do echo "$(date +%T) $l"; done
+        <p>Python の公式クライアントで、パスをテンプレートにした Histogram と生の URL を入れた Histogram に 1,000 ユーザー分のリクエストを記録し、公開される系列数を比べる。</p>
+        <pre class="code">mkdir -p /tmp/card &amp;&amp; cd /tmp/card
+python3 -m venv v &amp;&amp; v/bin/pip -q install prometheus_client
+cat &gt; card.py &lt;&lt;'EOF'
+from prometheus_client import CollectorRegistry, Histogram, generate_latest
 
-python3 -u -c 'import time
-for i in range(3):
-    print("tick", i); time.sleep(1)' \
-  | while read l; do echo "$(date +%T) $l"; done
+reg = CollectorRegistry()
+good = Histogram("good_seconds", "templated", ["path"], registry=reg)
+bad = Histogram("bad_seconds", "raw path", ["path"], registry=reg)
 
-python3 -c 'import os; print("lost?"); os._exit(0)' | cat</pre>
-        <p>1 つ目は 3 秒待ったあと 3 行が同じ時刻で届き、2 つ目は 1 秒ずつ時刻がずれて届くはずだ。3 つ目は何も表示されない。<code>os._exit()</code> が flush を飛ばして終了し、バッファ内の行が捨てられたからだ。<code>| cat</code> を外して端末に直接出すと、行バッファなので <code>lost?</code> が表示されることも確かめてみるとよい。</p>
+for user_id in range(1000):
+    good.labels(path="/users/:id").observe(0.03)
+    bad.labels(path=f"/users/{user_id}").observe(0.03)
+
+text = generate_latest(reg).decode()
+for name in ("good_seconds", "bad_seconds"):
+    n = sum(1 for l in text.splitlines() if l.startswith(name))
+    print(f"{name}: {n} series")
+EOF
+v/bin/python card.py</pre>
+        <p>リクエスト数は同じ 1,000 件なのに、<code>good_seconds</code> は 18 本、<code>bad_seconds</code> は 18,000 本になるはずだ（バケット 15 本・<code>_sum</code>・<code>_count</code> に、Python クライアントが付ける作成時刻の <code>_created</code> 1 本を加えて 18 本）。<code>range(1000)</code> を <code>range(10000)</code> に変えると、<code>bad_seconds</code> だけがさらに 10 倍になることも確かめられる。</p>
       </div>
 
       <div class="misconceptions">
         <div class="box-title">🙅 よくある誤解</div>
         <ul>
-          <li><span class="wrong">stdout は行バッファだから、改行さえ出せばすぐ届く</span> — 行バッファになるのは出力先が端末のときだけ。パイプやファイル、コンテナのログ収集先ではブロックバッファになり、改行では flush されない。</li>
-          <li><span class="wrong">ログが遅れて出るのは docker や kubectl logs の収集が遅いからだ</span> — 多くの場合、遅れているのはアプリのプロセス内バッファで、収集側にはまだ何も <code>write</code> されていない。<code>PYTHONUNBUFFERED=1</code> で直るなら原因はアプリ側だ。</li>
-          <li><span class="wrong">print したのだから、プロセスが落ちてもその行はどこかに残っている</span> — flush 前に <code>SIGKILL</code> などで終了すると、バッファの中身は OS に渡らずに消える。最後のログが欠けていても、そこまでコードが実行されなかったとは限らない。</li>
+          <li><span class="wrong">スクレイプ間隔を延ばせばメモリは大きく減る</span> — サンプルは系列内でよく圧縮されるため、コストを左右するのは主に系列の本数である。間隔を延ばしても系列数は変わらない。</li>
+          <li><span class="wrong">ユーザーごとの状況を見たいなら user_id ラベルを足せばよい</span> — 値に上限のないラベルは系列を際限なく増やす。個別ユーザーの追跡はログやトレースで行い、メトリクスは集計値に留める。</li>
+          <li><span class="wrong">Histogram 1 つは系列 1 本である</span> — バケットの数だけ系列があり、そこに <code>_sum</code> と <code>_count</code> が加わる。ラベルの組み合わせ 1 つごとにこの束が丸ごと複製される。</li>
         </ul>
       </div>
 
       <div class="glossary">
         <div class="box-title">📖 用語ミニ辞典</div>
         <dl>
-          <dt>出力バッファ</dt><dd>OS に書き込む前の出力を一時的に溜めておく、プロセス内のメモリ領域。</dd>
-          <dt>flush</dt><dd>バッファに溜まった内容を <code>write</code> システムコールで OS に渡し、バッファを空にすること。</dd>
-          <dt>行バッファ</dt><dd>改行が出力されるまで溜め、改行のたびに flush するモード。端末向け stdout の既定。</dd>
-          <dt>ブロックバッファ</dt><dd>バッファが一杯になるか明示的に flush されるまで溜めるモード。パイプ・ファイル向けの既定。</dd>
-          <dt>isatty</dt><dd>ファイルディスクリプタが端末を指しているかを判定する関数。バッファリング方式の切り替えに使われる。</dd>
-          <dt>疑似端末（pseudo-TTY）</dt><dd>プログラムからは本物の端末に見える仮想デバイス。<code>docker run -t</code> で割り当てられる。</dd>
+          <dt>時系列</dt><dd>メトリクス名とラベルの組で識別される、時刻と値の組を時間順に並べた列。</dd>
+          <dt>ラベル</dt><dd>測定対象の性質を表すキーと値の組。値の組み合わせが違えば別の時系列になる。</dd>
+          <dt>カーディナリティ</dt><dd>あるメトリクスが展開されるラベル値の組み合わせの数、すなわち時系列の本数。</dd>
+          <dt>head block</dt><dd>Prometheus が直近のサンプルをメモリ上に保持する領域。WAL でクラッシュに備える。</dd>
+          <dt>metric_relabel_configs</dt><dd>スクレイプしたサンプルに取り込み直前に適用するラベル書き換え・削除の設定。</dd>
+          <dt>sample_limit</dt><dd>1 回のスクレイプで受け入れるサンプル数の上限。超えるとスクレイプ全体が失敗扱いになる。</dd>
         </dl>
       </div>
 
       <div class="further-reading">
         <div class="box-title">🔗 もっと深く</div>
         <ul>
-          <li><a href="https://man7.org/linux/man-pages/man3/setbuf.3.html">setbuf(3) — Linux manual page</a> — 3 種類のバッファリングと stdout・stderr の既定を定義している一次資料。</li>
-          <li><a href="https://docs.python.org/3/library/sys.html#sys.stdout">Python: sys.stdout / sys.stderr</a> — 対話時・非対話時のバッファリングと <code>-u</code>・<code>PYTHONUNBUFFERED</code>、3.9 の変更点が一段落で読める。</li>
-          <li><a href="https://www.gnu.org/software/coreutils/manual/html_node/stdbuf-invocation.html">GNU coreutils: stdbuf invocation</a> — 外からバッファを変える方法と、効かないプログラムの条件。</li>
-          <li><a href="https://docs.docker.com/reference/cli/docker/container/run/">Docker: docker container run</a> — <code>-t</code> が疑似端末を割り当てることと、ログに stdout・stderr が記録される仕組み。</li>
+          <li><a href="https://prometheus.io/docs/practices/naming/">Prometheus: Metric and label naming</a> — 「ラベルの組み合わせごとに新しい時系列」という原則と、高カーディナリティの注意書きの一次ソース。</li>
+          <li><a href="https://prometheus.io/docs/practices/instrumentation/">Prometheus: Instrumentation</a> — 「Do not overuse labels」節にカーディナリティ 10 / 100 の目安と 1 万ノード × 1 万ユーザーの例がある。</li>
+          <li><a href="https://prometheus.io/docs/prometheus/latest/querying/api/">Prometheus: HTTP API</a> — TSDB Stats 節で <code>/api/v1/status/tsdb</code> が返す各統計の意味を確認できる。</li>
+          <li><a href="https://prometheus.io/docs/prometheus/latest/storage/">Prometheus: Storage</a> — head block と WAL の仕組み、系列数を減らすほうが効く理由が書かれている。</li>
         </ul>
       </div>
     </article>
@@ -155,6 +157,11 @@ python3 -c 'import os; print("lost?"); os._exit(0)' | cat</pre>
     <!-- recent:start -->
     <section class="section recent-articles">
       <div class="section-title">最近の記事</div>
+      <div class="card">
+        <h3><a href="archive/2026-11-09.html">ターミナルでは 1 行ずつ出るのに、なぜパイプや docker logs に通すとログがまとめて遅れて届くのか？</a></h3>
+        <div class="summary">print はすぐ OS に書かずプロセス内バッファに溜める。出力先が端末なら行単位、パイプやファイルならブロック単位で溜めるため、パイプや docker logs ではログがまとめて遅れて届き、強制終了時には消える。</div>
+        <div class="meta"><span class="tag tag-lang">Lang</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-09</span></div>
+      </div>
       <div class="card">
         <h3><a href="archive/2026-11-08.html">ブラウザでは鍵マークが付くのに、なぜ curl だけ証明書エラーになるのか？</a></h3>
         <div class="summary">サーバー証明書はルートに直接繋がらず、間の中間証明書をサーバーが一緒に送る決まりがある。送り忘れてもブラウザはキャッシュや AIA で補うため気づかれにくく、OpenSSL ベースの curl やサーバー間通信だけが失敗する。fullchain.pem の指定と openssl s_client での確認方法を解説。</div>
@@ -169,11 +176,6 @@ python3 -c 'import os; print("lost?"); os._exit(0)' | cat</pre>
         <h3><a href="archive/2026-11-06.html">-p 3000:3000 と書いたのに、なぜコンテナのアプリに繋がらないのか？</a></h3>
         <div class="summary">コンテナ内の localhost はコンテナ自身だけを指し、-p の転送は eth0 側に届く。127.0.0.1 で待つアプリには繋がらないので 0.0.0.0 にバインドし、公開範囲は -p のホスト側で絞る。</div>
         <div class="meta"><span class="tag tag-container">Container</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-06</span></div>
-      </div>
-      <div class="card">
-        <h3><a href="archive/2026-11-05.html">アプリは一度も落ちていないのに、なぜ ALB はたまに 502 を返すのか？</a></h3>
-        <div class="summary">ALB とアプリはそれぞれ別の idle timeout で keep-alive 接続を閉じる。アプリ側が短いと閉じる合図と次のリクエストがすれ違い、アプリに届かないまま ALB が 502 を返す。Node.js 既定 5 秒・Puma・Go の IdleTimeout の落とし穴と、受ける側を長くする設定ルール。</div>
-        <div class="meta"><span class="tag tag-network">Network</span><span>🌿 基礎</span><span>⏱ 約 8 分</span><span>2026-11-05</span></div>
       </div>
       <div class="recent-more"><a href="archive/">アーカイブですべて見る →</a></div>
     </section>

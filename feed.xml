@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-11-09T10:05:03+09:00</updated>
+  <updated>2026-11-10T12:42:12+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>ラベルを 1 つ足しただけなのに、なぜ Prometheus のメモリが溢れるのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-11-10.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-11-10.html</id>
+    <updated>2026-11-10T12:42:12+09:00</updated>
+    <summary>Prometheus はラベル値の組み合わせごとに別の時系列を作り、その本数がメモリを決める。生の URL やユーザー ID をラベルに入れると系列が掛け算で増えるため、計測側で値を有限に保ち、labeldrop や sample_limit を安全網にする。</summary>
+  </entry>
   <entry>
     <title>ターミナルでは 1 行ずつ出るのに、なぜパイプや docker logs に通すとログがまとめて遅れて届くのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-11-09.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-10-28.html</id>
     <updated>2026-10-28T09:35:23+09:00</updated>
     <summary>経路上のトンネルで MTU が縮むと、送信側は ICMP Type 3 Code 4 を頼りに小さく送り直すが、ICMP を捨てる FW があると大きなパケットだけが消える。ICMP を通す・MSS クランプ・MTU 調整で防ぐ。</summary>
-  </entry>
-  <entry>
-    <title>nil を返したはずなのに、なぜ Go の err != nil が true になるのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-10-27.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-10-27.html</id>
-    <updated>2026-10-27T09:35:08+09:00</updated>
-    <summary>Go の interface 値は動的な型と値の 2 欄を持ち、== nil は両方空のときだけ true。nil の *MyError を error で返すと型の欄が埋まり non-nil になる。素の nil を返し、戻り値は error 型にする。</summary>
   </entry>
 </feed>

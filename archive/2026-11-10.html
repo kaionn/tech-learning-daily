@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tech Learning Daily — ラベルを 1 つ足しただけなのに、なぜ Prometheus のメモリが溢れるのか？</title>
+  <link rel="stylesheet" href="../style.css">
+  <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="../feed.xml">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Tech Learning Daily</h1>
+      <div class="date">2026-11-10 (Tue) — 第 116 号</div>
+      <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
+    </header>
+
+    <article class="article">
+      <div class="meta-bar">
+        <span class="tag tag-obs">Obs</span>
+        <span class="difficulty">🌿 基礎</span>
+        <span class="read-time">⏱ 約 7 分</span>
+      </div>
+      <h2 class="article-title">ラベルを 1 つ足しただけなのに、なぜ Prometheus のメモリが溢れるのか？</h2>
+      <p class="lead">「どのエンドポイントが遅いか見たい」と思い、レイテンシのメトリクスに <code>path</code> ラベルを 1 つ足してデプロイした。数日後、Prometheus のメモリ使用量が跳ね上がり、OOM で再起動を繰り返し始める。リクエスト数は何も変わっていないのに、たった 1 つのラベルがなぜ監視サーバーを倒すのだろうか。</p>
+
+      <div class="tldr">
+        <div class="box-title">🎯 3 行まとめ</div>
+        <ul>
+          <li>Prometheus は「メトリクス名 + ラベルの値の組み合わせ」ごとに別々の時系列を作り、その本数（カーディナリティ）がメモリ・CPU・ディスクのコストを決める。</li>
+          <li>ラベルの種類数は足し算ではなく掛け算で効き、<code>/users/123</code> のような生の URL やユーザー ID を値に入れると系列が際限なく増える。</li>
+          <li>対策の主役は計測側でラベル値を有限に保つことで、<code>metric_relabel_configs</code> の <code>labeldrop</code> や <code>sample_limit</code> は取り込み側の安全網になる。</li>
+        </ul>
+      </div>
+
+      <section class="body-section">
+        <h3>1 本の時系列は「名前 + ラベルの組」で決まる</h3>
+        <p>Prometheus が保存する単位は<strong>時系列</strong>（time series。ある 1 つの対象について「時刻と値」の組を時間順に並べた列）である。<code>http_requests_total</code> というメトリクスがあっても、それ自体は 1 本の時系列ではない。</p>
+        <p>メトリクスには<strong>ラベル</strong>（<code>method="GET"</code> のように、測っている対象の性質を表すキーと値の組）を付けられる。公式ドキュメントは「キーと値のラベルの組み合わせが 1 つ異なるごとに新しい時系列になる」と明記している。つまり <code>method="GET"</code> と <code>method="POST"</code> は、同じメトリクス名でも保存上は別の 2 本である。</p>
+        <p>あるメトリクスが何本の時系列に展開されるかを、そのメトリクスの<strong>カーディナリティ</strong>（ラベル値の組み合わせの数）と呼ぶ。</p>
+        <pre class="diagram">http_requests_total
+├─{method="GET", status="200"}  ─▶ 系列1
+├─{method="GET", status="500"}  ─▶ 系列2
+├─{method="POST",status="200"}  ─▶ 系列3
+└─{method="POST",status="500"}  ─▶ 系列4
+
+path ラベルを追加（値が N 種類）
+        ▼
+4 本 × N 種類 = 4N 本の系列</pre>
+      </section>
+
+      <section class="body-section">
+        <h3>ラベルは足し算ではなく掛け算で効く</h3>
+        <p>ラベルを 1 つ足すのは、表に列を 1 つ足す程度の変更に思える。しかし実際は、既存の全組み合わせがそのラベルの値の数だけ複製される。<code>method</code> が 4 種類、<code>status</code> が 5 種類なら 20 本だが、ここに値が 20 種類の <code>path</code> を足すと 400 本になる。</p>
+        <p>問題は <code>path</code> の値が有限とは限らないことだ。ルーティングのテンプレート（<code>/users/:id</code>）ではなく実際のリクエスト URL（<code>/users/123</code>）を入れると、ユーザーが増えるたび、ボットが存在しない URL を叩くたびに新しい値が生まれる。公式ドキュメントはユーザー ID やメールアドレスのような「上限のない値の集合」をラベルに入れるなと注意している。</p>
+        <p>Histogram はこの掛け算をさらに大きくする。従来型の Histogram は値の分布を数えるために、上限値ごとの区間（<strong>バケット</strong>）を 1 本ずつ系列として持つからだ。Python クライアントの既定バケットは <code>+Inf</code> を含めて 15 個あり、そこに合計 <code>_sum</code> と件数 <code>_count</code> が加わる。つまりラベルの組み合わせ 1 つにつき 17 本以上の系列が生える。</p>
+      </section>
+
+      <div class="analogy">
+        <div class="box-title">🍱 たとえるなら</div>
+        <p>郵便局の私書箱に近い。宛名が 1 文字でも違えば別の箱を 1 つ借りる決まりで、手紙（サンプル）自体は小さく束ねて保管できる。ところが宛名に「部屋番号」を書き足すと、同じ建物の住人ごとに箱が増える。棚を圧迫するのは届く手紙の量ではなく、箱の数のほうだ。</p>
+      </div>
+
+      <section class="body-section">
+        <h3>なぜ「本数」がメモリに直結するのか</h3>
+        <p>Prometheus の保存エンジンは、取り込んだばかりのサンプルを <strong>head block</strong>（直近のデータを保持するメモリ上の領域。クラッシュに備えて WAL というログにも書く）に置く。系列 1 本ごとにラベルの組や書き込み途中のデータを持つため、系列が増えるほど常駐メモリが増える。</p>
+        <p>一方、同じ系列の中のサンプルは時刻も値も前の点と似ているので、よく圧縮される。公式のストレージ解説は 1 サンプルあたり平均 1〜2 バイトとし、負荷を下げるならサンプル数より系列数を減らすほうが効果的だとしている。スクレイプ間隔を延ばしてもメモリがあまり減らないのはこのためだ。</p>
+        <p>規模の感覚は公式ドキュメントの例が分かりやすい。1 万台のノードに数十本ずつのファイルシステム系列なら約 10 万本で問題ない。しかしそこへユーザーごとのクォータを足し、1 万ユーザー × 1 万ノードにすると数千万本になり、「現在の実装には多すぎる」と書かれている。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>計測側で絞り、取り込み側で安全網を張る</h3>
+        <p>対策の第一は、アプリが出すラベル値を有限に保つことだ。Rails なら <code>request.path</code> ではなくルート定義、Go のルーターならマッチしたパターンをラベルに入れる。公式の目安は「多くのメトリクスはラベル無し、ラベルを使うものもカーディナリティは 10 未満、100 を超えそうなら次元を減らすか監視以外の仕組みへ移す」である。ユーザー単位の分析はログやトレースの役割になる。</p>
+        <p>アプリをすぐ直せないときは、Prometheus 側の <code>metric_relabel_configs</code> で取り込み直前にラベルを削れる。これは取り込み前の最後の段階で各サンプルに適用され、<code>labeldrop</code> は正規表現に一致した名前のラベルを取り除く。ただし系列の区別に使っていたラベルを落とすと、別々だった系列が同じラベルの組になって衝突しうるので、応急処置と考えたほうがよい。</p>
+        <pre class="code">scrape_configs:
+  - job_name: app
+    sample_limit: 50000
+    metric_relabel_configs:
+      - action: labeldrop
+        regex: user_id</pre>
+        <p><code>sample_limit</code> は 1 回のスクレイプで受け入れるサンプル数の上限で、既定値 0 は「無制限」を意味する。上限を超えると、relabel 後の数で判定したうえでそのスクレイプ全体が失敗扱いになる。データが一時的に欠けるので強い手段だが、1 つのアプリのラベル事故が Prometheus 全体を巻き込んで落とす事態は防げる。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>犯人のメトリクスを見つける</h3>
+        <p>メモリが増え始めたら、どのメトリクスが系列を生んでいるかを先に調べる。HTTP API の <code>/api/v1/status/tsdb</code> は、head block の系列数（<code>headStats.numSeries</code>）に加えて、メトリクス名ごとの系列数（<code>seriesCountByMetricName</code>）やラベル名ごとの値の種類数（<code>labelValueCountByLabelName</code>）を上位から返す。既定では各リスト 10 件で、<code>limit</code> パラメータで増やせる。</p>
+        <pre class="code">curl -s 'http://localhost:9090/api/v1/status/tsdb?limit=5' \
+  | jq '.data.labelValueCountByLabelName'</pre>
+        <p><code>path</code> や <code>user_id</code> のようなラベルが値の種類数で上位に並んでいれば、それが掛け算の起点である。</p>
+      </section>
+
+      <div class="practical">
+        <div class="box-title">💼 実務でどう出会うか</div>
+        <p>典型は「ミドルウェアで全リクエストのレイテンシを Histogram に記録し、ラベルに生の URL パスを入れた」ケースである。開発環境ではアクセスする URL が数十種類しかないので問題が見えず、本番で ID 付きの URL やクローラーのアクセスが流れ込んで初めて系列が増え続ける。Grafana のダッシュボードが遅くなる、Prometheus が OOM で再起動する、マネージド監視サービスの請求が系列数に応じて増える、といった症状で発覚することが多い。レビュー時に「このラベルの値は何種類になりうるか」を 1 つ質問するだけで、多くは事前に防げる。</p>
+      </div>
+
+      <div class="hands-on">
+        <div class="box-title">⌨️ 手を動かす（5 分）</div>
+        <p>Python の公式クライアントで、パスをテンプレートにした Histogram と生の URL を入れた Histogram に 1,000 ユーザー分のリクエストを記録し、公開される系列数を比べる。</p>
+        <pre class="code">mkdir -p /tmp/card &amp;&amp; cd /tmp/card
+python3 -m venv v &amp;&amp; v/bin/pip -q install prometheus_client
+cat &gt; card.py &lt;&lt;'EOF'
+from prometheus_client import CollectorRegistry, Histogram, generate_latest
+
+reg = CollectorRegistry()
+good = Histogram("good_seconds", "templated", ["path"], registry=reg)
+bad = Histogram("bad_seconds", "raw path", ["path"], registry=reg)
+
+for user_id in range(1000):
+    good.labels(path="/users/:id").observe(0.03)
+    bad.labels(path=f"/users/{user_id}").observe(0.03)
+
+text = generate_latest(reg).decode()
+for name in ("good_seconds", "bad_seconds"):
+    n = sum(1 for l in text.splitlines() if l.startswith(name))
+    print(f"{name}: {n} series")
+EOF
+v/bin/python card.py</pre>
+        <p>リクエスト数は同じ 1,000 件なのに、<code>good_seconds</code> は 18 本、<code>bad_seconds</code> は 18,000 本になるはずだ（バケット 15 本・<code>_sum</code>・<code>_count</code> に、Python クライアントが付ける作成時刻の <code>_created</code> 1 本を加えて 18 本）。<code>range(1000)</code> を <code>range(10000)</code> に変えると、<code>bad_seconds</code> だけがさらに 10 倍になることも確かめられる。</p>
+      </div>
+
+      <div class="misconceptions">
+        <div class="box-title">🙅 よくある誤解</div>
+        <ul>
+          <li><span class="wrong">スクレイプ間隔を延ばせばメモリは大きく減る</span> — サンプルは系列内でよく圧縮されるため、コストを左右するのは主に系列の本数である。間隔を延ばしても系列数は変わらない。</li>
+          <li><span class="wrong">ユーザーごとの状況を見たいなら user_id ラベルを足せばよい</span> — 値に上限のないラベルは系列を際限なく増やす。個別ユーザーの追跡はログやトレースで行い、メトリクスは集計値に留める。</li>
+          <li><span class="wrong">Histogram 1 つは系列 1 本である</span> — バケットの数だけ系列があり、そこに <code>_sum</code> と <code>_count</code> が加わる。ラベルの組み合わせ 1 つごとにこの束が丸ごと複製される。</li>
+        </ul>
+      </div>
+
+      <div class="glossary">
+        <div class="box-title">📖 用語ミニ辞典</div>
+        <dl>
+          <dt>時系列</dt><dd>メトリクス名とラベルの組で識別される、時刻と値の組を時間順に並べた列。</dd>
+          <dt>ラベル</dt><dd>測定対象の性質を表すキーと値の組。値の組み合わせが違えば別の時系列になる。</dd>
+          <dt>カーディナリティ</dt><dd>あるメトリクスが展開されるラベル値の組み合わせの数、すなわち時系列の本数。</dd>
+          <dt>head block</dt><dd>Prometheus が直近のサンプルをメモリ上に保持する領域。WAL でクラッシュに備える。</dd>
+          <dt>metric_relabel_configs</dt><dd>スクレイプしたサンプルに取り込み直前に適用するラベル書き換え・削除の設定。</dd>
+          <dt>sample_limit</dt><dd>1 回のスクレイプで受け入れるサンプル数の上限。超えるとスクレイプ全体が失敗扱いになる。</dd>
+        </dl>
+      </div>
+
+      <div class="further-reading">
+        <div class="box-title">🔗 もっと深く</div>
+        <ul>
+          <li><a href="https://prometheus.io/docs/practices/naming/">Prometheus: Metric and label naming</a> — 「ラベルの組み合わせごとに新しい時系列」という原則と、高カーディナリティの注意書きの一次ソース。</li>
+          <li><a href="https://prometheus.io/docs/practices/instrumentation/">Prometheus: Instrumentation</a> — 「Do not overuse labels」節にカーディナリティ 10 / 100 の目安と 1 万ノード × 1 万ユーザーの例がある。</li>
+          <li><a href="https://prometheus.io/docs/prometheus/latest/querying/api/">Prometheus: HTTP API</a> — TSDB Stats 節で <code>/api/v1/status/tsdb</code> が返す各統計の意味を確認できる。</li>
+          <li><a href="https://prometheus.io/docs/prometheus/latest/storage/">Prometheus: Storage</a> — head block と WAL の仕組み、系列数を減らすほうが効く理由が書かれている。</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- recent:start -->
+    <!-- recent:end -->
+
+    <footer>
+      <p>Generated by Claude Code (GitHub Actions)</p>
+      <a href="./" class="archive-link">過去の記事</a>
+    </footer>
+  </div>
+</body>
+</html>
