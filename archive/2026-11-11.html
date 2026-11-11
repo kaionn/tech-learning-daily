@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tech Learning Daily — ノードの CPU はほぼ空いているのに、なぜ Pod は Pending のまま動かないのか？</title>
+  <link rel="stylesheet" href="../style.css">
+  <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="../feed.xml">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Tech Learning Daily</h1>
+      <div class="date">2026-11-11 (Wed) — 第 117 号</div>
+      <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
+    </header>
+
+    <article class="article">
+      <div class="meta-bar">
+        <span class="tag tag-container">Container</span>
+        <span class="difficulty">🌿 基礎</span>
+        <span class="read-time">⏱ 約 7 分</span>
+      </div>
+      <h2 class="article-title">ノードの CPU はほぼ空いているのに、なぜ Pod は Pending のまま動かないのか？</h2>
+      <p class="lead">レプリカを 1 つ増やしただけなのに、新しい Pod が <code>Pending</code> のまま動かない。監視画面ではどのノードも CPU 使用率 20% 程度で、空きは十分あるように見える。それでも <code>kubectl describe pod</code> には <code>Insufficient cpu</code> と出る。足りないのは、いったい何なのだろうか。</p>
+
+      <div class="tldr">
+        <div class="box-title">🎯 3 行まとめ</div>
+        <ul>
+          <li>スケジューラは実際の CPU 使用率を見ない。各 Pod が manifest に書いた <code>requests</code>（予約量）の合計が、ノードの Allocatable に収まるかだけで配置先を決める</li>
+          <li>そのため、実際にはほとんど働いていない Pod でも、大きな <code>requests</code> を書いていればノードの枠を埋めてしまい、新しい Pod は Pending になる</li>
+          <li>対処は「ノードを足す」より先に、<code>kubectl describe node</code> の Allocated resources で予約の合計を確認し、実測に合わせて <code>requests</code> を見直すことである</li>
+        </ul>
+      </div>
+
+      <section class="body-section">
+        <h3>Pending は「どのノードにも置けなかった」状態</h3>
+        <p>Pod を作ると、まず API サーバーに「まだノードが決まっていない Pod」として登録される。それを拾って配置先ノードを決めるのが <code>kube-scheduler</code>（スケジューラ）である。<code>Pending</code> は、コンテナがまだ 1 つも起動していない Pod の状態で、イメージのダウンロード待ちでも付くが、典型的な原因は「スケジューラが置き場所を見つけられなかった」ことだ。</p>
+        <p>置き場所が見つからないと、Pod は場所が空くまで未配置のまま残る。スケジューラは失敗するたびに Event を記録するため、理由は <code>kubectl describe pod</code> の末尾で確認できる。公式ドキュメントの例はこうなっている。</p>
+        <pre class="code">Events:
+  Type     Reason            From               Message
+  ----     ------            ----               -------
+  Warning  FailedScheduling  default-scheduler  0/42 nodes available: insufficient cpu</pre>
+        <p>ここで多くの人は「CPU が足りない」と読み、ノードの CPU 使用率を確かめに行く。そして空いているのを見て混乱する。しかしこのメッセージの「cpu」は、使用量のことではない。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>スケジューラが数えているのは「予約」であって「使用量」ではない</h3>
+        <p>コンテナの <code>resources.requests</code> は「このコンテナのために最低これだけ確保してほしい」という予約量である。CPU の単位は cpu で、1 cpu は物理コア 1 つ、VM なら仮想コア 1 つに当たる。<code>100m</code>（100 ミリ cpu）は <code>0.1</code> と同じ意味だ。</p>
+        <pre class="code">resources:
+  requests:
+    cpu: 500m      # 0.5 コアを予約
+    memory: 256Mi</pre>
+        <p>公式ドキュメントは、スケジューラがリソースの種類ごとに「配置済みコンテナの requests の合計がノードの容量を下回る」ことを確かめると説明している。そして、ノードの実際の CPU やメモリ使用量がとても低くても、この計算で収まらなければ配置を拒否すると明言している。理由も書かれている。今は暇なノードでも、日次のピークで全 Pod が予約分まで使い始めたとき、リソース不足にならないよう守るためだ。</p>
+        <p>つまりスケジューラにとってのノードは、予約票で埋まっていく座席表である。実際に座っている人が少なくても、予約済みの席に新しい客は案内しない。使用率 20% のノードが新しい Pod を拒むのは、この座席表がすでに満席だからである。</p>
+        <pre class="diagram">ノード Allocatable = 4 cpu
+┌──────────────────────────────────┐
+│予約 requests 合計 (スケジューラ) │
+│ A:1.5 │ B:1.5 │ C:0.8 │残 0.2    │
+├──────────────────────────────────┤
+│実際の使用量 (監視画面)           │
+│ A:0.2 │ B:0.3 │ C:0.3 │空き 3.2  │
+└──────────────────────────────────┘
+新 Pod D: requests 0.5
+  ▼
+残り 0.2 &lt; 0.5 ▶ 配置不可 ▶ Pending</pre>
+      </section>
+
+      <div class="analogy">
+        <div class="box-title">🍱 たとえるなら</div>
+        <p>予約制のレストランだ。8 席すべてに予約が入っていれば、店内に 2 人しか座っていなくても、飛び込みの客は「満席です」と断られる。店が見ているのは予約台帳であって、実際に座っている人数ではない。予約を 4 人分取って 1 人で来る客が多いほど、店はガラガラなのに満席という状態になる。</p>
+      </div>
+
+      <section class="body-section">
+        <h3>座席の総数は「ノードのスペック」より少ない</h3>
+        <p>席の総数にも落とし穴がある。スケジューラが分母に使うのはノードの CPU 数（Capacity）そのものではなく、Allocatable という値である。Allocatable は Pod に使わせてよい量のことで、Capacity から kubelet などの Kubernetes 用の予約（<code>kubeReserved</code>）、OS デーモン用の予約（<code>systemReserved</code>）、退避のしきい値（<code>evictionHard</code>）を差し引いて求める。公式ドキュメントの例では、16 CPU・32Gi のノードで <code>kubeReserved</code> に cpu 1000m・memory 2Gi、<code>systemReserved</code> に cpu 500m・memory 1Gi、<code>evictionHard</code> に memory 500Mi を設定すると、Allocatable は 14.5 CPU・28.5Gi になる。</p>
+        <p>さらに、各ノードには DaemonSet（全ノードに 1 つずつ置かれる Pod）やシステム系 Pod が先に座っている。ログ収集エージェントや CNI プラグインもそれぞれ requests を持つため、アプリ用に残る席は「スペック表の CPU 数」よりかなり少ない。ノードのサイズを小さくするほど、この固定の取り分の割合が大きくなる。</p>
+        <p>ノードごとの予約の合計は <code>kubectl describe node</code> の Allocated resources 欄で見られる。公式ドキュメントの出力例はこうだ。</p>
+        <pre class="code">Allocated resources:
+  (Total limits may be over 100 percent, i.e., overcommitted.)
+  CPU Requests  CPU Limits  Memory Requests  Memory Limits
+  ------------  ----------  ---------------  -------------
+  680m (34%)    400m (20%)  920Mi (11%)      1070Mi (13%)</pre>
+        <p>CPU Requests の割合が 100% 近くに達していれば、使用率が低くてもそのノードにはもう Pod が入らない。Limits は 100% を超えてもよい（上限の合計は予約ではないため）が、Requests は Allocatable を超えて積めない。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>requests を書かないと安全、とはならない</h3>
+        <p>「それなら requests を書かなければ席を取らずに済む」と考えたくなる。しかし実際はそうならないことが多い。まず、<code>limits</code> だけを書いて <code>requests</code> を書かず、ほかに既定値を入れる仕組みも無い場合、Kubernetes は limits の値をそのまま requests にコピーする。<code>limits.cpu: 2</code> とだけ書いた Pod は、2 cpu の予約を持つ Pod として扱われる。</p>
+        <p>次に、namespace に LimitRange（namespace ごとに既定値や上限を定めるオブジェクト）があれば、requests を書かなかったコンテナには Pod 作成時に <code>defaultRequest</code> が自動で入る。</p>
+        <pre class="code">apiVersion: v1
+kind: LimitRange
+metadata:
+  name: cpu-defaults
+spec:
+  limits:
+  - type: Container
+    defaultRequest:
+      cpu: 500m   # 書かなかったコンテナの requests
+    default:
+      cpu: 500m   # 書かなかったコンテナの limits</pre>
+        <p>この既定値は作成時に入るだけで、LimitRange を後から変えても既存の Pod は変わらない。どちらの仕組みも働かず本当に requests が空なら、スケジューラの勘定には入らないので配置はされる。その代わり予約が無いため、ノードが混んだときに CPU の取り分を保証されず、メモリ不足時には真っ先に退避の対象になる。requests は書かずに済ませるものではなく、実測に近い値を書くものである。</p>
+      </section>
+
+      <div class="practical">
+        <div class="box-title">💼 実務でどう出会うか</div>
+        <p>典型は「安全側に倒して <code>requests.cpu: 1</code> を全 Deployment にコピーしたが、実際の使用は 0.1 コア程度」というケースだ。ノードはガラガラなのに予約で満席になり、デプロイのたびに Pending が出る。Cluster Autoscaler（ノード数を自動調整する仕組み）を入れていると、スケジュールできない Pod を検知してノードを足すため、Pending は消えるが空気に席代を払い続けることになる。Cluster Autoscaler の縮小判定も、ノード上の Pod の requests の合計と Allocatable の比で行われる（既定のしきい値は 0.5）。過大な requests は縮小も妨げる。逆に requests を小さくしすぎると、1 つのノードに Pod を詰め込みすぎ、ピーク時に CPU を奪い合う。<code>kubectl top pod</code> などの実測値を数日分見て、ピーク付近に合わせて requests を決めるのが出発点になる。</p>
+      </div>
+
+      <div class="hands-on">
+        <div class="box-title">⌨️ 手を動かす（5 分）</div>
+        <p>kind でローカルに 1 ノードのクラスタを作り、ほぼ CPU を使わない <code>sleep</code> だけの Pod に大きな requests を持たせる。使用量がゼロに近くても、予約だけで Pending が起きることを確かめる。</p>
+        <pre class="code">kind create cluster --name sched
+ALLOC=$(kubectl get node -o jsonpath='{.items[0].status.allocatable.cpu}')
+echo "allocatable cpu: $ALLOC"
+# Allocatable の 3 割ずつを予約する Pod を 3 つ
+REQ=$((ALLOC * 300))m
+kubectl create deployment idle --image=busybox --replicas=3 -- sleep 3600
+kubectl set resources deployment idle --requests=cpu=$REQ
+sleep 20; kubectl get pods
+kubectl describe pods | grep -A3 FailedScheduling
+kubectl describe node | grep -A6 'Allocated resources'
+# 後片付け
+kind delete cluster --name sched</pre>
+        <p><code>ALLOC</code> は整数のコア数（例: <code>8</code>）で返る前提である。ミリ単位（例: <code>7800m</code>）で返った場合は数値を読み替えて <code>REQ</code> を手で指定する。kind のシステム Pod 自体も requests を持つため、3 つのうち少なくとも 1 つが <code>Pending</code> になり、Event に <code>Insufficient cpu</code> が出るはずだ。Allocated resources の CPU Requests は高い割合を示すが、Pod の中身は <code>sleep</code> なので実際の CPU はほとんど使われていない。</p>
+      </div>
+
+      <div class="misconceptions">
+        <div class="box-title">🙅 よくある誤解</div>
+        <ul>
+          <li><span class="wrong">スケジューラは CPU 使用率の低いノードを選んで Pod を置く</span> — 配置可否の判定に使われるのは requests の合計と Allocatable であり、実測の使用率は見ていない。暇なノードでも予約が埋まっていれば置かれない</li>
+          <li><span class="wrong">Pending はノードの性能不足だから、大きいノードに替えれば直る</span> — 予約が実測より過大なら、ノードを大きくしても同じ比率で席が埋まる。先に requests を実測に合わせる方が効果が大きいことが多い</li>
+          <li><span class="wrong">limits だけ書けば予約は発生しない</span> — requests が未指定で既定値を入れる仕組みも無ければ、limits の値が requests にコピーされる。limits を大きく書くと、そのまま大きな予約になる</li>
+        </ul>
+      </div>
+
+      <div class="glossary">
+        <div class="box-title">📖 用語ミニ辞典</div>
+        <dl>
+          <dt>kube-scheduler</dt><dd>未配置の Pod を見つけ、条件に合うノードを選んで割り当てるコンポーネント</dd>
+          <dt>requests</dt><dd>コンテナのために確保してほしい最低量。スケジューラが配置判定に使う予約量</dd>
+          <dt>Allocatable</dt><dd>ノードの容量から kubelet・OS 用の予約と退避しきい値を引いた、Pod に使わせてよい量</dd>
+          <dt>Pending</dt><dd>Pod のコンテナがまだ起動していない状態。配置先ノードが見つからない場合が典型</dd>
+          <dt>LimitRange</dt><dd>namespace ごとに requests / limits の既定値や上下限を定め、Pod 作成時に適用するオブジェクト</dd>
+        </dl>
+      </div>
+
+      <div class="further-reading">
+        <div class="box-title">🔗 もっと深く</div>
+        <ul>
+          <li><a href="https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/">Resource Management for Pods and Containers</a> — 「使用量が低くても requests で拒否する」理由と、Pending のトラブルシュート手順が載っている一次資料</li>
+          <li><a href="https://kubernetes.io/docs/tasks/administer-cluster/reserve-compute-resources/">Reserve Compute Resources for System Daemons</a> — Allocatable の計算と、16 CPU のノードが 14.5 CPU になる具体例</li>
+          <li><a href="https://kubernetes.io/docs/concepts/policy/limit-range/">Limit Ranges</a> — 既定 requests が作成時にだけ入ることや、既定値同士の矛盾で Pod が配置不能になる注意点</li>
+          <li><a href="https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/FAQ.md">Cluster Autoscaler FAQ</a> — Pending の Pod を契機にノードを足す仕組みと、requests 基準の縮小判定</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- recent:start -->
+    <!-- recent:end -->
+
+    <footer>
+      <p>Generated by Claude Code (GitHub Actions)</p>
+      <a href="./" class="archive-link">過去の記事</a>
+    </footer>
+  </div>
+</body>
+</html>

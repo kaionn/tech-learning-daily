@@ -30,7 +30,7 @@
       <div class="chip-row" id="cat-chips">
         <span class="row-label">カテゴリ</span>
         <button class="chip on" data-cat="">すべて</button>
-        <button class="chip" data-cat="container">Container <span class="chip-count">18</span></button>
+        <button class="chip" data-cat="container">Container <span class="chip-count">19</span></button>
         <button class="chip" data-cat="network">Network <span class="chip-count">18</span></button>
         <button class="chip" data-cat="db">DB <span class="chip-count">14</span></button>
         <button class="chip" data-cat="lang">Lang <span class="chip-count">13</span></button>
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-11">
       <div class="section-title">2026 年 11 月 <span class="count"></span></div>
+      <div class="card" data-cat="container" data-diff="基礎"
+           data-search="ノードの cpu はほぼ空いているのに、なぜ pod は pending のまま動かないのか？ kubernetes のスケジューラは cpu 使用率ではなく requests（予約量）の合計と allocatable で配置を決める。ノードが暇なのに pod が pending になる仕組みと、requests の見直し方を解説する。" data-terms="kube-scheduler / requests / Allocatable / Pending / LimitRange">
+        <h3><a href="2026-11-11.html">ノードの CPU はほぼ空いているのに、なぜ Pod は Pending のまま動かないのか？</a></h3>
+        <div class="summary">Kubernetes のスケジューラは CPU 使用率ではなく requests（予約量）の合計と Allocatable で配置を決める。ノードが暇なのに Pod が Pending になる仕組みと、requests の見直し方を解説する。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-container">Container</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-11</span></div>
+      </div>
       <div class="card" data-cat="obs" data-diff="基礎"
            data-search="ラベルを 1 つ足しただけなのに、なぜ prometheus のメモリが溢れるのか？ prometheus はラベル値の組み合わせごとに時系列を作るため、生の url やユーザー id をラベルに入れると系列数が掛け算で増えてメモリを圧迫する。仕組みと、計測側・取り込み側での防ぎ方を解説する。" data-terms="時系列 / ラベル / カーディナリティ / head block / metric_relabel_configs / sample_limit">
         <h3><a href="2026-11-10.html">ラベルを 1 つ足しただけなのに、なぜ Prometheus のメモリが溢れるのか？</a></h3>

@@ -1,5 +1,21 @@
 [
   {
+    "file": "2026-11-11.html",
+    "date": "2026-11-11",
+    "title": "ノードの CPU はほぼ空いているのに、なぜ Pod は Pending のまま動かないのか？",
+    "summary": "Kubernetes のスケジューラは CPU 使用率ではなく requests（予約量）の合計と Allocatable で配置を決める。ノードが暇なのに Pod が Pending になる仕組みと、requests の見直し方を解説する。",
+    "category": "container",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": [
+      "kube-scheduler",
+      "requests",
+      "Allocatable",
+      "Pending",
+      "LimitRange"
+    ]
+  },
+  {
     "file": "2026-11-10.html",
     "date": "2026-11-10",
     "title": "ラベルを 1 つ足しただけなのに、なぜ Prometheus のメモリが溢れるのか？",

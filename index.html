@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tech Learning Daily — ラベルを 1 つ足しただけなのに、なぜ Prometheus のメモリが溢れるのか？</title>
+  <title>Tech Learning Daily — ノードの CPU はほぼ空いているのに、なぜ Pod は Pending のまま動かないのか？</title>
   <link rel="stylesheet" href="style.css">
   <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="feed.xml">
   <link rel="icon" href="/favicon.ico" sizes="48x48">
@@ -14,142 +14,147 @@
   <div class="container">
     <header>
       <h1>Tech Learning Daily</h1>
-      <div class="date">2026-11-10 (Tue) — 第 116 号</div>
+      <div class="date">2026-11-11 (Wed) — 第 117 号</div>
       <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
     </header>
 
     <article class="article">
       <div class="meta-bar">
-        <span class="tag tag-obs">Obs</span>
+        <span class="tag tag-container">Container</span>
         <span class="difficulty">🌿 基礎</span>
         <span class="read-time">⏱ 約 7 分</span>
       </div>
-      <h2 class="article-title">ラベルを 1 つ足しただけなのに、なぜ Prometheus のメモリが溢れるのか？</h2>
-      <p class="lead">「どのエンドポイントが遅いか見たい」と思い、レイテンシのメトリクスに <code>path</code> ラベルを 1 つ足してデプロイした。数日後、Prometheus のメモリ使用量が跳ね上がり、OOM で再起動を繰り返し始める。リクエスト数は何も変わっていないのに、たった 1 つのラベルがなぜ監視サーバーを倒すのだろうか。</p>
+      <h2 class="article-title">ノードの CPU はほぼ空いているのに、なぜ Pod は Pending のまま動かないのか？</h2>
+      <p class="lead">レプリカを 1 つ増やしただけなのに、新しい Pod が <code>Pending</code> のまま動かない。監視画面ではどのノードも CPU 使用率 20% 程度で、空きは十分あるように見える。それでも <code>kubectl describe pod</code> には <code>Insufficient cpu</code> と出る。足りないのは、いったい何なのだろうか。</p>
 
       <div class="tldr">
         <div class="box-title">🎯 3 行まとめ</div>
         <ul>
-          <li>Prometheus は「メトリクス名 + ラベルの値の組み合わせ」ごとに別々の時系列を作り、その本数（カーディナリティ）がメモリ・CPU・ディスクのコストを決める。</li>
-          <li>ラベルの種類数は足し算ではなく掛け算で効き、<code>/users/123</code> のような生の URL やユーザー ID を値に入れると系列が際限なく増える。</li>
-          <li>対策の主役は計測側でラベル値を有限に保つことで、<code>metric_relabel_configs</code> の <code>labeldrop</code> や <code>sample_limit</code> は取り込み側の安全網になる。</li>
+          <li>スケジューラは実際の CPU 使用率を見ない。各 Pod が manifest に書いた <code>requests</code>（予約量）の合計が、ノードの Allocatable に収まるかだけで配置先を決める</li>
+          <li>そのため、実際にはほとんど働いていない Pod でも、大きな <code>requests</code> を書いていればノードの枠を埋めてしまい、新しい Pod は Pending になる</li>
+          <li>対処は「ノードを足す」より先に、<code>kubectl describe node</code> の Allocated resources で予約の合計を確認し、実測に合わせて <code>requests</code> を見直すことである</li>
         </ul>
       </div>
 
       <section class="body-section">
-        <h3>1 本の時系列は「名前 + ラベルの組」で決まる</h3>
-        <p>Prometheus が保存する単位は<strong>時系列</strong>（time series。ある 1 つの対象について「時刻と値」の組を時間順に並べた列）である。<code>http_requests_total</code> というメトリクスがあっても、それ自体は 1 本の時系列ではない。</p>
-        <p>メトリクスには<strong>ラベル</strong>（<code>method="GET"</code> のように、測っている対象の性質を表すキーと値の組）を付けられる。公式ドキュメントは「キーと値のラベルの組み合わせが 1 つ異なるごとに新しい時系列になる」と明記している。つまり <code>method="GET"</code> と <code>method="POST"</code> は、同じメトリクス名でも保存上は別の 2 本である。</p>
-        <p>あるメトリクスが何本の時系列に展開されるかを、そのメトリクスの<strong>カーディナリティ</strong>（ラベル値の組み合わせの数）と呼ぶ。</p>
-        <pre class="diagram">http_requests_total
-├─{method="GET", status="200"}  ─▶ 系列1
-├─{method="GET", status="500"}  ─▶ 系列2
-├─{method="POST",status="200"}  ─▶ 系列3
-└─{method="POST",status="500"}  ─▶ 系列4
-
-path ラベルを追加（値が N 種類）
-        ▼
-4 本 × N 種類 = 4N 本の系列</pre>
+        <h3>Pending は「どのノードにも置けなかった」状態</h3>
+        <p>Pod を作ると、まず API サーバーに「まだノードが決まっていない Pod」として登録される。それを拾って配置先ノードを決めるのが <code>kube-scheduler</code>（スケジューラ）である。<code>Pending</code> は、コンテナがまだ 1 つも起動していない Pod の状態で、イメージのダウンロード待ちでも付くが、典型的な原因は「スケジューラが置き場所を見つけられなかった」ことだ。</p>
+        <p>置き場所が見つからないと、Pod は場所が空くまで未配置のまま残る。スケジューラは失敗するたびに Event を記録するため、理由は <code>kubectl describe pod</code> の末尾で確認できる。公式ドキュメントの例はこうなっている。</p>
+        <pre class="code">Events:
+  Type     Reason            From               Message
+  ----     ------            ----               -------
+  Warning  FailedScheduling  default-scheduler  0/42 nodes available: insufficient cpu</pre>
+        <p>ここで多くの人は「CPU が足りない」と読み、ノードの CPU 使用率を確かめに行く。そして空いているのを見て混乱する。しかしこのメッセージの「cpu」は、使用量のことではない。</p>
       </section>
 
       <section class="body-section">
-        <h3>ラベルは足し算ではなく掛け算で効く</h3>
-        <p>ラベルを 1 つ足すのは、表に列を 1 つ足す程度の変更に思える。しかし実際は、既存の全組み合わせがそのラベルの値の数だけ複製される。<code>method</code> が 4 種類、<code>status</code> が 5 種類なら 20 本だが、ここに値が 20 種類の <code>path</code> を足すと 400 本になる。</p>
-        <p>問題は <code>path</code> の値が有限とは限らないことだ。ルーティングのテンプレート（<code>/users/:id</code>）ではなく実際のリクエスト URL（<code>/users/123</code>）を入れると、ユーザーが増えるたび、ボットが存在しない URL を叩くたびに新しい値が生まれる。公式ドキュメントはユーザー ID やメールアドレスのような「上限のない値の集合」をラベルに入れるなと注意している。</p>
-        <p>Histogram はこの掛け算をさらに大きくする。従来型の Histogram は値の分布を数えるために、上限値ごとの区間（<strong>バケット</strong>）を 1 本ずつ系列として持つからだ。Python クライアントの既定バケットは <code>+Inf</code> を含めて 15 個あり、そこに合計 <code>_sum</code> と件数 <code>_count</code> が加わる。つまりラベルの組み合わせ 1 つにつき 17 本以上の系列が生える。</p>
+        <h3>スケジューラが数えているのは「予約」であって「使用量」ではない</h3>
+        <p>コンテナの <code>resources.requests</code> は「このコンテナのために最低これだけ確保してほしい」という予約量である。CPU の単位は cpu で、1 cpu は物理コア 1 つ、VM なら仮想コア 1 つに当たる。<code>100m</code>（100 ミリ cpu）は <code>0.1</code> と同じ意味だ。</p>
+        <pre class="code">resources:
+  requests:
+    cpu: 500m      # 0.5 コアを予約
+    memory: 256Mi</pre>
+        <p>公式ドキュメントは、スケジューラがリソースの種類ごとに「配置済みコンテナの requests の合計がノードの容量を下回る」ことを確かめると説明している。そして、ノードの実際の CPU やメモリ使用量がとても低くても、この計算で収まらなければ配置を拒否すると明言している。理由も書かれている。今は暇なノードでも、日次のピークで全 Pod が予約分まで使い始めたとき、リソース不足にならないよう守るためだ。</p>
+        <p>つまりスケジューラにとってのノードは、予約票で埋まっていく座席表である。実際に座っている人が少なくても、予約済みの席に新しい客は案内しない。使用率 20% のノードが新しい Pod を拒むのは、この座席表がすでに満席だからである。</p>
+        <pre class="diagram">ノード Allocatable = 4 cpu
+┌──────────────────────────────────┐
+│予約 requests 合計 (スケジューラ) │
+│ A:1.5 │ B:1.5 │ C:0.8 │残 0.2    │
+├──────────────────────────────────┤
+│実際の使用量 (監視画面)           │
+│ A:0.2 │ B:0.3 │ C:0.3 │空き 3.2  │
+└──────────────────────────────────┘
+新 Pod D: requests 0.5
+  ▼
+残り 0.2 &lt; 0.5 ▶ 配置不可 ▶ Pending</pre>
       </section>
 
       <div class="analogy">
         <div class="box-title">🍱 たとえるなら</div>
-        <p>郵便局の私書箱に近い。宛名が 1 文字でも違えば別の箱を 1 つ借りる決まりで、手紙（サンプル）自体は小さく束ねて保管できる。ところが宛名に「部屋番号」を書き足すと、同じ建物の住人ごとに箱が増える。棚を圧迫するのは届く手紙の量ではなく、箱の数のほうだ。</p>
+        <p>予約制のレストランだ。8 席すべてに予約が入っていれば、店内に 2 人しか座っていなくても、飛び込みの客は「満席です」と断られる。店が見ているのは予約台帳であって、実際に座っている人数ではない。予約を 4 人分取って 1 人で来る客が多いほど、店はガラガラなのに満席という状態になる。</p>
       </div>
 
       <section class="body-section">
-        <h3>なぜ「本数」がメモリに直結するのか</h3>
-        <p>Prometheus の保存エンジンは、取り込んだばかりのサンプルを <strong>head block</strong>（直近のデータを保持するメモリ上の領域。クラッシュに備えて WAL というログにも書く）に置く。系列 1 本ごとにラベルの組や書き込み途中のデータを持つため、系列が増えるほど常駐メモリが増える。</p>
-        <p>一方、同じ系列の中のサンプルは時刻も値も前の点と似ているので、よく圧縮される。公式のストレージ解説は 1 サンプルあたり平均 1〜2 バイトとし、負荷を下げるならサンプル数より系列数を減らすほうが効果的だとしている。スクレイプ間隔を延ばしてもメモリがあまり減らないのはこのためだ。</p>
-        <p>規模の感覚は公式ドキュメントの例が分かりやすい。1 万台のノードに数十本ずつのファイルシステム系列なら約 10 万本で問題ない。しかしそこへユーザーごとのクォータを足し、1 万ユーザー × 1 万ノードにすると数千万本になり、「現在の実装には多すぎる」と書かれている。</p>
+        <h3>座席の総数は「ノードのスペック」より少ない</h3>
+        <p>席の総数にも落とし穴がある。スケジューラが分母に使うのはノードの CPU 数（Capacity）そのものではなく、Allocatable という値である。Allocatable は Pod に使わせてよい量のことで、Capacity から kubelet などの Kubernetes 用の予約（<code>kubeReserved</code>）、OS デーモン用の予約（<code>systemReserved</code>）、退避のしきい値（<code>evictionHard</code>）を差し引いて求める。公式ドキュメントの例では、16 CPU・32Gi のノードで <code>kubeReserved</code> に cpu 1000m・memory 2Gi、<code>systemReserved</code> に cpu 500m・memory 1Gi、<code>evictionHard</code> に memory 500Mi を設定すると、Allocatable は 14.5 CPU・28.5Gi になる。</p>
+        <p>さらに、各ノードには DaemonSet（全ノードに 1 つずつ置かれる Pod）やシステム系 Pod が先に座っている。ログ収集エージェントや CNI プラグインもそれぞれ requests を持つため、アプリ用に残る席は「スペック表の CPU 数」よりかなり少ない。ノードのサイズを小さくするほど、この固定の取り分の割合が大きくなる。</p>
+        <p>ノードごとの予約の合計は <code>kubectl describe node</code> の Allocated resources 欄で見られる。公式ドキュメントの出力例はこうだ。</p>
+        <pre class="code">Allocated resources:
+  (Total limits may be over 100 percent, i.e., overcommitted.)
+  CPU Requests  CPU Limits  Memory Requests  Memory Limits
+  ------------  ----------  ---------------  -------------
+  680m (34%)    400m (20%)  920Mi (11%)      1070Mi (13%)</pre>
+        <p>CPU Requests の割合が 100% 近くに達していれば、使用率が低くてもそのノードにはもう Pod が入らない。Limits は 100% を超えてもよい（上限の合計は予約ではないため）が、Requests は Allocatable を超えて積めない。</p>
       </section>
 
       <section class="body-section">
-        <h3>計測側で絞り、取り込み側で安全網を張る</h3>
-        <p>対策の第一は、アプリが出すラベル値を有限に保つことだ。Rails なら <code>request.path</code> ではなくルート定義、Go のルーターならマッチしたパターンをラベルに入れる。公式の目安は「多くのメトリクスはラベル無し、ラベルを使うものもカーディナリティは 10 未満、100 を超えそうなら次元を減らすか監視以外の仕組みへ移す」である。ユーザー単位の分析はログやトレースの役割になる。</p>
-        <p>アプリをすぐ直せないときは、Prometheus 側の <code>metric_relabel_configs</code> で取り込み直前にラベルを削れる。これは取り込み前の最後の段階で各サンプルに適用され、<code>labeldrop</code> は正規表現に一致した名前のラベルを取り除く。ただし系列の区別に使っていたラベルを落とすと、別々だった系列が同じラベルの組になって衝突しうるので、応急処置と考えたほうがよい。</p>
-        <pre class="code">scrape_configs:
-  - job_name: app
-    sample_limit: 50000
-    metric_relabel_configs:
-      - action: labeldrop
-        regex: user_id</pre>
-        <p><code>sample_limit</code> は 1 回のスクレイプで受け入れるサンプル数の上限で、既定値 0 は「無制限」を意味する。上限を超えると、relabel 後の数で判定したうえでそのスクレイプ全体が失敗扱いになる。データが一時的に欠けるので強い手段だが、1 つのアプリのラベル事故が Prometheus 全体を巻き込んで落とす事態は防げる。</p>
-      </section>
-
-      <section class="body-section">
-        <h3>犯人のメトリクスを見つける</h3>
-        <p>メモリが増え始めたら、どのメトリクスが系列を生んでいるかを先に調べる。HTTP API の <code>/api/v1/status/tsdb</code> は、head block の系列数（<code>headStats.numSeries</code>）に加えて、メトリクス名ごとの系列数（<code>seriesCountByMetricName</code>）やラベル名ごとの値の種類数（<code>labelValueCountByLabelName</code>）を上位から返す。既定では各リスト 10 件で、<code>limit</code> パラメータで増やせる。</p>
-        <pre class="code">curl -s 'http://localhost:9090/api/v1/status/tsdb?limit=5' \
-  | jq '.data.labelValueCountByLabelName'</pre>
-        <p><code>path</code> や <code>user_id</code> のようなラベルが値の種類数で上位に並んでいれば、それが掛け算の起点である。</p>
+        <h3>requests を書かないと安全、とはならない</h3>
+        <p>「それなら requests を書かなければ席を取らずに済む」と考えたくなる。しかし実際はそうならないことが多い。まず、<code>limits</code> だけを書いて <code>requests</code> を書かず、ほかに既定値を入れる仕組みも無い場合、Kubernetes は limits の値をそのまま requests にコピーする。<code>limits.cpu: 2</code> とだけ書いた Pod は、2 cpu の予約を持つ Pod として扱われる。</p>
+        <p>次に、namespace に LimitRange（namespace ごとに既定値や上限を定めるオブジェクト）があれば、requests を書かなかったコンテナには Pod 作成時に <code>defaultRequest</code> が自動で入る。</p>
+        <pre class="code">apiVersion: v1
+kind: LimitRange
+metadata:
+  name: cpu-defaults
+spec:
+  limits:
+  - type: Container
+    defaultRequest:
+      cpu: 500m   # 書かなかったコンテナの requests
+    default:
+      cpu: 500m   # 書かなかったコンテナの limits</pre>
+        <p>この既定値は作成時に入るだけで、LimitRange を後から変えても既存の Pod は変わらない。どちらの仕組みも働かず本当に requests が空なら、スケジューラの勘定には入らないので配置はされる。その代わり予約が無いため、ノードが混んだときに CPU の取り分を保証されず、メモリ不足時には真っ先に退避の対象になる。requests は書かずに済ませるものではなく、実測に近い値を書くものである。</p>
       </section>
 
       <div class="practical">
         <div class="box-title">💼 実務でどう出会うか</div>
-        <p>典型は「ミドルウェアで全リクエストのレイテンシを Histogram に記録し、ラベルに生の URL パスを入れた」ケースである。開発環境ではアクセスする URL が数十種類しかないので問題が見えず、本番で ID 付きの URL やクローラーのアクセスが流れ込んで初めて系列が増え続ける。Grafana のダッシュボードが遅くなる、Prometheus が OOM で再起動する、マネージド監視サービスの請求が系列数に応じて増える、といった症状で発覚することが多い。レビュー時に「このラベルの値は何種類になりうるか」を 1 つ質問するだけで、多くは事前に防げる。</p>
+        <p>典型は「安全側に倒して <code>requests.cpu: 1</code> を全 Deployment にコピーしたが、実際の使用は 0.1 コア程度」というケースだ。ノードはガラガラなのに予約で満席になり、デプロイのたびに Pending が出る。Cluster Autoscaler（ノード数を自動調整する仕組み）を入れていると、スケジュールできない Pod を検知してノードを足すため、Pending は消えるが空気に席代を払い続けることになる。Cluster Autoscaler の縮小判定も、ノード上の Pod の requests の合計と Allocatable の比で行われる（既定のしきい値は 0.5）。過大な requests は縮小も妨げる。逆に requests を小さくしすぎると、1 つのノードに Pod を詰め込みすぎ、ピーク時に CPU を奪い合う。<code>kubectl top pod</code> などの実測値を数日分見て、ピーク付近に合わせて requests を決めるのが出発点になる。</p>
       </div>
 
       <div class="hands-on">
         <div class="box-title">⌨️ 手を動かす（5 分）</div>
-        <p>Python の公式クライアントで、パスをテンプレートにした Histogram と生の URL を入れた Histogram に 1,000 ユーザー分のリクエストを記録し、公開される系列数を比べる。</p>
-        <pre class="code">mkdir -p /tmp/card &amp;&amp; cd /tmp/card
-python3 -m venv v &amp;&amp; v/bin/pip -q install prometheus_client
-cat &gt; card.py &lt;&lt;'EOF'
-from prometheus_client import CollectorRegistry, Histogram, generate_latest
-
-reg = CollectorRegistry()
-good = Histogram("good_seconds", "templated", ["path"], registry=reg)
-bad = Histogram("bad_seconds", "raw path", ["path"], registry=reg)
-
-for user_id in range(1000):
-    good.labels(path="/users/:id").observe(0.03)
-    bad.labels(path=f"/users/{user_id}").observe(0.03)
-
-text = generate_latest(reg).decode()
-for name in ("good_seconds", "bad_seconds"):
-    n = sum(1 for l in text.splitlines() if l.startswith(name))
-    print(f"{name}: {n} series")
-EOF
-v/bin/python card.py</pre>
-        <p>リクエスト数は同じ 1,000 件なのに、<code>good_seconds</code> は 18 本、<code>bad_seconds</code> は 18,000 本になるはずだ（バケット 15 本・<code>_sum</code>・<code>_count</code> に、Python クライアントが付ける作成時刻の <code>_created</code> 1 本を加えて 18 本）。<code>range(1000)</code> を <code>range(10000)</code> に変えると、<code>bad_seconds</code> だけがさらに 10 倍になることも確かめられる。</p>
+        <p>kind でローカルに 1 ノードのクラスタを作り、ほぼ CPU を使わない <code>sleep</code> だけの Pod に大きな requests を持たせる。使用量がゼロに近くても、予約だけで Pending が起きることを確かめる。</p>
+        <pre class="code">kind create cluster --name sched
+ALLOC=$(kubectl get node -o jsonpath='{.items[0].status.allocatable.cpu}')
+echo "allocatable cpu: $ALLOC"
+# Allocatable の 3 割ずつを予約する Pod を 3 つ
+REQ=$((ALLOC * 300))m
+kubectl create deployment idle --image=busybox --replicas=3 -- sleep 3600
+kubectl set resources deployment idle --requests=cpu=$REQ
+sleep 20; kubectl get pods
+kubectl describe pods | grep -A3 FailedScheduling
+kubectl describe node | grep -A6 'Allocated resources'
+# 後片付け
+kind delete cluster --name sched</pre>
+        <p><code>ALLOC</code> は整数のコア数（例: <code>8</code>）で返る前提である。ミリ単位（例: <code>7800m</code>）で返った場合は数値を読み替えて <code>REQ</code> を手で指定する。kind のシステム Pod 自体も requests を持つため、3 つのうち少なくとも 1 つが <code>Pending</code> になり、Event に <code>Insufficient cpu</code> が出るはずだ。Allocated resources の CPU Requests は高い割合を示すが、Pod の中身は <code>sleep</code> なので実際の CPU はほとんど使われていない。</p>
       </div>
 
       <div class="misconceptions">
         <div class="box-title">🙅 よくある誤解</div>
         <ul>
-          <li><span class="wrong">スクレイプ間隔を延ばせばメモリは大きく減る</span> — サンプルは系列内でよく圧縮されるため、コストを左右するのは主に系列の本数である。間隔を延ばしても系列数は変わらない。</li>
-          <li><span class="wrong">ユーザーごとの状況を見たいなら user_id ラベルを足せばよい</span> — 値に上限のないラベルは系列を際限なく増やす。個別ユーザーの追跡はログやトレースで行い、メトリクスは集計値に留める。</li>
-          <li><span class="wrong">Histogram 1 つは系列 1 本である</span> — バケットの数だけ系列があり、そこに <code>_sum</code> と <code>_count</code> が加わる。ラベルの組み合わせ 1 つごとにこの束が丸ごと複製される。</li>
+          <li><span class="wrong">スケジューラは CPU 使用率の低いノードを選んで Pod を置く</span> — 配置可否の判定に使われるのは requests の合計と Allocatable であり、実測の使用率は見ていない。暇なノードでも予約が埋まっていれば置かれない</li>
+          <li><span class="wrong">Pending はノードの性能不足だから、大きいノードに替えれば直る</span> — 予約が実測より過大なら、ノードを大きくしても同じ比率で席が埋まる。先に requests を実測に合わせる方が効果が大きいことが多い</li>
+          <li><span class="wrong">limits だけ書けば予約は発生しない</span> — requests が未指定で既定値を入れる仕組みも無ければ、limits の値が requests にコピーされる。limits を大きく書くと、そのまま大きな予約になる</li>
         </ul>
       </div>
 
       <div class="glossary">
         <div class="box-title">📖 用語ミニ辞典</div>
         <dl>
-          <dt>時系列</dt><dd>メトリクス名とラベルの組で識別される、時刻と値の組を時間順に並べた列。</dd>
-          <dt>ラベル</dt><dd>測定対象の性質を表すキーと値の組。値の組み合わせが違えば別の時系列になる。</dd>
-          <dt>カーディナリティ</dt><dd>あるメトリクスが展開されるラベル値の組み合わせの数、すなわち時系列の本数。</dd>
-          <dt>head block</dt><dd>Prometheus が直近のサンプルをメモリ上に保持する領域。WAL でクラッシュに備える。</dd>
-          <dt>metric_relabel_configs</dt><dd>スクレイプしたサンプルに取り込み直前に適用するラベル書き換え・削除の設定。</dd>
-          <dt>sample_limit</dt><dd>1 回のスクレイプで受け入れるサンプル数の上限。超えるとスクレイプ全体が失敗扱いになる。</dd>
+          <dt>kube-scheduler</dt><dd>未配置の Pod を見つけ、条件に合うノードを選んで割り当てるコンポーネント</dd>
+          <dt>requests</dt><dd>コンテナのために確保してほしい最低量。スケジューラが配置判定に使う予約量</dd>
+          <dt>Allocatable</dt><dd>ノードの容量から kubelet・OS 用の予約と退避しきい値を引いた、Pod に使わせてよい量</dd>
+          <dt>Pending</dt><dd>Pod のコンテナがまだ起動していない状態。配置先ノードが見つからない場合が典型</dd>
+          <dt>LimitRange</dt><dd>namespace ごとに requests / limits の既定値や上下限を定め、Pod 作成時に適用するオブジェクト</dd>
         </dl>
       </div>
 
       <div class="further-reading">
         <div class="box-title">🔗 もっと深く</div>
         <ul>
-          <li><a href="https://prometheus.io/docs/practices/naming/">Prometheus: Metric and label naming</a> — 「ラベルの組み合わせごとに新しい時系列」という原則と、高カーディナリティの注意書きの一次ソース。</li>
-          <li><a href="https://prometheus.io/docs/practices/instrumentation/">Prometheus: Instrumentation</a> — 「Do not overuse labels」節にカーディナリティ 10 / 100 の目安と 1 万ノード × 1 万ユーザーの例がある。</li>
-          <li><a href="https://prometheus.io/docs/prometheus/latest/querying/api/">Prometheus: HTTP API</a> — TSDB Stats 節で <code>/api/v1/status/tsdb</code> が返す各統計の意味を確認できる。</li>
-          <li><a href="https://prometheus.io/docs/prometheus/latest/storage/">Prometheus: Storage</a> — head block と WAL の仕組み、系列数を減らすほうが効く理由が書かれている。</li>
+          <li><a href="https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/">Resource Management for Pods and Containers</a> — 「使用量が低くても requests で拒否する」理由と、Pending のトラブルシュート手順が載っている一次資料</li>
+          <li><a href="https://kubernetes.io/docs/tasks/administer-cluster/reserve-compute-resources/">Reserve Compute Resources for System Daemons</a> — Allocatable の計算と、16 CPU のノードが 14.5 CPU になる具体例</li>
+          <li><a href="https://kubernetes.io/docs/concepts/policy/limit-range/">Limit Ranges</a> — 既定 requests が作成時にだけ入ることや、既定値同士の矛盾で Pod が配置不能になる注意点</li>
+          <li><a href="https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/FAQ.md">Cluster Autoscaler FAQ</a> — Pending の Pod を契機にノードを足す仕組みと、requests 基準の縮小判定</li>
         </ul>
       </div>
     </article>
@@ -157,6 +162,11 @@ v/bin/python card.py</pre>
     <!-- recent:start -->
     <section class="section recent-articles">
       <div class="section-title">最近の記事</div>
+      <div class="card">
+        <h3><a href="archive/2026-11-10.html">ラベルを 1 つ足しただけなのに、なぜ Prometheus のメモリが溢れるのか？</a></h3>
+        <div class="summary">Prometheus はラベル値の組み合わせごとに時系列を作るため、生の URL やユーザー ID をラベルに入れると系列数が掛け算で増えてメモリを圧迫する。仕組みと、計測側・取り込み側での防ぎ方を解説する。</div>
+        <div class="meta"><span class="tag tag-obs">Obs</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-10</span></div>
+      </div>
       <div class="card">
         <h3><a href="archive/2026-11-09.html">ターミナルでは 1 行ずつ出るのに、なぜパイプや docker logs に通すとログがまとめて遅れて届くのか？</a></h3>
         <div class="summary">print はすぐ OS に書かずプロセス内バッファに溜める。出力先が端末なら行単位、パイプやファイルならブロック単位で溜めるため、パイプや docker logs ではログがまとめて遅れて届き、強制終了時には消える。</div>
@@ -171,11 +181,6 @@ v/bin/python card.py</pre>
         <h3><a href="archive/2026-11-07.html">b に append しただけなのに、なぜ別の変数 c の中身まで変わるのか？</a></h3>
         <div class="summary">Go の slice はヘッダ（ポインタ・長さ・容量）にすぎず、append は容量に空きがあれば共有中の基底配列に上書きする。再帰で結果が全部同じ値になる理由と、full slice expression・slices.Clip・slices.Clone で共有を断つ方法を解説。</div>
         <div class="meta"><span class="tag tag-lang">Lang</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-07</span></div>
-      </div>
-      <div class="card">
-        <h3><a href="archive/2026-11-06.html">-p 3000:3000 と書いたのに、なぜコンテナのアプリに繋がらないのか？</a></h3>
-        <div class="summary">コンテナ内の localhost はコンテナ自身だけを指し、-p の転送は eth0 側に届く。127.0.0.1 で待つアプリには繋がらないので 0.0.0.0 にバインドし、公開範囲は -p のホスト側で絞る。</div>
-        <div class="meta"><span class="tag tag-container">Container</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-06</span></div>
       </div>
       <div class="recent-more"><a href="archive/">アーカイブですべて見る →</a></div>
     </section>

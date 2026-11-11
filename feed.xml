@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-11-10T12:42:12+09:00</updated>
+  <updated>2026-11-11T10:22:37+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>ノードの CPU はほぼ空いているのに、なぜ Pod は Pending のまま動かないのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-11-11.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-11-11.html</id>
+    <updated>2026-11-11T10:22:37+09:00</updated>
+    <summary>スケジューラは実際の CPU 使用率ではなく requests の合計がノードの Allocatable に収まるかで配置を決める。過大な requests は暇なノードを満席にして Pod を Pending にするため、実測に合わせて見直す。</summary>
+  </entry>
   <entry>
     <title>ラベルを 1 つ足しただけなのに、なぜ Prometheus のメモリが溢れるのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-11-10.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-10-29.html</id>
     <updated>2026-10-29T10:07:06+09:00</updated>
     <summary>fork は物理ページを親子で共有し書き込まれたページだけを複製する Copy-on-Write。RSS は共有分を重複計上するので PSS で測る。Ruby は GC の書き込みで共有が剥がれるため preload_app! と Process.warmup で抑える。</summary>
-  </entry>
-  <entry>
-    <title>ping も TCP 接続も通るのに、なぜ大きなレスポンスだけが返ってこないのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-10-28.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-10-28.html</id>
-    <updated>2026-10-28T09:35:23+09:00</updated>
-    <summary>経路上のトンネルで MTU が縮むと、送信側は ICMP Type 3 Code 4 を頼りに小さく送り直すが、ICMP を捨てる FW があると大きなパケットだけが消える。ICMP を通す・MSS クランプ・MTU 調整で防ぐ。</summary>
   </entry>
 </feed>
