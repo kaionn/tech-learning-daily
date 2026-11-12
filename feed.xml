@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-11-11T10:22:37+09:00</updated>
+  <updated>2026-11-12T11:22:55+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>100 万回ずつ count++ しただけなのに、なぜ 2 つの goroutine の合計は 200 万にならないのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-11-12.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-11-12.html</id>
+    <updated>2026-11-12T11:22:55+09:00</updated>
+    <summary>count++ は読む・足す・書くの 3 手順で、並行する goroutine が同じ古い値を読むと片方の加算が上書きで消える。sync.Mutex か sync/atomic で直列化し、go test -race で実際に起きた競合を検出する。</summary>
+  </entry>
   <entry>
     <title>ノードの CPU はほぼ空いているのに、なぜ Pod は Pending のまま動かないのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-11-11.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-10-30.html</id>
     <updated>2026-10-30T10:10:32+09:00</updated>
     <summary>HTTP→HTTPS の 301 は平文の初回リクエストを中間者に横取りされうる。HSTS はブラウザに HTTPS 専用と記憶させ送信前に書き換えさせ、max-age・includeSubDomains・プリロードで範囲と期間が決まる。</summary>
-  </entry>
-  <entry>
-    <title>Puma のワーカーを 4 つ fork したのに、なぜメモリは 4 倍にならないのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-10-29.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-10-29.html</id>
-    <updated>2026-10-29T10:07:06+09:00</updated>
-    <summary>fork は物理ページを親子で共有し書き込まれたページだけを複製する Copy-on-Write。RSS は共有分を重複計上するので PSS で測る。Ruby は GC の書き込みで共有が剥がれるため preload_app! と Process.warmup で抑える。</summary>
   </entry>
 </feed>

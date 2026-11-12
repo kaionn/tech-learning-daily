@@ -33,7 +33,7 @@
         <button class="chip" data-cat="container">Container <span class="chip-count">19</span></button>
         <button class="chip" data-cat="network">Network <span class="chip-count">18</span></button>
         <button class="chip" data-cat="db">DB <span class="chip-count">14</span></button>
-        <button class="chip" data-cat="lang">Lang <span class="chip-count">13</span></button>
+        <button class="chip" data-cat="lang">Lang <span class="chip-count">14</span></button>
         <button class="chip" data-cat="arch">Arch <span class="chip-count">9</span></button>
         <button class="chip" data-cat="security">Security <span class="chip-count">9</span></button>
         <button class="chip" data-cat="ai">AI <span class="chip-count">8</span></button>
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-11">
       <div class="section-title">2026 年 11 月 <span class="count"></span></div>
+      <div class="card" data-cat="lang" data-diff="基礎"
+           data-search="100 万回ずつ count++ しただけなのに、なぜ 2 つの goroutine の合計は 200 万にならないのか？ count++ は 1 行でも読む・足す・書くの 3 手順に分かれ、並行する goroutine が割り込むと加算が消える。データ競合の仕組みと、mutex・atomic での直し方、race detector での検出を解説する。" data-terms="データ競合（data race） / read-modify-write / sync.Mutex / sync/atomic / race detector">
+        <h3><a href="2026-11-12.html">100 万回ずつ count++ しただけなのに、なぜ 2 つの goroutine の合計は 200 万にならないのか？</a></h3>
+        <div class="summary">count++ は 1 行でも読む・足す・書くの 3 手順に分かれ、並行する goroutine が割り込むと加算が消える。データ競合の仕組みと、Mutex・atomic での直し方、race detector での検出を解説する。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-lang">Lang</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-12</span></div>
+      </div>
       <div class="card" data-cat="container" data-diff="基礎"
            data-search="ノードの cpu はほぼ空いているのに、なぜ pod は pending のまま動かないのか？ kubernetes のスケジューラは cpu 使用率ではなく requests（予約量）の合計と allocatable で配置を決める。ノードが暇なのに pod が pending になる仕組みと、requests の見直し方を解説する。" data-terms="kube-scheduler / requests / Allocatable / Pending / LimitRange">
         <h3><a href="2026-11-11.html">ノードの CPU はほぼ空いているのに、なぜ Pod は Pending のまま動かないのか？</a></h3>

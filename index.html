@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tech Learning Daily — ノードの CPU はほぼ空いているのに、なぜ Pod は Pending のまま動かないのか？</title>
+  <title>Tech Learning Daily — 100 万回ずつ count++ しただけなのに、なぜ 2 つの goroutine の合計は 200 万にならないのか？</title>
   <link rel="stylesheet" href="style.css">
   <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="feed.xml">
   <link rel="icon" href="/favicon.ico" sizes="48x48">
@@ -14,147 +14,164 @@
   <div class="container">
     <header>
       <h1>Tech Learning Daily</h1>
-      <div class="date">2026-11-11 (Wed) — 第 117 号</div>
+      <div class="date">2026-11-12 (Thu) — 第 118 号</div>
       <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
     </header>
 
     <article class="article">
       <div class="meta-bar">
-        <span class="tag tag-container">Container</span>
+        <span class="tag tag-lang">Lang</span>
         <span class="difficulty">🌿 基礎</span>
         <span class="read-time">⏱ 約 7 分</span>
       </div>
-      <h2 class="article-title">ノードの CPU はほぼ空いているのに、なぜ Pod は Pending のまま動かないのか？</h2>
-      <p class="lead">レプリカを 1 つ増やしただけなのに、新しい Pod が <code>Pending</code> のまま動かない。監視画面ではどのノードも CPU 使用率 20% 程度で、空きは十分あるように見える。それでも <code>kubectl describe pod</code> には <code>Insufficient cpu</code> と出る。足りないのは、いったい何なのだろうか。</p>
+      <h2 class="article-title">100 万回ずつ count++ しただけなのに、なぜ 2 つの goroutine の合計は 200 万にならないのか？</h2>
+      <p class="lead">goroutine を 2 つ起動し、それぞれ共有の変数に <code>count++</code> を 100 万回実行させる。終わるのを待って表示すると、出てくるのは 200 万に届かない数字で、しかも実行のたびに値が変わる。足し算を 1 回も書き間違えていないのに、カウントはどこへ消えたのだろうか。</p>
 
       <div class="tldr">
         <div class="box-title">🎯 3 行まとめ</div>
         <ul>
-          <li>スケジューラは実際の CPU 使用率を見ない。各 Pod が manifest に書いた <code>requests</code>（予約量）の合計が、ノードの Allocatable に収まるかだけで配置先を決める</li>
-          <li>そのため、実際にはほとんど働いていない Pod でも、大きな <code>requests</code> を書いていればノードの枠を埋めてしまい、新しい Pod は Pending になる</li>
-          <li>対処は「ノードを足す」より先に、<code>kubectl describe node</code> の Allocated resources で予約の合計を確認し、実測に合わせて <code>requests</code> を見直すことである</li>
+          <li><code>count++</code> は 1 行だが、CPU から見ると「読む・足す・書く」の 3 手順で、その途中に別の goroutine が割り込める</li>
+          <li>2 つが同じ古い値を読んで書き戻すと、片方の +1 が上書きされて消える。これがデータ競合（data race）による更新の消失である</li>
+          <li><code>sync.Mutex</code> か <code>sync/atomic</code> でアクセスを直列化し、<code>go test -race</code> で実際に起きた競合を検出する</li>
         </ul>
       </div>
 
       <section class="body-section">
-        <h3>Pending は「どのノードにも置けなかった」状態</h3>
-        <p>Pod を作ると、まず API サーバーに「まだノードが決まっていない Pod」として登録される。それを拾って配置先ノードを決めるのが <code>kube-scheduler</code>（スケジューラ）である。<code>Pending</code> は、コンテナがまだ 1 つも起動していない Pod の状態で、イメージのダウンロード待ちでも付くが、典型的な原因は「スケジューラが置き場所を見つけられなかった」ことだ。</p>
-        <p>置き場所が見つからないと、Pod は場所が空くまで未配置のまま残る。スケジューラは失敗するたびに Event を記録するため、理由は <code>kubectl describe pod</code> の末尾で確認できる。公式ドキュメントの例はこうなっている。</p>
-        <pre class="code">Events:
-  Type     Reason            From               Message
-  ----     ------            ----               -------
-  Warning  FailedScheduling  default-scheduler  0/42 nodes available: insufficient cpu</pre>
-        <p>ここで多くの人は「CPU が足りない」と読み、ノードの CPU 使用率を確かめに行く。そして空いているのを見て混乱する。しかしこのメッセージの「cpu」は、使用量のことではない。</p>
+        <h3>再現するコード：1 行も間違っていないのに数が合わない</h3>
+        <p>まず問題のコードを見る。<code>sync.WaitGroup</code> は「起動した goroutine が全部終わるまで待つ」ためのカウンタで、<code>Add</code> で待つ数を増やし、各 goroutine が <code>Done</code> で減らし、<code>Wait</code> が 0 になるまでブロックする。</p>
+        <pre class="code">var count int
+var wg sync.WaitGroup
+for i := 0; i &lt; 2; i++ {
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for j := 0; j &lt; 1000000; j++ {
+			count++
+		}
+	}()
+}
+wg.Wait()
+fmt.Println(count) // 2000000 にならない</pre>
+        <p>待ち合わせは正しく、ループ回数も正しい。それでも合計が足りないのは、ロジックの誤りではなく、2 つの goroutine が同じ変数を同時に触っていることが原因である。マルチコアの CPU では、2 つの goroutine は別々のコアで文字どおり同時に走りうる。</p>
       </section>
 
       <section class="body-section">
-        <h3>スケジューラが数えているのは「予約」であって「使用量」ではない</h3>
-        <p>コンテナの <code>resources.requests</code> は「このコンテナのために最低これだけ確保してほしい」という予約量である。CPU の単位は cpu で、1 cpu は物理コア 1 つ、VM なら仮想コア 1 つに当たる。<code>100m</code>（100 ミリ cpu）は <code>0.1</code> と同じ意味だ。</p>
-        <pre class="code">resources:
-  requests:
-    cpu: 500m      # 0.5 コアを予約
-    memory: 256Mi</pre>
-        <p>公式ドキュメントは、スケジューラがリソースの種類ごとに「配置済みコンテナの requests の合計がノードの容量を下回る」ことを確かめると説明している。そして、ノードの実際の CPU やメモリ使用量がとても低くても、この計算で収まらなければ配置を拒否すると明言している。理由も書かれている。今は暇なノードでも、日次のピークで全 Pod が予約分まで使い始めたとき、リソース不足にならないよう守るためだ。</p>
-        <p>つまりスケジューラにとってのノードは、予約票で埋まっていく座席表である。実際に座っている人が少なくても、予約済みの席に新しい客は案内しない。使用率 20% のノードが新しい Pod を拒むのは、この座席表がすでに満席だからである。</p>
-        <pre class="diagram">ノード Allocatable = 4 cpu
-┌──────────────────────────────────┐
-│予約 requests 合計 (スケジューラ) │
-│ A:1.5 │ B:1.5 │ C:0.8 │残 0.2    │
-├──────────────────────────────────┤
-│実際の使用量 (監視画面)           │
-│ A:0.2 │ B:0.3 │ C:0.3 │空き 3.2  │
-└──────────────────────────────────┘
-新 Pod D: requests 0.5
-  ▼
-残り 0.2 &lt; 0.5 ▶ 配置不可 ▶ Pending</pre>
+        <h3>1 行に見えて 3 手順：更新が消える瞬間</h3>
+        <p><code>count++</code> は 1 つの操作に見える。しかし実際は、メモリから値をレジスタ（CPU 内部の作業用の置き場）へ読み込み、1 を足し、結果をメモリへ書き戻すという 3 手順に分かれる。この「読んで・変えて・書く」の組を read-modify-write と呼ぶ。3 手順のあいだに他のコアが同じ場所を読み書きしても、CPU は通常の命令ではそれを止めない。</p>
+        <pre class="diagram">  メモリ上の count = 41
+
+  goroutine A       goroutine B
+  ───────────       ───────────
+  ① 読む → 41
+                    ② 読む → 41
+  ③ 足す → 42
+                    ④ 足す → 42
+  ⑤ 書く → 42
+                    ⑥ 書く → 42
+                         │
+                         ▼
+  結果 count = 42（+2 のはずが +1）</pre>
+        <p>図のように、A が書き戻す前に B が同じ 41 を読むと、2 人とも 42 を書き込む。2 回分の加算をしたのに値は 1 しか増えず、A の +1 は B の書き込みで上書きされて跡形もなく消える。100 万回のループではこの重なりが何十万回も起きうるため、合計は大きく欠ける。重なる回数はタイミング次第なので、実行ごとに結果が変わる。</p>
+        <p>Go のメモリモデルは、この状況をデータ競合（data race）と定義している。「あるメモリ位置への書き込みが、同じ位置への別の読み書きと並行して起きること。ただしすべてのアクセスが <code>sync/atomic</code> による atomic なアクセスである場合を除く」。そして並行に触られるデータを変更するプログラムは、そのアクセスを直列化（同時に 1 つずつしか触れないように）しなければならない、とも明記している。</p>
       </section>
 
       <div class="analogy">
         <div class="box-title">🍱 たとえるなら</div>
-        <p>予約制のレストランだ。8 席すべてに予約が入っていれば、店内に 2 人しか座っていなくても、飛び込みの客は「満席です」と断られる。店が見ているのは予約台帳であって、実際に座っている人数ではない。予約を 4 人分取って 1 人で来る客が多いほど、店はガラガラなのに満席という状態になる。</p>
+        <p>ホワイトボードに書かれた来場者数を、入口係 2 人が更新する場面に近い。それぞれ「ボードを見て数字を覚える → 頭の中で +1 → 消して書き直す」を繰り返す。2 人が同時にボードを見て 41 と覚えれば、2 人とも 42 と書き、1 人分の来場が記録から消える。防ぐ方法は、マーカーを 1 本だけにして持っている人しかボードに触れないようにすること（Mutex）か、押すと必ず 1 増える数取器に置き換えること（atomic）である。</p>
       </div>
 
       <section class="body-section">
-        <h3>座席の総数は「ノードのスペック」より少ない</h3>
-        <p>席の総数にも落とし穴がある。スケジューラが分母に使うのはノードの CPU 数（Capacity）そのものではなく、Allocatable という値である。Allocatable は Pod に使わせてよい量のことで、Capacity から kubelet などの Kubernetes 用の予約（<code>kubeReserved</code>）、OS デーモン用の予約（<code>systemReserved</code>）、退避のしきい値（<code>evictionHard</code>）を差し引いて求める。公式ドキュメントの例では、16 CPU・32Gi のノードで <code>kubeReserved</code> に cpu 1000m・memory 2Gi、<code>systemReserved</code> に cpu 500m・memory 1Gi、<code>evictionHard</code> に memory 500Mi を設定すると、Allocatable は 14.5 CPU・28.5Gi になる。</p>
-        <p>さらに、各ノードには DaemonSet（全ノードに 1 つずつ置かれる Pod）やシステム系 Pod が先に座っている。ログ収集エージェントや CNI プラグインもそれぞれ requests を持つため、アプリ用に残る席は「スペック表の CPU 数」よりかなり少ない。ノードのサイズを小さくするほど、この固定の取り分の割合が大きくなる。</p>
-        <p>ノードごとの予約の合計は <code>kubectl describe node</code> の Allocated resources 欄で見られる。公式ドキュメントの出力例はこうだ。</p>
-        <pre class="code">Allocated resources:
-  (Total limits may be over 100 percent, i.e., overcommitted.)
-  CPU Requests  CPU Limits  Memory Requests  Memory Limits
-  ------------  ----------  ---------------  -------------
-  680m (34%)    400m (20%)  920Mi (11%)      1070Mi (13%)</pre>
-        <p>CPU Requests の割合が 100% 近くに達していれば、使用率が低くてもそのノードにはもう Pod が入らない。Limits は 100% を超えてもよい（上限の合計は予約ではないため）が、Requests は Allocatable を超えて積めない。</p>
+        <h3>直し方 2 つ：Mutex と atomic はどう使い分けるか</h3>
+        <p>1 つ目は <code>sync.Mutex</code>（相互排他ロック）で、<code>Lock</code> から <code>Unlock</code> までの区間に同時に 1 つの goroutine しか入れないようにする。ほかの goroutine が保持している間に <code>Lock</code> を呼ぶと、解放されるまでブロックする。ゼロ値がそのまま「ロックされていない Mutex」なので初期化は不要である。</p>
+        <pre class="code">var mu sync.Mutex
+// ...
+mu.Lock()
+count++
+mu.Unlock()</pre>
+        <p>2 つ目は <code>sync/atomic</code> で、読む・足す・書くを CPU の専用命令で不可分（途中に割り込めない 1 手順）に行う。Go 1.19 で追加された <code>atomic.Int64</code> 型を使うと、<code>Add</code> が「値に delta を atomic に足して新しい値を返す」。</p>
+        <pre class="code">var count atomic.Int64
+// ...
+count.Add(1)
+// 読むときも count.Load() を使う</pre>
+        <p>使い分けの基準は「守りたいのが 1 つの変数か、複数の値の組か」である。単一のカウンタなら atomic が軽い。しかし「残高を減らしたら履歴にも 1 行足す」のように 2 つの値をそろって変えたい場合、それぞれを atomic にしても、間の瞬間に他の goroutine が不整合な組を見る。この場合は Mutex で区間ごと守る必要がある。公式ドキュメントも <code>sync/atomic</code> について「正しく使うには細心の注意が要る」とし、特殊な低レベル用途以外はチャネルや <code>sync</code> パッケージを勧めている。</p>
+        <p>Mutex を使うときの落とし穴がもう 1 つある。<code>sync.Mutex</code> は「最初に使った後はコピーしてはならない」。Mutex を含む構造体を値渡しやレシーバの値コピーで扱うと、コピー先は別の錠になり、守っているつもりで何も守らない。Mutex を持つ型のメソッドはポインタレシーバで書く。</p>
       </section>
 
       <section class="body-section">
-        <h3>requests を書かないと安全、とはならない</h3>
-        <p>「それなら requests を書かなければ席を取らずに済む」と考えたくなる。しかし実際はそうならないことが多い。まず、<code>limits</code> だけを書いて <code>requests</code> を書かず、ほかに既定値を入れる仕組みも無い場合、Kubernetes は limits の値をそのまま requests にコピーする。<code>limits.cpu: 2</code> とだけ書いた Pod は、2 cpu の予約を持つ Pod として扱われる。</p>
-        <p>次に、namespace に LimitRange（namespace ごとに既定値や上限を定めるオブジェクト）があれば、requests を書かなかったコンテナには Pod 作成時に <code>defaultRequest</code> が自動で入る。</p>
-        <pre class="code">apiVersion: v1
-kind: LimitRange
-metadata:
-  name: cpu-defaults
-spec:
-  limits:
-  - type: Container
-    defaultRequest:
-      cpu: 500m   # 書かなかったコンテナの requests
-    default:
-      cpu: 500m   # 書かなかったコンテナの limits</pre>
-        <p>この既定値は作成時に入るだけで、LimitRange を後から変えても既存の Pod は変わらない。どちらの仕組みも働かず本当に requests が空なら、スケジューラの勘定には入らないので配置はされる。その代わり予約が無いため、ノードが混んだときに CPU の取り分を保証されず、メモリ不足時には真っ先に退避の対象になる。requests は書かずに済ませるものではなく、実測に近い値を書くものである。</p>
+        <h3>テストが通っても安心できない理由と、race detector</h3>
+        <p>データ競合は毎回壊れるとは限らない。そう思える。しかし実際はもっと厄介で、ループ回数が少なかったり、たまたま goroutine が時間差で走ったりすると、正しい結果が出てしまう。ローカルのテストは緑なのに、本番の高負荷でだけ数字がずれる、という形で表に出ることが多い。</p>
+        <p>そこで使うのが Go の race detector である。<code>go test</code> / <code>go run</code> / <code>go build</code> に <code>-race</code> を付けると、メモリアクセスを監視するコードが埋め込まれ、競合が起きると <code>WARNING: DATA RACE</code> と、競合した 2 つのアクセスのスタックトレースを出す。公式ドキュメントによれば、典型的なプログラムでメモリ使用量が 5〜10 倍、実行時間が 2〜20 倍になるため、本番バイナリには常用せず、CI のテストや負荷をかけた検証環境で使う。</p>
+        <p>ただし race detector は「実行時に実際に起きた競合」しか見つけない。通らなかったコードパスの競合は報告されないので、<code>-race</code> で何も出ないことは競合がない証明にはならない。カバレッジの薄いテストより、<code>-race</code> 付きでビルドしたバイナリに現実的な負荷をかけた方が多く見つかる、と公式ドキュメントも書いている。</p>
+        <p>挙動は環境変数 <code>GORACE</code> で調整できる。既定では競合を報告しても実行を続け、終了時の終了コードが <code>66</code> になる。<code>halt_on_error=1</code> にすると最初の競合を報告した時点で止まり、ログの洪水を避けられる。<code>exitcode</code> で終了コードを変えられるので、CI で「競合が出たら失敗」の判定に使える。</p>
+        <pre class="code">GORACE="halt_on_error=1" go test -race ./...</pre>
+        <p>map では同じ問題がさらに激しく出る。Go 1.6 以降のランタイムは map の並行な誤用をベストエフォートで検出し、検出すると診断を表示してプログラムをクラッシュさせる。カウンタのように「数がずれる」では済まず、プロセスが落ちるので、共有 map への並行書き込みも Mutex で守る。</p>
       </section>
 
       <div class="practical">
         <div class="box-title">💼 実務でどう出会うか</div>
-        <p>典型は「安全側に倒して <code>requests.cpu: 1</code> を全 Deployment にコピーしたが、実際の使用は 0.1 コア程度」というケースだ。ノードはガラガラなのに予約で満席になり、デプロイのたびに Pending が出る。Cluster Autoscaler（ノード数を自動調整する仕組み）を入れていると、スケジュールできない Pod を検知してノードを足すため、Pending は消えるが空気に席代を払い続けることになる。Cluster Autoscaler の縮小判定も、ノード上の Pod の requests の合計と Allocatable の比で行われる（既定のしきい値は 0.5）。過大な requests は縮小も妨げる。逆に requests を小さくしすぎると、1 つのノードに Pod を詰め込みすぎ、ピーク時に CPU を奪い合う。<code>kubectl top pod</code> などの実測値を数日分見て、ピーク付近に合わせて requests を決めるのが出発点になる。</p>
+        <p>Go の HTTP サーバーはリクエストごとに goroutine を起動するため、ハンドラから触るパッケージ変数や構造体のフィールド（アクセス数のカウンタ、メモリ上のキャッシュ用 map）は、それだけで複数 goroutine からの並行アクセスになる。ローカルで 1 リクエストずつ試すと再現せず、負荷試験や本番で初めて数字のずれや <code>concurrent map writes</code> のクラッシュとして現れる。同じ構造は Puma のスレッドで動く Rails でも起こりうる。クラス変数やメモ化（<code>@cache ||= ...</code>）を複数スレッドで共有すると、読んでから書くまでの間に別スレッドが割り込む余地がある。CI の Go テストには最初から <code>-race</code> を付けておくのが、もっとも手間の少ない予防になる。</p>
       </div>
 
       <div class="hands-on">
         <div class="box-title">⌨️ 手を動かす（5 分）</div>
-        <p>kind でローカルに 1 ノードのクラスタを作り、ほぼ CPU を使わない <code>sleep</code> だけの Pod に大きな requests を持たせる。使用量がゼロに近くても、予約だけで Pending が起きることを確かめる。</p>
-        <pre class="code">kind create cluster --name sched
-ALLOC=$(kubectl get node -o jsonpath='{.items[0].status.allocatable.cpu}')
-echo "allocatable cpu: $ALLOC"
-# Allocatable の 3 割ずつを予約する Pod を 3 つ
-REQ=$((ALLOC * 300))m
-kubectl create deployment idle --image=busybox --replicas=3 -- sleep 3600
-kubectl set resources deployment idle --requests=cpu=$REQ
-sleep 20; kubectl get pods
-kubectl describe pods | grep -A3 FailedScheduling
-kubectl describe node | grep -A6 'Allocated resources'
-# 後片付け
-kind delete cluster --name sched</pre>
-        <p><code>ALLOC</code> は整数のコア数（例: <code>8</code>）で返る前提である。ミリ単位（例: <code>7800m</code>）で返った場合は数値を読み替えて <code>REQ</code> を手で指定する。kind のシステム Pod 自体も requests を持つため、3 つのうち少なくとも 1 つが <code>Pending</code> になり、Event に <code>Insufficient cpu</code> が出るはずだ。Allocated resources の CPU Requests は高い割合を示すが、Pod の中身は <code>sleep</code> なので実際の CPU はほとんど使われていない。</p>
+        <p>Go が入った Mac で、更新の消失と race detector の報告を自分の目で確かめる。</p>
+        <pre class="code">mkdir -p /tmp/racedemo &amp;&amp; cd /tmp/racedemo
+cat &gt; main.go &lt;&lt;'EOF'
+package main
+
+import (
+	"fmt"
+	"sync"
+)
+
+func main() {
+	var count int
+	var wg sync.WaitGroup
+	for i := 0; i &lt; 2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j &lt; 1000000; j++ {
+				count++
+			}
+		}()
+	}
+	wg.Wait()
+	fmt.Println(count)
+}
+EOF
+go run main.go; go run main.go; go run main.go
+go run -race main.go; echo "exit=$?"</pre>
+        <p>最初の 3 回は 2000000 より小さい、毎回違う数字が出るはずだ（コア数や負荷によっては近い値になることもある）。<code>-race</code> 付きの実行では <code>WARNING: DATA RACE</code> と、<code>main.go</code> の <code>count++</code> の行を指す 2 つのアクセス（Read と Write）が表示され、<code>exit=66</code> で終わる。続けて <code>count++</code> を <code>mu.Lock()</code> / <code>mu.Unlock()</code> で囲む（<code>var mu sync.Mutex</code> を足す）と、毎回 2000000 になり、<code>-race</code> も何も報告しなくなる。</p>
       </div>
 
       <div class="misconceptions">
         <div class="box-title">🙅 よくある誤解</div>
         <ul>
-          <li><span class="wrong">スケジューラは CPU 使用率の低いノードを選んで Pod を置く</span> — 配置可否の判定に使われるのは requests の合計と Allocatable であり、実測の使用率は見ていない。暇なノードでも予約が埋まっていれば置かれない</li>
-          <li><span class="wrong">Pending はノードの性能不足だから、大きいノードに替えれば直る</span> — 予約が実測より過大なら、ノードを大きくしても同じ比率で席が埋まる。先に requests を実測に合わせる方が効果が大きいことが多い</li>
-          <li><span class="wrong">limits だけ書けば予約は発生しない</span> — requests が未指定で既定値を入れる仕組みも無ければ、limits の値が requests にコピーされる。limits を大きく書くと、そのまま大きな予約になる</li>
+          <li><span class="wrong"><code>count++</code> は 1 行だから途中で割り込まれない</span> — ソースの 1 行と CPU の不可分な 1 手順は別物で、<code>count++</code> は読む・足す・書くに分かれる。不可分にしたいなら <code>sync/atomic</code> を明示的に使う。</li>
+          <li><span class="wrong">読むだけの goroutine はロックしなくてよい</span> — 別の goroutine が書いている最中の読み取りもデータ競合である。書き手がいる限り、読み手も同じ Mutex を取るか atomic の <code>Load</code> を使う。</li>
+          <li><span class="wrong"><code>-race</code> で何も出なければ競合はない</span> — race detector は実行中に実際に起きた競合だけを報告する。通らなかった経路や、テストでは重ならなかったタイミングの競合は見逃す。</li>
         </ul>
       </div>
 
       <div class="glossary">
         <div class="box-title">📖 用語ミニ辞典</div>
         <dl>
-          <dt>kube-scheduler</dt><dd>未配置の Pod を見つけ、条件に合うノードを選んで割り当てるコンポーネント</dd>
-          <dt>requests</dt><dd>コンテナのために確保してほしい最低量。スケジューラが配置判定に使う予約量</dd>
-          <dt>Allocatable</dt><dd>ノードの容量から kubelet・OS 用の予約と退避しきい値を引いた、Pod に使わせてよい量</dd>
-          <dt>Pending</dt><dd>Pod のコンテナがまだ起動していない状態。配置先ノードが見つからない場合が典型</dd>
-          <dt>LimitRange</dt><dd>namespace ごとに requests / limits の既定値や上下限を定め、Pod 作成時に適用するオブジェクト</dd>
+          <dt>データ競合（data race）</dt><dd>同じメモリ位置への書き込みが、別の読み書きと同期なしに並行して起きること</dd>
+          <dt>read-modify-write</dt><dd>値を読み、変更し、書き戻す一連の操作。途中に割り込まれると更新が消える</dd>
+          <dt>sync.Mutex</dt><dd>Lock〜Unlock の区間に同時に 1 つの goroutine しか入れない相互排他ロック</dd>
+          <dt>sync/atomic</dt><dd>単一の値への読み書き・加算を割り込み不能な 1 手順で行う Go のパッケージ</dd>
+          <dt>race detector</dt><dd><code>-race</code> で有効になる、実行時に起きたデータ競合を検出・報告する Go のツール</dd>
         </dl>
       </div>
 
       <div class="further-reading">
         <div class="box-title">🔗 もっと深く</div>
         <ul>
-          <li><a href="https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/">Resource Management for Pods and Containers</a> — 「使用量が低くても requests で拒否する」理由と、Pending のトラブルシュート手順が載っている一次資料</li>
-          <li><a href="https://kubernetes.io/docs/tasks/administer-cluster/reserve-compute-resources/">Reserve Compute Resources for System Daemons</a> — Allocatable の計算と、16 CPU のノードが 14.5 CPU になる具体例</li>
-          <li><a href="https://kubernetes.io/docs/concepts/policy/limit-range/">Limit Ranges</a> — 既定 requests が作成時にだけ入ることや、既定値同士の矛盾で Pod が配置不能になる注意点</li>
-          <li><a href="https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/FAQ.md">Cluster Autoscaler FAQ</a> — Pending の Pod を契機にノードを足す仕組みと、requests 基準の縮小判定</li>
+          <li><a href="https://go.dev/doc/articles/race_detector">Data Race Detector — The Go Programming Language</a> — <code>-race</code> の使い方、レポートの読み方、<code>GORACE</code> のオプションと実行コストの公式解説</li>
+          <li><a href="https://go.dev/ref/mem">The Go Memory Model</a> — データ競合の定義と、競合のあるプログラムで何が保証されないかを示す一次資料。冒頭の「Don't be clever」だけでも読む価値がある</li>
+          <li><a href="https://pkg.go.dev/sync/atomic">sync/atomic package</a> — <code>atomic.Int64</code> などの型と、atomic 操作が逐次一貫な順序で実行されるという保証の記述</li>
+          <li><a href="https://pkg.go.dev/sync#Mutex">sync.Mutex — sync package</a> — ゼロ値で使えること、コピー禁止などの Mutex の約束事</li>
         </ul>
       </div>
     </article>
@@ -162,6 +179,11 @@ kind delete cluster --name sched</pre>
     <!-- recent:start -->
     <section class="section recent-articles">
       <div class="section-title">最近の記事</div>
+      <div class="card">
+        <h3><a href="archive/2026-11-11.html">ノードの CPU はほぼ空いているのに、なぜ Pod は Pending のまま動かないのか？</a></h3>
+        <div class="summary">Kubernetes のスケジューラは CPU 使用率ではなく requests（予約量）の合計と Allocatable で配置を決める。ノードが暇なのに Pod が Pending になる仕組みと、requests の見直し方を解説する。</div>
+        <div class="meta"><span class="tag tag-container">Container</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-11</span></div>
+      </div>
       <div class="card">
         <h3><a href="archive/2026-11-10.html">ラベルを 1 つ足しただけなのに、なぜ Prometheus のメモリが溢れるのか？</a></h3>
         <div class="summary">Prometheus はラベル値の組み合わせごとに時系列を作るため、生の URL やユーザー ID をラベルに入れると系列数が掛け算で増えてメモリを圧迫する。仕組みと、計測側・取り込み側での防ぎ方を解説する。</div>
@@ -176,11 +198,6 @@ kind delete cluster --name sched</pre>
         <h3><a href="archive/2026-11-08.html">ブラウザでは鍵マークが付くのに、なぜ curl だけ証明書エラーになるのか？</a></h3>
         <div class="summary">サーバー証明書はルートに直接繋がらず、間の中間証明書をサーバーが一緒に送る決まりがある。送り忘れてもブラウザはキャッシュや AIA で補うため気づかれにくく、OpenSSL ベースの curl やサーバー間通信だけが失敗する。fullchain.pem の指定と openssl s_client での確認方法を解説。</div>
         <div class="meta"><span class="tag tag-network">Network</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-08</span></div>
-      </div>
-      <div class="card">
-        <h3><a href="archive/2026-11-07.html">b に append しただけなのに、なぜ別の変数 c の中身まで変わるのか？</a></h3>
-        <div class="summary">Go の slice はヘッダ（ポインタ・長さ・容量）にすぎず、append は容量に空きがあれば共有中の基底配列に上書きする。再帰で結果が全部同じ値になる理由と、full slice expression・slices.Clip・slices.Clone で共有を断つ方法を解説。</div>
-        <div class="meta"><span class="tag tag-lang">Lang</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-07</span></div>
       </div>
       <div class="recent-more"><a href="archive/">アーカイブですべて見る →</a></div>
     </section>

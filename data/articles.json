@@ -1,5 +1,21 @@
 [
   {
+    "file": "2026-11-12.html",
+    "date": "2026-11-12",
+    "title": "100 万回ずつ count++ しただけなのに、なぜ 2 つの goroutine の合計は 200 万にならないのか？",
+    "summary": "count++ は 1 行でも読む・足す・書くの 3 手順に分かれ、並行する goroutine が割り込むと加算が消える。データ競合の仕組みと、Mutex・atomic での直し方、race detector での検出を解説する。",
+    "category": "lang",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": [
+      "データ競合（data race）",
+      "read-modify-write",
+      "sync.Mutex",
+      "sync/atomic",
+      "race detector"
+    ]
+  },
+  {
     "file": "2026-11-11.html",
     "date": "2026-11-11",
     "title": "ノードの CPU はほぼ空いているのに、なぜ Pod は Pending のまま動かないのか？",

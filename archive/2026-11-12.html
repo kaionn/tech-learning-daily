@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tech Learning Daily — 100 万回ずつ count++ しただけなのに、なぜ 2 つの goroutine の合計は 200 万にならないのか？</title>
+  <link rel="stylesheet" href="../style.css">
+  <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="../feed.xml">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Tech Learning Daily</h1>
+      <div class="date">2026-11-12 (Thu) — 第 118 号</div>
+      <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
+    </header>
+
+    <article class="article">
+      <div class="meta-bar">
+        <span class="tag tag-lang">Lang</span>
+        <span class="difficulty">🌿 基礎</span>
+        <span class="read-time">⏱ 約 7 分</span>
+      </div>
+      <h2 class="article-title">100 万回ずつ count++ しただけなのに、なぜ 2 つの goroutine の合計は 200 万にならないのか？</h2>
+      <p class="lead">goroutine を 2 つ起動し、それぞれ共有の変数に <code>count++</code> を 100 万回実行させる。終わるのを待って表示すると、出てくるのは 200 万に届かない数字で、しかも実行のたびに値が変わる。足し算を 1 回も書き間違えていないのに、カウントはどこへ消えたのだろうか。</p>
+
+      <div class="tldr">
+        <div class="box-title">🎯 3 行まとめ</div>
+        <ul>
+          <li><code>count++</code> は 1 行だが、CPU から見ると「読む・足す・書く」の 3 手順で、その途中に別の goroutine が割り込める</li>
+          <li>2 つが同じ古い値を読んで書き戻すと、片方の +1 が上書きされて消える。これがデータ競合（data race）による更新の消失である</li>
+          <li><code>sync.Mutex</code> か <code>sync/atomic</code> でアクセスを直列化し、<code>go test -race</code> で実際に起きた競合を検出する</li>
+        </ul>
+      </div>
+
+      <section class="body-section">
+        <h3>再現するコード：1 行も間違っていないのに数が合わない</h3>
+        <p>まず問題のコードを見る。<code>sync.WaitGroup</code> は「起動した goroutine が全部終わるまで待つ」ためのカウンタで、<code>Add</code> で待つ数を増やし、各 goroutine が <code>Done</code> で減らし、<code>Wait</code> が 0 になるまでブロックする。</p>
+        <pre class="code">var count int
+var wg sync.WaitGroup
+for i := 0; i &lt; 2; i++ {
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for j := 0; j &lt; 1000000; j++ {
+			count++
+		}
+	}()
+}
+wg.Wait()
+fmt.Println(count) // 2000000 にならない</pre>
+        <p>待ち合わせは正しく、ループ回数も正しい。それでも合計が足りないのは、ロジックの誤りではなく、2 つの goroutine が同じ変数を同時に触っていることが原因である。マルチコアの CPU では、2 つの goroutine は別々のコアで文字どおり同時に走りうる。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>1 行に見えて 3 手順：更新が消える瞬間</h3>
+        <p><code>count++</code> は 1 つの操作に見える。しかし実際は、メモリから値をレジスタ（CPU 内部の作業用の置き場）へ読み込み、1 を足し、結果をメモリへ書き戻すという 3 手順に分かれる。この「読んで・変えて・書く」の組を read-modify-write と呼ぶ。3 手順のあいだに他のコアが同じ場所を読み書きしても、CPU は通常の命令ではそれを止めない。</p>
+        <pre class="diagram">  メモリ上の count = 41
+
+  goroutine A       goroutine B
+  ───────────       ───────────
+  ① 読む → 41
+                    ② 読む → 41
+  ③ 足す → 42
+                    ④ 足す → 42
+  ⑤ 書く → 42
+                    ⑥ 書く → 42
+                         │
+                         ▼
+  結果 count = 42（+2 のはずが +1）</pre>
+        <p>図のように、A が書き戻す前に B が同じ 41 を読むと、2 人とも 42 を書き込む。2 回分の加算をしたのに値は 1 しか増えず、A の +1 は B の書き込みで上書きされて跡形もなく消える。100 万回のループではこの重なりが何十万回も起きうるため、合計は大きく欠ける。重なる回数はタイミング次第なので、実行ごとに結果が変わる。</p>
+        <p>Go のメモリモデルは、この状況をデータ競合（data race）と定義している。「あるメモリ位置への書き込みが、同じ位置への別の読み書きと並行して起きること。ただしすべてのアクセスが <code>sync/atomic</code> による atomic なアクセスである場合を除く」。そして並行に触られるデータを変更するプログラムは、そのアクセスを直列化（同時に 1 つずつしか触れないように）しなければならない、とも明記している。</p>
+      </section>
+
+      <div class="analogy">
+        <div class="box-title">🍱 たとえるなら</div>
+        <p>ホワイトボードに書かれた来場者数を、入口係 2 人が更新する場面に近い。それぞれ「ボードを見て数字を覚える → 頭の中で +1 → 消して書き直す」を繰り返す。2 人が同時にボードを見て 41 と覚えれば、2 人とも 42 と書き、1 人分の来場が記録から消える。防ぐ方法は、マーカーを 1 本だけにして持っている人しかボードに触れないようにすること（Mutex）か、押すと必ず 1 増える数取器に置き換えること（atomic）である。</p>
+      </div>
+
+      <section class="body-section">
+        <h3>直し方 2 つ：Mutex と atomic はどう使い分けるか</h3>
+        <p>1 つ目は <code>sync.Mutex</code>（相互排他ロック）で、<code>Lock</code> から <code>Unlock</code> までの区間に同時に 1 つの goroutine しか入れないようにする。ほかの goroutine が保持している間に <code>Lock</code> を呼ぶと、解放されるまでブロックする。ゼロ値がそのまま「ロックされていない Mutex」なので初期化は不要である。</p>
+        <pre class="code">var mu sync.Mutex
+// ...
+mu.Lock()
+count++
+mu.Unlock()</pre>
+        <p>2 つ目は <code>sync/atomic</code> で、読む・足す・書くを CPU の専用命令で不可分（途中に割り込めない 1 手順）に行う。Go 1.19 で追加された <code>atomic.Int64</code> 型を使うと、<code>Add</code> が「値に delta を atomic に足して新しい値を返す」。</p>
+        <pre class="code">var count atomic.Int64
+// ...
+count.Add(1)
+// 読むときも count.Load() を使う</pre>
+        <p>使い分けの基準は「守りたいのが 1 つの変数か、複数の値の組か」である。単一のカウンタなら atomic が軽い。しかし「残高を減らしたら履歴にも 1 行足す」のように 2 つの値をそろって変えたい場合、それぞれを atomic にしても、間の瞬間に他の goroutine が不整合な組を見る。この場合は Mutex で区間ごと守る必要がある。公式ドキュメントも <code>sync/atomic</code> について「正しく使うには細心の注意が要る」とし、特殊な低レベル用途以外はチャネルや <code>sync</code> パッケージを勧めている。</p>
+        <p>Mutex を使うときの落とし穴がもう 1 つある。<code>sync.Mutex</code> は「最初に使った後はコピーしてはならない」。Mutex を含む構造体を値渡しやレシーバの値コピーで扱うと、コピー先は別の錠になり、守っているつもりで何も守らない。Mutex を持つ型のメソッドはポインタレシーバで書く。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>テストが通っても安心できない理由と、race detector</h3>
+        <p>データ競合は毎回壊れるとは限らない。そう思える。しかし実際はもっと厄介で、ループ回数が少なかったり、たまたま goroutine が時間差で走ったりすると、正しい結果が出てしまう。ローカルのテストは緑なのに、本番の高負荷でだけ数字がずれる、という形で表に出ることが多い。</p>
+        <p>そこで使うのが Go の race detector である。<code>go test</code> / <code>go run</code> / <code>go build</code> に <code>-race</code> を付けると、メモリアクセスを監視するコードが埋め込まれ、競合が起きると <code>WARNING: DATA RACE</code> と、競合した 2 つのアクセスのスタックトレースを出す。公式ドキュメントによれば、典型的なプログラムでメモリ使用量が 5〜10 倍、実行時間が 2〜20 倍になるため、本番バイナリには常用せず、CI のテストや負荷をかけた検証環境で使う。</p>
+        <p>ただし race detector は「実行時に実際に起きた競合」しか見つけない。通らなかったコードパスの競合は報告されないので、<code>-race</code> で何も出ないことは競合がない証明にはならない。カバレッジの薄いテストより、<code>-race</code> 付きでビルドしたバイナリに現実的な負荷をかけた方が多く見つかる、と公式ドキュメントも書いている。</p>
+        <p>挙動は環境変数 <code>GORACE</code> で調整できる。既定では競合を報告しても実行を続け、終了時の終了コードが <code>66</code> になる。<code>halt_on_error=1</code> にすると最初の競合を報告した時点で止まり、ログの洪水を避けられる。<code>exitcode</code> で終了コードを変えられるので、CI で「競合が出たら失敗」の判定に使える。</p>
+        <pre class="code">GORACE="halt_on_error=1" go test -race ./...</pre>
+        <p>map では同じ問題がさらに激しく出る。Go 1.6 以降のランタイムは map の並行な誤用をベストエフォートで検出し、検出すると診断を表示してプログラムをクラッシュさせる。カウンタのように「数がずれる」では済まず、プロセスが落ちるので、共有 map への並行書き込みも Mutex で守る。</p>
+      </section>
+
+      <div class="practical">
+        <div class="box-title">💼 実務でどう出会うか</div>
+        <p>Go の HTTP サーバーはリクエストごとに goroutine を起動するため、ハンドラから触るパッケージ変数や構造体のフィールド（アクセス数のカウンタ、メモリ上のキャッシュ用 map）は、それだけで複数 goroutine からの並行アクセスになる。ローカルで 1 リクエストずつ試すと再現せず、負荷試験や本番で初めて数字のずれや <code>concurrent map writes</code> のクラッシュとして現れる。同じ構造は Puma のスレッドで動く Rails でも起こりうる。クラス変数やメモ化（<code>@cache ||= ...</code>）を複数スレッドで共有すると、読んでから書くまでの間に別スレッドが割り込む余地がある。CI の Go テストには最初から <code>-race</code> を付けておくのが、もっとも手間の少ない予防になる。</p>
+      </div>
+
+      <div class="hands-on">
+        <div class="box-title">⌨️ 手を動かす（5 分）</div>
+        <p>Go が入った Mac で、更新の消失と race detector の報告を自分の目で確かめる。</p>
+        <pre class="code">mkdir -p /tmp/racedemo &amp;&amp; cd /tmp/racedemo
+cat &gt; main.go &lt;&lt;'EOF'
+package main
+
+import (
+	"fmt"
+	"sync"
+)
+
+func main() {
+	var count int
+	var wg sync.WaitGroup
+	for i := 0; i &lt; 2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j &lt; 1000000; j++ {
+				count++
+			}
+		}()
+	}
+	wg.Wait()
+	fmt.Println(count)
+}
+EOF
+go run main.go; go run main.go; go run main.go
+go run -race main.go; echo "exit=$?"</pre>
+        <p>最初の 3 回は 2000000 より小さい、毎回違う数字が出るはずだ（コア数や負荷によっては近い値になることもある）。<code>-race</code> 付きの実行では <code>WARNING: DATA RACE</code> と、<code>main.go</code> の <code>count++</code> の行を指す 2 つのアクセス（Read と Write）が表示され、<code>exit=66</code> で終わる。続けて <code>count++</code> を <code>mu.Lock()</code> / <code>mu.Unlock()</code> で囲む（<code>var mu sync.Mutex</code> を足す）と、毎回 2000000 になり、<code>-race</code> も何も報告しなくなる。</p>
+      </div>
+
+      <div class="misconceptions">
+        <div class="box-title">🙅 よくある誤解</div>
+        <ul>
+          <li><span class="wrong"><code>count++</code> は 1 行だから途中で割り込まれない</span> — ソースの 1 行と CPU の不可分な 1 手順は別物で、<code>count++</code> は読む・足す・書くに分かれる。不可分にしたいなら <code>sync/atomic</code> を明示的に使う。</li>
+          <li><span class="wrong">読むだけの goroutine はロックしなくてよい</span> — 別の goroutine が書いている最中の読み取りもデータ競合である。書き手がいる限り、読み手も同じ Mutex を取るか atomic の <code>Load</code> を使う。</li>
+          <li><span class="wrong"><code>-race</code> で何も出なければ競合はない</span> — race detector は実行中に実際に起きた競合だけを報告する。通らなかった経路や、テストでは重ならなかったタイミングの競合は見逃す。</li>
+        </ul>
+      </div>
+
+      <div class="glossary">
+        <div class="box-title">📖 用語ミニ辞典</div>
+        <dl>
+          <dt>データ競合（data race）</dt><dd>同じメモリ位置への書き込みが、別の読み書きと同期なしに並行して起きること</dd>
+          <dt>read-modify-write</dt><dd>値を読み、変更し、書き戻す一連の操作。途中に割り込まれると更新が消える</dd>
+          <dt>sync.Mutex</dt><dd>Lock〜Unlock の区間に同時に 1 つの goroutine しか入れない相互排他ロック</dd>
+          <dt>sync/atomic</dt><dd>単一の値への読み書き・加算を割り込み不能な 1 手順で行う Go のパッケージ</dd>
+          <dt>race detector</dt><dd><code>-race</code> で有効になる、実行時に起きたデータ競合を検出・報告する Go のツール</dd>
+        </dl>
+      </div>
+
+      <div class="further-reading">
+        <div class="box-title">🔗 もっと深く</div>
+        <ul>
+          <li><a href="https://go.dev/doc/articles/race_detector">Data Race Detector — The Go Programming Language</a> — <code>-race</code> の使い方、レポートの読み方、<code>GORACE</code> のオプションと実行コストの公式解説</li>
+          <li><a href="https://go.dev/ref/mem">The Go Memory Model</a> — データ競合の定義と、競合のあるプログラムで何が保証されないかを示す一次資料。冒頭の「Don't be clever」だけでも読む価値がある</li>
+          <li><a href="https://pkg.go.dev/sync/atomic">sync/atomic package</a> — <code>atomic.Int64</code> などの型と、atomic 操作が逐次一貫な順序で実行されるという保証の記述</li>
+          <li><a href="https://pkg.go.dev/sync#Mutex">sync.Mutex — sync package</a> — ゼロ値で使えること、コピー禁止などの Mutex の約束事</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- recent:start -->
+    <!-- recent:end -->
+
+    <footer>
+      <p>Generated by Claude Code (GitHub Actions)</p>
+      <a href="./" class="archive-link">過去の記事</a>
+    </footer>
+  </div>
+</body>
+</html>
