@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tech Learning Daily — ユーザーはもう画面を閉じたのに、なぜサーバーの重い処理は最後まで走り続けるのか？</title>
+  <link rel="stylesheet" href="../style.css">
+  <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="../feed.xml">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Tech Learning Daily</h1>
+      <div class="date">2026-11-13 (Fri) — 第 119 号</div>
+      <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
+    </header>
+
+    <article class="article">
+      <div class="meta-bar">
+        <span class="tag tag-lang">Lang</span>
+        <span class="difficulty">🌿 基礎</span>
+        <span class="read-time">⏱ 約 7 分</span>
+      </div>
+      <h2 class="article-title">ユーザーはもう画面を閉じたのに、なぜサーバーの重い処理は最後まで走り続けるのか？</h2>
+      <p class="lead">集計画面が重いので、ユーザーは待ちきれずにタブを閉じた。ところがサーバーのログを見ると、その 30 秒後に「集計完了」が出ていて、DB には重いクエリが最後まで走った痕跡が残っている。受け取る相手がもういないのに、サーバーはなぜ仕事をやめなかったのだろうか。</p>
+
+      <div class="tldr">
+        <div class="box-title">🎯 3 行まとめ</div>
+        <ul>
+          <li>Go の <code>r.Context()</code> はクライアントが切断すると「キャンセル済み」になるが、それは合図を出すだけで、実行中の処理を強制停止はしない</li>
+          <li>止まるのは、<code>ctx</code> を受け取って <code>ctx.Done()</code> を見ている関数だけ。<code>QueryContext</code> や <code>NewRequestWithContext</code> に渡し続けて初めて、下流の DB や外部 API まで止まる</li>
+          <li><code>context.WithTimeout</code> で上限時間を足し、返ってきた <code>cancel</code> は必ず <code>defer</code> で呼ぶ。DB 側でクエリが本当に止まるかはドライバと DB の設定にも依存する</li>
+        </ul>
+      </div>
+
+      <section class="body-section">
+        <h3>サーバーは「もういらない」をどうやって知るのか</h3>
+        <p>HTTP サーバーから見ると、ユーザーがタブを閉じたことは「TCP 接続が閉じられた」という出来事として届く。Go の <code>net/http</code> は、この出来事をハンドラに伝える窓口として <code>r.Context()</code> を用意している。公式ドキュメントによれば、受信リクエストの context は「クライアントの接続が閉じたとき、（HTTP/2 で）リクエストがキャンセルされたとき、または <code>ServeHTTP</code> が戻ったとき」にキャンセルされる。</p>
+        <p>ここで context（<code>context.Context</code>）とは、「この処理はもう不要になったか」「いつまでに終えるべきか」をリクエスト単位で運ぶ値である。中心にあるのは <code>Done()</code> というチャネルで、キャンセルされた瞬間にこのチャネルが close される。<code>Err()</code> はその理由を返し、明示的にキャンセルされたなら <code>context.Canceled</code>、期限切れなら <code>context.DeadlineExceeded</code> になる。</p>
+        <p>つまり、サーバーは切断にちゃんと気づいている。それでも処理が走り続けたのなら、気づいた後の伝わり方に問題がある。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>キャンセルは「強制終了」ではなく「お知らせ」である</h3>
+        <p>context がキャンセルされれば、ハンドラの goroutine も止まりそうに思える。しかし実際は、Go にはある goroutine を外から強制終了する手段がそもそも無い。context のキャンセルがすることは <code>Done()</code> のチャネルを close することだけで、そのチャネルを誰も見ていなければ何も起きない。この方式を協調的キャンセル（cooperative cancellation）と呼ぶ。止まる側が自分で合図を確認して、自分で処理を切り上げる方式である。</p>
+        <pre class="code">// ctx を見ていない：切断されても 5 秒寝続ける
+time.Sleep(5 * time.Second)
+
+// ctx を見ている：切断されたらすぐ抜ける
+select {
+case &lt;-time.After(5 * time.Second):
+case &lt;-ctx.Done():
+	return ctx.Err() // context.Canceled
+}</pre>
+        <p>冒頭の事故は、ハンドラの中で <code>db.Query(...)</code> のように context を受け取らない関数を呼んでいたことが原因であることが多い。<code>database/sql</code> の <code>Query</code> は内部で <code>context.Background()</code> を使う。これは決してキャンセルされない空の context なので、HTTP 側のキャンセルとの接点がどこにも無い。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>ctx をバケツリレーで下流まで運ぶ</h3>
+        <p>キャンセルを DB や外部 API まで届けるには、受け取った <code>ctx</code> を呼び出しの連鎖に沿って引数で渡し続ける。context は親子関係を持ち、<code>WithTimeout</code> や <code>WithCancel</code> で作った子 context は、親がキャンセルされると自動的にキャンセルされる。</p>
+        <pre class="diagram">ブラウザ ─ TCP 切断 ─▶ net/http
+                        │ cancel
+                        ▼
+          ┌─────────────────────┐
+          │ r.Context()  (親)  │
+          └──────────┬──────────┘
+          ┌──────────┴──────────┐
+          ▼                     ▼
+  ┌──────────────┐     ┌──────────────┐
+  │ WithTimeout  │     │ NewRequest-  │
+  │ QueryContext │     │ WithContext  │
+  └──────┬───────┘     └──────┬───────┘
+         ▼                    ▼
+   DB の待ちを中断      外部 API を中断
+
+  ctx を渡さない枝 ▶ 合図が届かず完走</pre>
+        <p>公式のチュートリアルにある書き方はこうなる。</p>
+        <pre class="code">func report(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	rows, err := db.QueryContext(ctx, "SELECT ...")
+	...
+}</pre>
+        <p>この <code>ctx</code> に HTTP リクエストの context を渡すと、クエリは「リクエストがキャンセルされたとき」と「5 秒を超えたとき」のどちらか早いほうで止まる。<code>WithTimeout</code> を付けないと、上限はクライアント任せになる。切断しないクライアントや、タイムアウトを持たない内部呼び出しでは、処理は終わるまで走り続ける。外向きの HTTP 呼び出しも同じで、<code>http.NewRequestWithContext(ctx, ...)</code> で作ったリクエストは、接続の取得からレスポンスボディの読み取りまでがその context に縛られる。</p>
+        <p>Go のドキュメントは、context を構造体に保存せず、関数の第 1 引数 <code>ctx</code> として明示的に渡すよう求めている。構造体に入れると、どのリクエストの寿命に縛られているのかが呼び出し側から見えなくなるためである。</p>
+      </section>
+
+      <div class="analogy">
+        <div class="box-title">🍱 たとえるなら</div>
+        <p>レストランで客が注文を取り消して帰った場面である。ホール係は取り消しを知っているが、厨房に伝える手段は「注文伝票に赤い取り消し印を押す」ことだけだ。伝票を見ながら作業するコックは手を止めるが、伝票を見ずに覚えた注文を作り続けるコックは、皿を出すまで気づかない。context は伝票、<code>ctx.Done()</code> は取り消し印、ctx を受け取らない関数は伝票を見ないコックにあたる。</p>
+      </div>
+
+      <section class="body-section">
+        <h3>cancel を呼ばないと何が漏れるのか、DB 側で本当に止まるのか</h3>
+        <p><code>WithTimeout</code> は context と一緒に <code>cancel</code> 関数を返す。ドキュメントは「CancelFunc を呼ばないと、親がキャンセルされるまで子とその子孫が漏れる」と書いている。親が長寿命の context なら、タイマーや親子の紐付けが処理の終了後も残り続ける。このため <code>defer cancel()</code> を直後に書くのが定石で、<code>go vet</code> も cancel がすべての分岐で呼ばれているかを検査する。</p>
+        <p>ctx を正しく渡しても、DB サーバー上のクエリが即座に止まるとは限らない。キャンセル時の動作はドライバごとに違う。たとえば pgx（PostgreSQL 用の Go ドライバ）の既定の動作は、ネットワーク接続に期限を設定して待ちを打ち切るもので、別途 PostgreSQL に「このクエリを中止せよ」と送る cancel request 方式も選べる。前者の場合、Go 側は待つのをやめて接続を捨てるが、PostgreSQL は既定ではクエリ実行中に接続の生死を確かめない。</p>
+        <pre class="code"># postgresql.conf（Linux / macOS など）
+client_connection_check_interval = 5s</pre>
+        <p>この設定は、クエリ実行中にソケットを定期的に確認し、接続が閉じていればクエリを早めに中止させる。既定値は <code>0</code>（確認しない）で、その場合サーバーが切断に気づくのは、次にソケットで送受信しようとしたときになる。結果を返す段になって初めて気づくので、重い集計はそこまで走りきってしまう。アプリ側の ctx と DB 側の設定は、両方そろって初めて「ユーザーが去ったら DB も止まる」になる。</p>
+      </section>
+
+      <div class="practical">
+        <div class="box-title">💼 実務でどう出会うか</div>
+        <p>典型は、遅いエンドポイントにユーザーがリロードを連打し、そのたびに前の重いクエリが置き去りのまま走り、DB の CPU とコネクションプールが埋まる障害である。コードレビューでは「<code>ctx</code> を受け取っているのに下で <code>context.Background()</code> や <code>Query</code>（Context なし版）を使っていないか」を見る。逆に、レスポンス後も必ず完了させたい監査ログの書き込みなどでは、リクエストの ctx をそのまま渡すと切断で一緒に中断される。Go 1.21 で追加された <code>context.WithoutCancel(ctx)</code> は、値は引き継ぎつつ親のキャンセルだけを切り離すので、この用途に使える。ログに <code>context canceled</code> が大量に出るのは、多くの場合クライアントが先に去っただけで、サーバーの故障ではない。</p>
+      </div>
+
+      <div class="hands-on">
+        <div class="box-title">⌨️ 手を動かす（5 分）</div>
+        <p>ctx を見ないハンドラと見るハンドラを並べ、クライアントが 2 秒で切断したときにサーバー側の処理が続くかを比べる。Go が入っていれば Mac でそのまま動く（<code>go build</code> で先にバイナリを作り、起動待ちを短くしている）。</p>
+        <pre class="code">mkdir -p /tmp/ctxdemo &amp;&amp; cd /tmp/ctxdemo
+cat &gt; main.go &lt;&lt;'EOF'
+package main
+
+import (
+	"fmt"
+	"log"
+	"net/http"
+	"time"
+)
+
+func main() {
+	http.HandleFunc("/ignore", func(w http.ResponseWriter, r *http.Request) {
+		for i := 1; i &lt;= 5; i++ {
+			time.Sleep(time.Second)
+			log.Printf("ignore: step %d", i)
+		}
+		fmt.Fprintln(w, "done")
+	})
+	http.HandleFunc("/respect", func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		for i := 1; i &lt;= 5; i++ {
+			select {
+			case &lt;-time.After(time.Second):
+				log.Printf("respect: step %d", i)
+			case &lt;-ctx.Done():
+				log.Printf("respect: stopped: %v", ctx.Err())
+				return
+			}
+		}
+		fmt.Fprintln(w, "done")
+	})
+	log.Fatal(http.ListenAndServe("127.0.0.1:8080", nil))
+}
+EOF
+go build -o ctxdemo main.go
+./ctxdemo &amp;
+sleep 1
+curl --max-time 2 http://127.0.0.1:8080/ignore
+curl --max-time 2 http://127.0.0.1:8080/respect
+sleep 5; kill %1</pre>
+        <p>curl はどちらも 2 秒でタイムアウトする。しかしサーバーのログを見ると、<code>/ignore</code> は接続が切れた後も <code>step 5</code> まで出力し続け、そのログが 2 本目の <code>/respect</code> のログに混ざって出てくる。<code>/respect</code> は切断の時点で <code>stopped: context canceled</code> を出して即座に抜ける。両者の差は、<code>ctx.Done()</code> を見ているかどうかだけである。</p>
+      </div>
+
+      <div class="misconceptions">
+        <div class="box-title">🙅 よくある誤解</div>
+        <ul>
+          <li><span class="wrong">context がキャンセルされれば goroutine は自動で止まる</span> — キャンセルは <code>Done()</code> チャネルを close するだけで、goroutine を外から殺す仕組みは Go に無い。<code>ctx.Done()</code> を見る関数を呼んでいる箇所でだけ止まる。</li>
+          <li><span class="wrong"><code>QueryContext</code> に ctx を渡せば DB サーバー上のクエリも即座に止まる</span> — Go 側の待ちは打ち切られるが、サーバー上の実行が止まるかはドライバのキャンセル方式と DB 側の設定（PostgreSQL なら <code>client_connection_check_interval</code> など）による。</li>
+          <li><span class="wrong">親の ctx にタイムアウトがあるなら <code>cancel</code> は呼ばなくてよい</span> — 呼ばないと、親がキャンセルされるまで子 context とそのタイマーが残る。<code>defer cancel()</code> は省略しない。</li>
+        </ul>
+      </div>
+
+      <div class="glossary">
+        <div class="box-title">📖 用語ミニ辞典</div>
+        <dl>
+          <dt>context.Context</dt><dd>キャンセルの合図・期限・リクエスト単位の値を、関数呼び出しの連鎖に沿って運ぶ Go の標準型。</dd>
+          <dt>ctx.Done()</dt><dd>context がキャンセルされた瞬間に close されるチャネル。これを見ている処理だけが止まれる。</dd>
+          <dt>協調的キャンセル</dt><dd>外から強制終了するのではなく、止まる側が合図を確認して自分で処理を切り上げる方式。</dd>
+          <dt>context.WithTimeout</dt><dd>親から派生し、指定時間の経過か親のキャンセルのどちらか早いほうでキャンセルされる子 context を作る関数。</dd>
+          <dt>CancelFunc</dt><dd>派生 context を明示的にキャンセルして資源を解放する関数。呼ばないと親のキャンセルまで子が残る。</dd>
+          <dt>client_connection_check_interval</dt><dd>PostgreSQL がクエリ実行中にクライアント接続の生死を確認する間隔。既定 0 で確認しない。</dd>
+        </dl>
+      </div>
+
+      <div class="further-reading">
+        <div class="box-title">🔗 もっと深く</div>
+        <ul>
+          <li><a href="https://go.dev/doc/database/cancel-operations">Canceling in-progress operations (Go 公式)</a> — <code>QueryContext</code> と <code>WithTimeout</code> で DB 操作を打ち切る公式の書き方。</li>
+          <li><a href="https://pkg.go.dev/context">Package context (pkg.go.dev)</a> — 親子のキャンセル伝播、CancelFunc を呼ばないと漏れる理由、<code>WithoutCancel</code> の仕様の一次資料。</li>
+          <li><a href="https://go.dev/blog/context">Go Concurrency Patterns: Context (Go Blog)</a> — context がなぜ第 1 引数で渡す設計になったかを、検索サーバーの例で示した原典の記事。</li>
+          <li><a href="https://www.postgresql.org/docs/current/runtime-config-connection.html">PostgreSQL: Connections and Authentication</a> — <code>client_connection_check_interval</code> の挙動と、TCP keepalive との関係。</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- recent:start -->
+    <!-- recent:end -->
+
+    <footer>
+      <p>Generated by Claude Code (GitHub Actions)</p>
+      <a href="./" class="archive-link">過去の記事</a>
+    </footer>
+  </div>
+</body>
+</html>

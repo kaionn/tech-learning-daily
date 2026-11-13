@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tech Learning Daily — 100 万回ずつ count++ しただけなのに、なぜ 2 つの goroutine の合計は 200 万にならないのか？</title>
+  <title>Tech Learning Daily — ユーザーはもう画面を閉じたのに、なぜサーバーの重い処理は最後まで走り続けるのか？</title>
   <link rel="stylesheet" href="style.css">
   <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="feed.xml">
   <link rel="icon" href="/favicon.ico" sizes="48x48">
@@ -14,7 +14,7 @@
   <div class="container">
     <header>
       <h1>Tech Learning Daily</h1>
-      <div class="date">2026-11-12 (Thu) — 第 118 号</div>
+      <div class="date">2026-11-13 (Fri) — 第 119 号</div>
       <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
     </header>
 
@@ -24,154 +24,164 @@
         <span class="difficulty">🌿 基礎</span>
         <span class="read-time">⏱ 約 7 分</span>
       </div>
-      <h2 class="article-title">100 万回ずつ count++ しただけなのに、なぜ 2 つの goroutine の合計は 200 万にならないのか？</h2>
-      <p class="lead">goroutine を 2 つ起動し、それぞれ共有の変数に <code>count++</code> を 100 万回実行させる。終わるのを待って表示すると、出てくるのは 200 万に届かない数字で、しかも実行のたびに値が変わる。足し算を 1 回も書き間違えていないのに、カウントはどこへ消えたのだろうか。</p>
+      <h2 class="article-title">ユーザーはもう画面を閉じたのに、なぜサーバーの重い処理は最後まで走り続けるのか？</h2>
+      <p class="lead">集計画面が重いので、ユーザーは待ちきれずにタブを閉じた。ところがサーバーのログを見ると、その 30 秒後に「集計完了」が出ていて、DB には重いクエリが最後まで走った痕跡が残っている。受け取る相手がもういないのに、サーバーはなぜ仕事をやめなかったのだろうか。</p>
 
       <div class="tldr">
         <div class="box-title">🎯 3 行まとめ</div>
         <ul>
-          <li><code>count++</code> は 1 行だが、CPU から見ると「読む・足す・書く」の 3 手順で、その途中に別の goroutine が割り込める</li>
-          <li>2 つが同じ古い値を読んで書き戻すと、片方の +1 が上書きされて消える。これがデータ競合（data race）による更新の消失である</li>
-          <li><code>sync.Mutex</code> か <code>sync/atomic</code> でアクセスを直列化し、<code>go test -race</code> で実際に起きた競合を検出する</li>
+          <li>Go の <code>r.Context()</code> はクライアントが切断すると「キャンセル済み」になるが、それは合図を出すだけで、実行中の処理を強制停止はしない</li>
+          <li>止まるのは、<code>ctx</code> を受け取って <code>ctx.Done()</code> を見ている関数だけ。<code>QueryContext</code> や <code>NewRequestWithContext</code> に渡し続けて初めて、下流の DB や外部 API まで止まる</li>
+          <li><code>context.WithTimeout</code> で上限時間を足し、返ってきた <code>cancel</code> は必ず <code>defer</code> で呼ぶ。DB 側でクエリが本当に止まるかはドライバと DB の設定にも依存する</li>
         </ul>
       </div>
 
       <section class="body-section">
-        <h3>再現するコード：1 行も間違っていないのに数が合わない</h3>
-        <p>まず問題のコードを見る。<code>sync.WaitGroup</code> は「起動した goroutine が全部終わるまで待つ」ためのカウンタで、<code>Add</code> で待つ数を増やし、各 goroutine が <code>Done</code> で減らし、<code>Wait</code> が 0 になるまでブロックする。</p>
-        <pre class="code">var count int
-var wg sync.WaitGroup
-for i := 0; i &lt; 2; i++ {
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for j := 0; j &lt; 1000000; j++ {
-			count++
-		}
-	}()
-}
-wg.Wait()
-fmt.Println(count) // 2000000 にならない</pre>
-        <p>待ち合わせは正しく、ループ回数も正しい。それでも合計が足りないのは、ロジックの誤りではなく、2 つの goroutine が同じ変数を同時に触っていることが原因である。マルチコアの CPU では、2 つの goroutine は別々のコアで文字どおり同時に走りうる。</p>
+        <h3>サーバーは「もういらない」をどうやって知るのか</h3>
+        <p>HTTP サーバーから見ると、ユーザーがタブを閉じたことは「TCP 接続が閉じられた」という出来事として届く。Go の <code>net/http</code> は、この出来事をハンドラに伝える窓口として <code>r.Context()</code> を用意している。公式ドキュメントによれば、受信リクエストの context は「クライアントの接続が閉じたとき、（HTTP/2 で）リクエストがキャンセルされたとき、または <code>ServeHTTP</code> が戻ったとき」にキャンセルされる。</p>
+        <p>ここで context（<code>context.Context</code>）とは、「この処理はもう不要になったか」「いつまでに終えるべきか」をリクエスト単位で運ぶ値である。中心にあるのは <code>Done()</code> というチャネルで、キャンセルされた瞬間にこのチャネルが close される。<code>Err()</code> はその理由を返し、明示的にキャンセルされたなら <code>context.Canceled</code>、期限切れなら <code>context.DeadlineExceeded</code> になる。</p>
+        <p>つまり、サーバーは切断にちゃんと気づいている。それでも処理が走り続けたのなら、気づいた後の伝わり方に問題がある。</p>
       </section>
 
       <section class="body-section">
-        <h3>1 行に見えて 3 手順：更新が消える瞬間</h3>
-        <p><code>count++</code> は 1 つの操作に見える。しかし実際は、メモリから値をレジスタ（CPU 内部の作業用の置き場）へ読み込み、1 を足し、結果をメモリへ書き戻すという 3 手順に分かれる。この「読んで・変えて・書く」の組を read-modify-write と呼ぶ。3 手順のあいだに他のコアが同じ場所を読み書きしても、CPU は通常の命令ではそれを止めない。</p>
-        <pre class="diagram">  メモリ上の count = 41
+        <h3>キャンセルは「強制終了」ではなく「お知らせ」である</h3>
+        <p>context がキャンセルされれば、ハンドラの goroutine も止まりそうに思える。しかし実際は、Go にはある goroutine を外から強制終了する手段がそもそも無い。context のキャンセルがすることは <code>Done()</code> のチャネルを close することだけで、そのチャネルを誰も見ていなければ何も起きない。この方式を協調的キャンセル（cooperative cancellation）と呼ぶ。止まる側が自分で合図を確認して、自分で処理を切り上げる方式である。</p>
+        <pre class="code">// ctx を見ていない：切断されても 5 秒寝続ける
+time.Sleep(5 * time.Second)
 
-  goroutine A       goroutine B
-  ───────────       ───────────
-  ① 読む → 41
-                    ② 読む → 41
-  ③ 足す → 42
-                    ④ 足す → 42
-  ⑤ 書く → 42
-                    ⑥ 書く → 42
-                         │
-                         ▼
-  結果 count = 42（+2 のはずが +1）</pre>
-        <p>図のように、A が書き戻す前に B が同じ 41 を読むと、2 人とも 42 を書き込む。2 回分の加算をしたのに値は 1 しか増えず、A の +1 は B の書き込みで上書きされて跡形もなく消える。100 万回のループではこの重なりが何十万回も起きうるため、合計は大きく欠ける。重なる回数はタイミング次第なので、実行ごとに結果が変わる。</p>
-        <p>Go のメモリモデルは、この状況をデータ競合（data race）と定義している。「あるメモリ位置への書き込みが、同じ位置への別の読み書きと並行して起きること。ただしすべてのアクセスが <code>sync/atomic</code> による atomic なアクセスである場合を除く」。そして並行に触られるデータを変更するプログラムは、そのアクセスを直列化（同時に 1 つずつしか触れないように）しなければならない、とも明記している。</p>
+// ctx を見ている：切断されたらすぐ抜ける
+select {
+case &lt;-time.After(5 * time.Second):
+case &lt;-ctx.Done():
+	return ctx.Err() // context.Canceled
+}</pre>
+        <p>冒頭の事故は、ハンドラの中で <code>db.Query(...)</code> のように context を受け取らない関数を呼んでいたことが原因であることが多い。<code>database/sql</code> の <code>Query</code> は内部で <code>context.Background()</code> を使う。これは決してキャンセルされない空の context なので、HTTP 側のキャンセルとの接点がどこにも無い。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>ctx をバケツリレーで下流まで運ぶ</h3>
+        <p>キャンセルを DB や外部 API まで届けるには、受け取った <code>ctx</code> を呼び出しの連鎖に沿って引数で渡し続ける。context は親子関係を持ち、<code>WithTimeout</code> や <code>WithCancel</code> で作った子 context は、親がキャンセルされると自動的にキャンセルされる。</p>
+        <pre class="diagram">ブラウザ ─ TCP 切断 ─▶ net/http
+                        │ cancel
+                        ▼
+          ┌─────────────────────┐
+          │ r.Context()  (親)  │
+          └──────────┬──────────┘
+          ┌──────────┴──────────┐
+          ▼                     ▼
+  ┌──────────────┐     ┌──────────────┐
+  │ WithTimeout  │     │ NewRequest-  │
+  │ QueryContext │     │ WithContext  │
+  └──────┬───────┘     └──────┬───────┘
+         ▼                    ▼
+   DB の待ちを中断      外部 API を中断
+
+  ctx を渡さない枝 ▶ 合図が届かず完走</pre>
+        <p>公式のチュートリアルにある書き方はこうなる。</p>
+        <pre class="code">func report(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	rows, err := db.QueryContext(ctx, "SELECT ...")
+	...
+}</pre>
+        <p>この <code>ctx</code> に HTTP リクエストの context を渡すと、クエリは「リクエストがキャンセルされたとき」と「5 秒を超えたとき」のどちらか早いほうで止まる。<code>WithTimeout</code> を付けないと、上限はクライアント任せになる。切断しないクライアントや、タイムアウトを持たない内部呼び出しでは、処理は終わるまで走り続ける。外向きの HTTP 呼び出しも同じで、<code>http.NewRequestWithContext(ctx, ...)</code> で作ったリクエストは、接続の取得からレスポンスボディの読み取りまでがその context に縛られる。</p>
+        <p>Go のドキュメントは、context を構造体に保存せず、関数の第 1 引数 <code>ctx</code> として明示的に渡すよう求めている。構造体に入れると、どのリクエストの寿命に縛られているのかが呼び出し側から見えなくなるためである。</p>
       </section>
 
       <div class="analogy">
         <div class="box-title">🍱 たとえるなら</div>
-        <p>ホワイトボードに書かれた来場者数を、入口係 2 人が更新する場面に近い。それぞれ「ボードを見て数字を覚える → 頭の中で +1 → 消して書き直す」を繰り返す。2 人が同時にボードを見て 41 と覚えれば、2 人とも 42 と書き、1 人分の来場が記録から消える。防ぐ方法は、マーカーを 1 本だけにして持っている人しかボードに触れないようにすること（Mutex）か、押すと必ず 1 増える数取器に置き換えること（atomic）である。</p>
+        <p>レストランで客が注文を取り消して帰った場面である。ホール係は取り消しを知っているが、厨房に伝える手段は「注文伝票に赤い取り消し印を押す」ことだけだ。伝票を見ながら作業するコックは手を止めるが、伝票を見ずに覚えた注文を作り続けるコックは、皿を出すまで気づかない。context は伝票、<code>ctx.Done()</code> は取り消し印、ctx を受け取らない関数は伝票を見ないコックにあたる。</p>
       </div>
 
       <section class="body-section">
-        <h3>直し方 2 つ：Mutex と atomic はどう使い分けるか</h3>
-        <p>1 つ目は <code>sync.Mutex</code>（相互排他ロック）で、<code>Lock</code> から <code>Unlock</code> までの区間に同時に 1 つの goroutine しか入れないようにする。ほかの goroutine が保持している間に <code>Lock</code> を呼ぶと、解放されるまでブロックする。ゼロ値がそのまま「ロックされていない Mutex」なので初期化は不要である。</p>
-        <pre class="code">var mu sync.Mutex
-// ...
-mu.Lock()
-count++
-mu.Unlock()</pre>
-        <p>2 つ目は <code>sync/atomic</code> で、読む・足す・書くを CPU の専用命令で不可分（途中に割り込めない 1 手順）に行う。Go 1.19 で追加された <code>atomic.Int64</code> 型を使うと、<code>Add</code> が「値に delta を atomic に足して新しい値を返す」。</p>
-        <pre class="code">var count atomic.Int64
-// ...
-count.Add(1)
-// 読むときも count.Load() を使う</pre>
-        <p>使い分けの基準は「守りたいのが 1 つの変数か、複数の値の組か」である。単一のカウンタなら atomic が軽い。しかし「残高を減らしたら履歴にも 1 行足す」のように 2 つの値をそろって変えたい場合、それぞれを atomic にしても、間の瞬間に他の goroutine が不整合な組を見る。この場合は Mutex で区間ごと守る必要がある。公式ドキュメントも <code>sync/atomic</code> について「正しく使うには細心の注意が要る」とし、特殊な低レベル用途以外はチャネルや <code>sync</code> パッケージを勧めている。</p>
-        <p>Mutex を使うときの落とし穴がもう 1 つある。<code>sync.Mutex</code> は「最初に使った後はコピーしてはならない」。Mutex を含む構造体を値渡しやレシーバの値コピーで扱うと、コピー先は別の錠になり、守っているつもりで何も守らない。Mutex を持つ型のメソッドはポインタレシーバで書く。</p>
-      </section>
-
-      <section class="body-section">
-        <h3>テストが通っても安心できない理由と、race detector</h3>
-        <p>データ競合は毎回壊れるとは限らない。そう思える。しかし実際はもっと厄介で、ループ回数が少なかったり、たまたま goroutine が時間差で走ったりすると、正しい結果が出てしまう。ローカルのテストは緑なのに、本番の高負荷でだけ数字がずれる、という形で表に出ることが多い。</p>
-        <p>そこで使うのが Go の race detector である。<code>go test</code> / <code>go run</code> / <code>go build</code> に <code>-race</code> を付けると、メモリアクセスを監視するコードが埋め込まれ、競合が起きると <code>WARNING: DATA RACE</code> と、競合した 2 つのアクセスのスタックトレースを出す。公式ドキュメントによれば、典型的なプログラムでメモリ使用量が 5〜10 倍、実行時間が 2〜20 倍になるため、本番バイナリには常用せず、CI のテストや負荷をかけた検証環境で使う。</p>
-        <p>ただし race detector は「実行時に実際に起きた競合」しか見つけない。通らなかったコードパスの競合は報告されないので、<code>-race</code> で何も出ないことは競合がない証明にはならない。カバレッジの薄いテストより、<code>-race</code> 付きでビルドしたバイナリに現実的な負荷をかけた方が多く見つかる、と公式ドキュメントも書いている。</p>
-        <p>挙動は環境変数 <code>GORACE</code> で調整できる。既定では競合を報告しても実行を続け、終了時の終了コードが <code>66</code> になる。<code>halt_on_error=1</code> にすると最初の競合を報告した時点で止まり、ログの洪水を避けられる。<code>exitcode</code> で終了コードを変えられるので、CI で「競合が出たら失敗」の判定に使える。</p>
-        <pre class="code">GORACE="halt_on_error=1" go test -race ./...</pre>
-        <p>map では同じ問題がさらに激しく出る。Go 1.6 以降のランタイムは map の並行な誤用をベストエフォートで検出し、検出すると診断を表示してプログラムをクラッシュさせる。カウンタのように「数がずれる」では済まず、プロセスが落ちるので、共有 map への並行書き込みも Mutex で守る。</p>
+        <h3>cancel を呼ばないと何が漏れるのか、DB 側で本当に止まるのか</h3>
+        <p><code>WithTimeout</code> は context と一緒に <code>cancel</code> 関数を返す。ドキュメントは「CancelFunc を呼ばないと、親がキャンセルされるまで子とその子孫が漏れる」と書いている。親が長寿命の context なら、タイマーや親子の紐付けが処理の終了後も残り続ける。このため <code>defer cancel()</code> を直後に書くのが定石で、<code>go vet</code> も cancel がすべての分岐で呼ばれているかを検査する。</p>
+        <p>ctx を正しく渡しても、DB サーバー上のクエリが即座に止まるとは限らない。キャンセル時の動作はドライバごとに違う。たとえば pgx（PostgreSQL 用の Go ドライバ）の既定の動作は、ネットワーク接続に期限を設定して待ちを打ち切るもので、別途 PostgreSQL に「このクエリを中止せよ」と送る cancel request 方式も選べる。前者の場合、Go 側は待つのをやめて接続を捨てるが、PostgreSQL は既定ではクエリ実行中に接続の生死を確かめない。</p>
+        <pre class="code"># postgresql.conf（Linux / macOS など）
+client_connection_check_interval = 5s</pre>
+        <p>この設定は、クエリ実行中にソケットを定期的に確認し、接続が閉じていればクエリを早めに中止させる。既定値は <code>0</code>（確認しない）で、その場合サーバーが切断に気づくのは、次にソケットで送受信しようとしたときになる。結果を返す段になって初めて気づくので、重い集計はそこまで走りきってしまう。アプリ側の ctx と DB 側の設定は、両方そろって初めて「ユーザーが去ったら DB も止まる」になる。</p>
       </section>
 
       <div class="practical">
         <div class="box-title">💼 実務でどう出会うか</div>
-        <p>Go の HTTP サーバーはリクエストごとに goroutine を起動するため、ハンドラから触るパッケージ変数や構造体のフィールド（アクセス数のカウンタ、メモリ上のキャッシュ用 map）は、それだけで複数 goroutine からの並行アクセスになる。ローカルで 1 リクエストずつ試すと再現せず、負荷試験や本番で初めて数字のずれや <code>concurrent map writes</code> のクラッシュとして現れる。同じ構造は Puma のスレッドで動く Rails でも起こりうる。クラス変数やメモ化（<code>@cache ||= ...</code>）を複数スレッドで共有すると、読んでから書くまでの間に別スレッドが割り込む余地がある。CI の Go テストには最初から <code>-race</code> を付けておくのが、もっとも手間の少ない予防になる。</p>
+        <p>典型は、遅いエンドポイントにユーザーがリロードを連打し、そのたびに前の重いクエリが置き去りのまま走り、DB の CPU とコネクションプールが埋まる障害である。コードレビューでは「<code>ctx</code> を受け取っているのに下で <code>context.Background()</code> や <code>Query</code>（Context なし版）を使っていないか」を見る。逆に、レスポンス後も必ず完了させたい監査ログの書き込みなどでは、リクエストの ctx をそのまま渡すと切断で一緒に中断される。Go 1.21 で追加された <code>context.WithoutCancel(ctx)</code> は、値は引き継ぎつつ親のキャンセルだけを切り離すので、この用途に使える。ログに <code>context canceled</code> が大量に出るのは、多くの場合クライアントが先に去っただけで、サーバーの故障ではない。</p>
       </div>
 
       <div class="hands-on">
         <div class="box-title">⌨️ 手を動かす（5 分）</div>
-        <p>Go が入った Mac で、更新の消失と race detector の報告を自分の目で確かめる。</p>
-        <pre class="code">mkdir -p /tmp/racedemo &amp;&amp; cd /tmp/racedemo
+        <p>ctx を見ないハンドラと見るハンドラを並べ、クライアントが 2 秒で切断したときにサーバー側の処理が続くかを比べる。Go が入っていれば Mac でそのまま動く（<code>go build</code> で先にバイナリを作り、起動待ちを短くしている）。</p>
+        <pre class="code">mkdir -p /tmp/ctxdemo &amp;&amp; cd /tmp/ctxdemo
 cat &gt; main.go &lt;&lt;'EOF'
 package main
 
 import (
 	"fmt"
-	"sync"
+	"log"
+	"net/http"
+	"time"
 )
 
 func main() {
-	var count int
-	var wg sync.WaitGroup
-	for i := 0; i &lt; 2; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for j := 0; j &lt; 1000000; j++ {
-				count++
+	http.HandleFunc("/ignore", func(w http.ResponseWriter, r *http.Request) {
+		for i := 1; i &lt;= 5; i++ {
+			time.Sleep(time.Second)
+			log.Printf("ignore: step %d", i)
+		}
+		fmt.Fprintln(w, "done")
+	})
+	http.HandleFunc("/respect", func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		for i := 1; i &lt;= 5; i++ {
+			select {
+			case &lt;-time.After(time.Second):
+				log.Printf("respect: step %d", i)
+			case &lt;-ctx.Done():
+				log.Printf("respect: stopped: %v", ctx.Err())
+				return
 			}
-		}()
-	}
-	wg.Wait()
-	fmt.Println(count)
+		}
+		fmt.Fprintln(w, "done")
+	})
+	log.Fatal(http.ListenAndServe("127.0.0.1:8080", nil))
 }
 EOF
-go run main.go; go run main.go; go run main.go
-go run -race main.go; echo "exit=$?"</pre>
-        <p>最初の 3 回は 2000000 より小さい、毎回違う数字が出るはずだ（コア数や負荷によっては近い値になることもある）。<code>-race</code> 付きの実行では <code>WARNING: DATA RACE</code> と、<code>main.go</code> の <code>count++</code> の行を指す 2 つのアクセス（Read と Write）が表示され、<code>exit=66</code> で終わる。続けて <code>count++</code> を <code>mu.Lock()</code> / <code>mu.Unlock()</code> で囲む（<code>var mu sync.Mutex</code> を足す）と、毎回 2000000 になり、<code>-race</code> も何も報告しなくなる。</p>
+go build -o ctxdemo main.go
+./ctxdemo &amp;
+sleep 1
+curl --max-time 2 http://127.0.0.1:8080/ignore
+curl --max-time 2 http://127.0.0.1:8080/respect
+sleep 5; kill %1</pre>
+        <p>curl はどちらも 2 秒でタイムアウトする。しかしサーバーのログを見ると、<code>/ignore</code> は接続が切れた後も <code>step 5</code> まで出力し続け、そのログが 2 本目の <code>/respect</code> のログに混ざって出てくる。<code>/respect</code> は切断の時点で <code>stopped: context canceled</code> を出して即座に抜ける。両者の差は、<code>ctx.Done()</code> を見ているかどうかだけである。</p>
       </div>
 
       <div class="misconceptions">
         <div class="box-title">🙅 よくある誤解</div>
         <ul>
-          <li><span class="wrong"><code>count++</code> は 1 行だから途中で割り込まれない</span> — ソースの 1 行と CPU の不可分な 1 手順は別物で、<code>count++</code> は読む・足す・書くに分かれる。不可分にしたいなら <code>sync/atomic</code> を明示的に使う。</li>
-          <li><span class="wrong">読むだけの goroutine はロックしなくてよい</span> — 別の goroutine が書いている最中の読み取りもデータ競合である。書き手がいる限り、読み手も同じ Mutex を取るか atomic の <code>Load</code> を使う。</li>
-          <li><span class="wrong"><code>-race</code> で何も出なければ競合はない</span> — race detector は実行中に実際に起きた競合だけを報告する。通らなかった経路や、テストでは重ならなかったタイミングの競合は見逃す。</li>
+          <li><span class="wrong">context がキャンセルされれば goroutine は自動で止まる</span> — キャンセルは <code>Done()</code> チャネルを close するだけで、goroutine を外から殺す仕組みは Go に無い。<code>ctx.Done()</code> を見る関数を呼んでいる箇所でだけ止まる。</li>
+          <li><span class="wrong"><code>QueryContext</code> に ctx を渡せば DB サーバー上のクエリも即座に止まる</span> — Go 側の待ちは打ち切られるが、サーバー上の実行が止まるかはドライバのキャンセル方式と DB 側の設定（PostgreSQL なら <code>client_connection_check_interval</code> など）による。</li>
+          <li><span class="wrong">親の ctx にタイムアウトがあるなら <code>cancel</code> は呼ばなくてよい</span> — 呼ばないと、親がキャンセルされるまで子 context とそのタイマーが残る。<code>defer cancel()</code> は省略しない。</li>
         </ul>
       </div>
 
       <div class="glossary">
         <div class="box-title">📖 用語ミニ辞典</div>
         <dl>
-          <dt>データ競合（data race）</dt><dd>同じメモリ位置への書き込みが、別の読み書きと同期なしに並行して起きること</dd>
-          <dt>read-modify-write</dt><dd>値を読み、変更し、書き戻す一連の操作。途中に割り込まれると更新が消える</dd>
-          <dt>sync.Mutex</dt><dd>Lock〜Unlock の区間に同時に 1 つの goroutine しか入れない相互排他ロック</dd>
-          <dt>sync/atomic</dt><dd>単一の値への読み書き・加算を割り込み不能な 1 手順で行う Go のパッケージ</dd>
-          <dt>race detector</dt><dd><code>-race</code> で有効になる、実行時に起きたデータ競合を検出・報告する Go のツール</dd>
+          <dt>context.Context</dt><dd>キャンセルの合図・期限・リクエスト単位の値を、関数呼び出しの連鎖に沿って運ぶ Go の標準型。</dd>
+          <dt>ctx.Done()</dt><dd>context がキャンセルされた瞬間に close されるチャネル。これを見ている処理だけが止まれる。</dd>
+          <dt>協調的キャンセル</dt><dd>外から強制終了するのではなく、止まる側が合図を確認して自分で処理を切り上げる方式。</dd>
+          <dt>context.WithTimeout</dt><dd>親から派生し、指定時間の経過か親のキャンセルのどちらか早いほうでキャンセルされる子 context を作る関数。</dd>
+          <dt>CancelFunc</dt><dd>派生 context を明示的にキャンセルして資源を解放する関数。呼ばないと親のキャンセルまで子が残る。</dd>
+          <dt>client_connection_check_interval</dt><dd>PostgreSQL がクエリ実行中にクライアント接続の生死を確認する間隔。既定 0 で確認しない。</dd>
         </dl>
       </div>
 
       <div class="further-reading">
         <div class="box-title">🔗 もっと深く</div>
         <ul>
-          <li><a href="https://go.dev/doc/articles/race_detector">Data Race Detector — The Go Programming Language</a> — <code>-race</code> の使い方、レポートの読み方、<code>GORACE</code> のオプションと実行コストの公式解説</li>
-          <li><a href="https://go.dev/ref/mem">The Go Memory Model</a> — データ競合の定義と、競合のあるプログラムで何が保証されないかを示す一次資料。冒頭の「Don't be clever」だけでも読む価値がある</li>
-          <li><a href="https://pkg.go.dev/sync/atomic">sync/atomic package</a> — <code>atomic.Int64</code> などの型と、atomic 操作が逐次一貫な順序で実行されるという保証の記述</li>
-          <li><a href="https://pkg.go.dev/sync#Mutex">sync.Mutex — sync package</a> — ゼロ値で使えること、コピー禁止などの Mutex の約束事</li>
+          <li><a href="https://go.dev/doc/database/cancel-operations">Canceling in-progress operations (Go 公式)</a> — <code>QueryContext</code> と <code>WithTimeout</code> で DB 操作を打ち切る公式の書き方。</li>
+          <li><a href="https://pkg.go.dev/context">Package context (pkg.go.dev)</a> — 親子のキャンセル伝播、CancelFunc を呼ばないと漏れる理由、<code>WithoutCancel</code> の仕様の一次資料。</li>
+          <li><a href="https://go.dev/blog/context">Go Concurrency Patterns: Context (Go Blog)</a> — context がなぜ第 1 引数で渡す設計になったかを、検索サーバーの例で示した原典の記事。</li>
+          <li><a href="https://www.postgresql.org/docs/current/runtime-config-connection.html">PostgreSQL: Connections and Authentication</a> — <code>client_connection_check_interval</code> の挙動と、TCP keepalive との関係。</li>
         </ul>
       </div>
     </article>
@@ -179,6 +189,11 @@ go run -race main.go; echo "exit=$?"</pre>
     <!-- recent:start -->
     <section class="section recent-articles">
       <div class="section-title">最近の記事</div>
+      <div class="card">
+        <h3><a href="archive/2026-11-12.html">100 万回ずつ count++ しただけなのに、なぜ 2 つの goroutine の合計は 200 万にならないのか？</a></h3>
+        <div class="summary">count++ は 1 行でも読む・足す・書くの 3 手順に分かれ、並行する goroutine が割り込むと加算が消える。データ競合の仕組みと、Mutex・atomic での直し方、race detector での検出を解説する。</div>
+        <div class="meta"><span class="tag tag-lang">Lang</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-12</span></div>
+      </div>
       <div class="card">
         <h3><a href="archive/2026-11-11.html">ノードの CPU はほぼ空いているのに、なぜ Pod は Pending のまま動かないのか？</a></h3>
         <div class="summary">Kubernetes のスケジューラは CPU 使用率ではなく requests（予約量）の合計と Allocatable で配置を決める。ノードが暇なのに Pod が Pending になる仕組みと、requests の見直し方を解説する。</div>
@@ -193,11 +208,6 @@ go run -race main.go; echo "exit=$?"</pre>
         <h3><a href="archive/2026-11-09.html">ターミナルでは 1 行ずつ出るのに、なぜパイプや docker logs に通すとログがまとめて遅れて届くのか？</a></h3>
         <div class="summary">print はすぐ OS に書かずプロセス内バッファに溜める。出力先が端末なら行単位、パイプやファイルならブロック単位で溜めるため、パイプや docker logs ではログがまとめて遅れて届き、強制終了時には消える。</div>
         <div class="meta"><span class="tag tag-lang">Lang</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-09</span></div>
-      </div>
-      <div class="card">
-        <h3><a href="archive/2026-11-08.html">ブラウザでは鍵マークが付くのに、なぜ curl だけ証明書エラーになるのか？</a></h3>
-        <div class="summary">サーバー証明書はルートに直接繋がらず、間の中間証明書をサーバーが一緒に送る決まりがある。送り忘れてもブラウザはキャッシュや AIA で補うため気づかれにくく、OpenSSL ベースの curl やサーバー間通信だけが失敗する。fullchain.pem の指定と openssl s_client での確認方法を解説。</div>
-        <div class="meta"><span class="tag tag-network">Network</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-08</span></div>
       </div>
       <div class="recent-more"><a href="archive/">アーカイブですべて見る →</a></div>
     </section>

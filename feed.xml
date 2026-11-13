@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-11-12T11:22:55+09:00</updated>
+  <updated>2026-11-13T11:01:09+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>ユーザーはもう画面を閉じたのに、なぜサーバーの重い処理は最後まで走り続けるのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-11-13.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-11-13.html</id>
+    <updated>2026-11-13T11:01:09+09:00</updated>
+    <summary>Go の context キャンセルは Done チャネルを閉じる合図にすぎず、ctx を QueryContext などへ渡し続けた処理だけが止まる。WithTimeout と defer cancel、DB 側の切断検知設定まで揃えて初めて重い処理が止まる。</summary>
+  </entry>
   <entry>
     <title>100 万回ずつ count++ しただけなのに、なぜ 2 つの goroutine の合計は 200 万にならないのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-11-12.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-10-31.html</id>
     <updated>2026-10-31T09:54:51+09:00</updated>
     <summary>LLM は過去トークンの Key と Value を保存して使い回す。プロンプトキャッシュはそれをリクエストをまたいで保存し、先頭から一致した範囲だけを再利用するため、変わらない部分を前に置くと速く安くなる。</summary>
-  </entry>
-  <entry>
-    <title>http:// と打ったのに、なぜブラウザはサーバーに聞く前に https:// へ書き換えるのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-10-30.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-10-30.html</id>
-    <updated>2026-10-30T10:10:32+09:00</updated>
-    <summary>HTTP→HTTPS の 301 は平文の初回リクエストを中間者に横取りされうる。HSTS はブラウザに HTTPS 専用と記憶させ送信前に書き換えさせ、max-age・includeSubDomains・プリロードで範囲と期間が決まる。</summary>
   </entry>
 </feed>

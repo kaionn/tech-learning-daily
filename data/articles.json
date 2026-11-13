@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-11-13.html",
+    "date": "2026-11-13",
+    "title": "ユーザーはもう画面を閉じたのに、なぜサーバーの重い処理は最後まで走り続けるのか？",
+    "summary": "Go の r.Context() は切断でキャンセルされるが、それは Done チャネルを閉じる協調的な合図にすぎない。ctx を QueryContext や NewRequestWithContext へ渡し続けること、WithTimeout と defer cancel、PostgreSQL の client_connection_check_interval まで揃えて初めて重い処理が止まる仕組みを解説。",
+    "category": "lang",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": ["context.Context", "ctx.Done()", "協調的キャンセル", "context.WithTimeout", "CancelFunc", "client_connection_check_interval"]
+  },
+  {
     "file": "2026-11-12.html",
     "date": "2026-11-12",
     "title": "100 万回ずつ count++ しただけなのに、なぜ 2 つの goroutine の合計は 200 万にならないのか？",
