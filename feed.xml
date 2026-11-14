@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-11-13T11:01:09+09:00</updated>
+  <updated>2026-11-14T10:32:42+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>useEffect に書いた API 呼び出しが、なぜ開発中だけ 2 回飛ぶのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-11-14.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-11-14.html</id>
+    <updated>2026-11-14T10:32:42+09:00</updated>
+    <summary>開発中に Effect が 2 回走るのは StrictMode の再マウント検査で、本番では起きない。2 回目を止めるのではなく、cleanup で接続を閉じ fetch 結果を無視するのが正しい直し方である。</summary>
+  </entry>
   <entry>
     <title>ユーザーはもう画面を閉じたのに、なぜサーバーの重い処理は最後まで走り続けるのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-11-13.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-11-01.html</id>
     <updated>2026-11-01T09:13:03+09:00</updated>
     <summary>壁時計は NTP や手動設定で後ろへ飛びうるため、時刻の引き算は負になる。経過時間はモノトニッククロックで測り、Go では UTC() や JSON 化でモノトニック時刻が消える点に注意する。</summary>
-  </entry>
-  <entry>
-    <title>同じ長いプロンプトを送っただけなのに、なぜ 2 回目の LLM 呼び出しは速く安くなるのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-10-31.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-10-31.html</id>
-    <updated>2026-10-31T09:54:51+09:00</updated>
-    <summary>LLM は過去トークンの Key と Value を保存して使い回す。プロンプトキャッシュはそれをリクエストをまたいで保存し、先頭から一致した範囲だけを再利用するため、変わらない部分を前に置くと速く安くなる。</summary>
   </entry>
 </feed>

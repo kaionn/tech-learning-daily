@@ -39,9 +39,9 @@
         <button class="chip" data-cat="ai">AI <span class="chip-count">8</span></button>
         <button class="chip" data-cat="infra">Infra <span class="chip-count">8</span></button>
         <button class="chip" data-cat="dev" data-overflow="1" hidden>Dev <span class="chip-count">5</span></button>
+        <button class="chip" data-cat="frontend" data-overflow="1" hidden>Frontend <span class="chip-count">5</span></button>
         <button class="chip" data-cat="obs" data-overflow="1" hidden>Obs <span class="chip-count">5</span></button>
         <button class="chip" data-cat="perf" data-overflow="1" hidden>Perf <span class="chip-count">5</span></button>
-        <button class="chip" data-cat="frontend" data-overflow="1" hidden>Frontend <span class="chip-count">4</span></button>
         <button class="chip chip-more" id="chip-more">+ 4 件</button>
       </div>
       <div class="chip-row" id="diff-chips">
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-11">
       <div class="section-title">2026 年 11 月 <span class="count"></span></div>
+      <div class="card" data-cat="frontend" data-diff="基礎"
+           data-search="useeffect に書いた api 呼び出しが、なぜ開発中だけ 2 回飛ぶのか？ 開発中だけ useeffect の処理が 2 回走るのは、strictmode がマウント直後にアンマウントと再マウントを行う検査のため。cleanup の書き忘れを炙り出す狙いと、ref で握りつぶさない正しい直し方を解説する。" data-terms="StrictMode / Effect / cleanup 関数 / マウント / アンマウント / AbortController">
+        <h3><a href="2026-11-14.html">useEffect に書いた API 呼び出しが、なぜ開発中だけ 2 回飛ぶのか？</a></h3>
+        <div class="summary">開発中だけ useEffect の処理が 2 回走るのは、StrictMode がマウント直後にアンマウントと再マウントを行う検査のため。cleanup の書き忘れを炙り出す狙いと、ref で握りつぶさない正しい直し方を解説する。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-frontend">Frontend</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-14</span></div>
+      </div>
       <div class="card" data-cat="lang" data-diff="基礎"
            data-search="ユーザーはもう画面を閉じたのに、なぜサーバーの重い処理は最後まで走り続けるのか？ go の r.context() は切断でキャンセルされるが、それは done チャネルを閉じる協調的な合図にすぎない。ctx を querycontext や newrequestwithcontext へ渡し続けること、withtimeout と defer cancel、postgresql の client_connection_check_interval まで揃えて初めて重い処理が止まる仕組みを解説。" data-terms="context.Context / ctx.Done() / 協調的キャンセル / context.WithTimeout / CancelFunc / client_connection_check_interval">
         <h3><a href="2026-11-13.html">ユーザーはもう画面を閉じたのに、なぜサーバーの重い処理は最後まで走り続けるのか？</a></h3>

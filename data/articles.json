@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-11-14.html",
+    "date": "2026-11-14",
+    "title": "useEffect に書いた API 呼び出しが、なぜ開発中だけ 2 回飛ぶのか？",
+    "summary": "開発中だけ useEffect の処理が 2 回走るのは、StrictMode がマウント直後にアンマウントと再マウントを行う検査のため。cleanup の書き忘れを炙り出す狙いと、ref で握りつぶさない正しい直し方を解説する。",
+    "category": "frontend",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": ["StrictMode", "Effect", "cleanup 関数", "マウント / アンマウント", "AbortController"]
+  },
+  {
     "file": "2026-11-13.html",
     "date": "2026-11-13",
     "title": "ユーザーはもう画面を閉じたのに、なぜサーバーの重い処理は最後まで走り続けるのか？",
