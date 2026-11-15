@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tech Learning Daily — z-index: 9999 にしたのに、なぜモーダルはヘッダーの下に潜るのか？</title>
+  <link rel="stylesheet" href="../style.css">
+  <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="../feed.xml">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Tech Learning Daily</h1>
+      <div class="date">2026-11-15 (Sun) — 第 121 号</div>
+      <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
+    </header>
+
+    <article class="article">
+      <div class="meta-bar">
+        <span class="tag tag-frontend">Frontend</span>
+        <span class="difficulty">🌿 基礎</span>
+        <span class="read-time">⏱ 約 7 分</span>
+      </div>
+      <h2 class="article-title">z-index: 9999 にしたのに、なぜモーダルはヘッダーの下に潜るのか？</h2>
+      <p class="lead">固定ヘッダーの <code>z-index</code> は 10、モーダルは 9999。数字の上では圧勝のはずなのに、開いたモーダルの上端がヘッダーの裏に隠れる。焦って 99999 に増やしても何も変わらない。z-index は「ページ全体で比べる 1 本の数直線」だと思っているなら、その前提がずれている。</p>
+
+      <div class="tldr">
+        <div class="box-title">🎯 3 行まとめ</div>
+        <ul>
+          <li>z-index は「同じスタッキングコンテキストの中の兄弟同士」でしか比べられない。</li>
+          <li><code>position</code> + 整数の <code>z-index</code>、<code>transform</code>、<code>opacity</code> &lt; 1 などは要素を新しいスタッキングコンテキストにし、中身を 1 つの塊に閉じ込める。</li>
+          <li>直すときは数字を上げず、祖先の塊を探して外す・<code>isolation: isolate</code> で意図的に作る・Portal や <code>&lt;dialog&gt;</code> で外へ出す。</li>
+        </ul>
+      </div>
+
+      <section class="body-section">
+        <h3>描画の順番は「スタッキングコンテキスト」単位で決まる</h3>
+        <p>ブラウザは要素を重ねて描くとき、どれを後から（手前に）塗るかを決める必要がある。この重なり順を決める単位が<strong>スタッキングコンテキスト</strong>だ。スタッキングコンテキストとは「中身をまとめて重ね順を計算し、計算し終えたら外からは 1 枚の板として扱われる要素」のことである。ルート要素 <code>&lt;html&gt;</code> が最初の 1 つで、条件を満たす子孫がその中に入れ子の板を作っていく。</p>
+        <p>MDN はこれを「各スタッキングコンテキストは自己完結しており、中身を重ね終えた後は要素全体が親のスタッキングコンテキストの中で 1 つの単位として扱われる」と説明している。<code>z-index</code> の数字はこの「親の中での板の高さ」を指定するだけで、ページ全体の絶対的な高さではない。</p>
+        <p>z-index の初期値は <code>auto</code> で、これは「新しいスタッキングコンテキストを作らず、今いるコンテキストでの高さは 0」を意味する。一方、<code>position: relative</code> や <code>absolute</code> の要素に整数（<code>0</code> も含む）を指定すると、その要素は高さを得ると同時に<strong>自分自身が新しいスタッキングコンテキストになる</strong>。高さを付けたつもりの操作が、子孫を閉じ込める壁も同時に作っている。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>9999 が 10 に負ける仕組み</h3>
+        <p>冒頭の状況を DOM に落とすとこうなる。ヘッダーは <code>position: sticky; z-index: 10</code>。モーダルは、ホバーで浮くカード（<code>position: relative; z-index: 1</code>）のコンポーネント内に置かれ、自身は <code>position: fixed; z-index: 9999</code> を持つ。</p>
+        <pre class="diagram">ルート (html) のコンテキスト
+├─ header      z-index: 10
+└─ .card       z-index: 1  ◀ ここが板になる
+   └─ .modal   z-index: 9999
+               (.card の中だけで有効)
+
+ルートで比べられるのは header と .card
+  header(10) ＞ .card(1)
+  ▼
+.card の板ごと header の下に描かれる
+  → 中の .modal も道連れ</pre>
+        <p>ルートのコンテキストで比較されるのは直接の住人である <code>header</code> と <code>.card</code> だけだ。<code>.modal</code> の 9999 は <code>.card</code> の板の中で兄弟に勝つための値にすぎず、板の外へは持ち出せない。MDN の例でも、<code>z-index: 6</code> の要素が <code>z-index: 5</code> の要素の下に描かれる理由を「親の値が 4 なので、4-6 は 5-0 より小さい」と説明している。だから 99999 にしても順位は変わらない。</p>
+        <p><code>position: fixed</code> にすれば画面基準で自由に浮けるように思える。しかし fixed は位置の基準を変えるだけで、どの板に属するかは DOM 上の祖先で決まる。さらに祖先に <code>transform</code> があると、fixed の位置基準そのものがその祖先に変わり、ビューポート全体を覆うことすらできなくなる。</p>
+      </section>
+
+      <div class="analogy">
+        <div class="box-title">🍱 たとえるなら</div>
+        <p>本の章・節番号だ。「第 1 章 第 9999 節」は節番号がどれだけ大きくても「第 10 章」より前に来る。比較はまず章番号で行われ、節番号は同じ章の中でしか意味を持たない。z-index も同じで、まず属する板（章）の高さで比べ、自分の数字（節）はその板の中の順位にしか効かない。</p>
+      </div>
+
+      <section class="body-section">
+        <h3>板を作るのは z-index だけではない</h3>
+        <p>厄介なのは、スタッキングコンテキストが z-index と無関係なプロパティでも生まれることだ。MDN が挙げる条件のうち、実務で出会いやすいものを並べる。</p>
+        <pre class="code">/* どれも要素を新しいスタッキングコンテキストにする */
+position: relative;  z-index: 1;  /* absolute も同様。auto 以外 */
+position: fixed;                   /* z-index なしでも作る */
+position: sticky;                  /* 同上 */
+opacity: 0.99;                     /* 1 未満なら作る */
+transform: translateY(-2px);       /* none 以外 */
+filter: blur(4px);                 /* backdrop-filter も同様 */
+will-change: transform;            /* 作る値を予告した時点で作る */
+isolation: isolate;                /* 作るためだけのプロパティ */</pre>
+        <p>ホバーで <code>transform</code> を付けるカード、フェードイン用に <code>opacity</code> をアニメーションさせるラッパー、性能対策で入れた <code>will-change</code>。どれも見た目の調整のつもりで書かれ、重なり順を変える意図はない。それでも付いた瞬間に子孫の z-index が外で効かなくなる。ちなみに z-index 無しの <code>transform</code> や <code>opacity</code> の板は、親の中では <code>z-index: 0</code> 相当の位置に描かれる（CSS 2 の描画順で z-index が 0 または auto の位置指定要素と同じ段）。</p>
+        <p>また、flex アイテムと grid アイテムは <code>position</code> 無しでも z-index が効き、整数を指定すれば板になる。逆に、普通のブロック要素（<code>position: static</code>）に <code>z-index</code> を書いても何も起きない。「書いたのに効かない」の多くはこれだ。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>板は「消す」だけでなく「わざと作る」</h3>
+        <p>原因の板が見つかったら、直し方は 3 つある。1 つ目は不要な板を外すことで、冒頭の例なら <code>.card</code> の <code>z-index: 1</code> を消すか、ホバー効果を <code>transform</code> 以外で表現する。ただし板は他の理由で必要なことも多く、消せないこともある。</p>
+        <p>2 つ目は、モーダルを板の外へ出すことだ。React の <code>createPortal</code> は、コンポーネントの位置はそのままに DOM ノードだけを <code>document.body</code> などへ置く。公式ドキュメントも <code>overflow: hidden</code> などの容器の中から呼んでもページ全体の上に浮くモーダルの用途を挙げている。ネイティブの <code>&lt;dialog&gt;</code> を <code>showModal()</code> で開けば、要素はブラウザが管理する<strong>トップレイヤー</strong>に置かれる。トップレイヤーは文書内の他のすべての層の上に描かれる層で、祖先の板の影響を受けない。</p>
+        <p>3 つ目は、板を意図して作り、z-index の競争範囲を閉じ込めることだ。よくある罠に、装飾用の擬似要素に <code>z-index: -1</code> を付けたら親の背景の裏へ消える、というものがある。CSS 2 の描画順では、負の z-index の子は「属するスタッキングコンテキストの背景」の直後に描かれる。親が板でなければ、その子はもっと外側の板の背景の直後まで沈み、親の背景がその上に塗られてしまう。</p>
+        <pre class="code">.button {
+  position: relative;
+  isolation: isolate; /* ここで板を作る */
+}
+.button::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1; /* .button の背景の上・文字の下に収まる */
+}</pre>
+        <p><code>isolation</code> の初期値は <code>auto</code> で、<code>isolate</code> にすると「スタッキングコンテキストを必ず作る」以外の副作用が無い。z-index の値を付けたり <code>transform</code> を足したりする方法と違い、位置や見た目を一切変えずに板だけを作れるので、コンポーネントの外へ z-index が漏れ出すのを防ぐ目的で使える。</p>
+      </section>
+
+      <div class="practical">
+        <div class="box-title">💼 実務でどう出会うか</div>
+        <p>典型はデザインシステムやライブラリの組み合わせだ。ヘッダーやサイドバーは <code>position: sticky</code> / <code>fixed</code> で必ず板になり、その中に置いたドロップダウンは、後ろにある本文側の板との勝負に親ごと巻き込まれる。ツールチップが <code>overflow: hidden</code> のテーブルの中で切れる問題と同じく、「その要素の数字」ではなく「どの板に属しているか」を見るのが調査の起点になる。DevTools の Elements パネルで問題の要素から祖先を 1 つずつ選び、Computed で <code>z-index</code>・<code>transform</code>・<code>opacity</code>・<code>filter</code>・<code>will-change</code>・<code>position</code> を確認していく。条件を満たす祖先が見つかるたびに「その板が親の中で誰と比べられているか」を確かめれば、負けている板に行き着く。チームでは z-index の値を「header: 100 / dropdown: 200 / modal: 300」のように変数で一元管理しても、板の入れ子を無視すれば同じ事故が起きる点に注意したい。</p>
+      </div>
+
+      <div class="hands-on">
+        <div class="box-title">⌨️ 手を動かす（5 分）</div>
+        <p>z-index: 9999 のモーダルが z-index: 10 のヘッダーに負ける状況を再現し、親の 1 行を変えるだけで結果が反転することを確かめる。</p>
+        <pre class="code">mkdir -p /tmp/zidx &amp;&amp; cat &gt; /tmp/zidx/index.html &lt;&lt;'EOF'
+&lt;!doctype html&gt;
+&lt;style&gt;
+  body { margin: 0; font: 16px sans-serif; }
+  header { position: sticky; top: 0; z-index: 10;
+           height: 80px; background: tomato; }
+  .card  { position: relative; z-index: 1;
+           margin: 20px; padding: 20px; background: #eee; }
+  .modal { position: fixed; top: 40px; left: 40px;
+           z-index: 9999; width: 240px; height: 120px;
+           background: royalblue; color: #fff; }
+&lt;/style&gt;
+&lt;header&gt;header z-index: 10&lt;/header&gt;
+&lt;div class="card"&gt;card
+  &lt;div class="modal"&gt;modal z-index: 9999&lt;/div&gt;
+&lt;/div&gt;
+EOF
+open /tmp/zidx/index.html</pre>
+        <p>青いモーダルの上部が赤いヘッダーの下に隠れるはずだ。DevTools で <code>.card</code> の <code>z-index: 1</code> のチェックを外すと、<code>.card</code> は板でなくなり、モーダルがルートで直接ヘッダーと比べられて手前に出る。続けて <code>.card</code> に <code>opacity: 0.99</code> を足すと再びヘッダーの下に潜る。z-index を書いていないのに板ができ、親の中で 0 相当の段に描かれるためだ（<code>transform</code> でも板はできるが、fixed の位置基準が <code>.card</code> に変わってモーダルが下へずれるので、この実験では opacity が見やすい）。最後に <code>.modal</code> を <code>&lt;body&gt;</code> 直下へドラッグで移すと、どの設定でも手前に出る。</p>
+      </div>
+
+      <div class="misconceptions">
+        <div class="box-title">🙅 よくある誤解</div>
+        <ul>
+          <li><span class="wrong">z-index を十分大きくすれば必ず最前面に出る</span> — 比べられるのは同じスタッキングコンテキストの兄弟だけで、祖先の板が負けていれば値をいくら上げても順位は変わらない。</li>
+          <li><span class="wrong">z-index はどんな要素にも効く</span> — 効くのは <code>position</code> が <code>static</code> 以外の要素と、flex / grid のアイテムである。普通のブロック要素に書いても無視される。</li>
+          <li><span class="wrong"><code>position: fixed</code> にすれば親から独立する</span> — fixed は位置の基準を変えるだけで、属する板は DOM 上の祖先で決まる。祖先に <code>transform</code> があれば位置の基準もその祖先になる。</li>
+        </ul>
+      </div>
+
+      <div class="glossary">
+        <div class="box-title">📖 用語ミニ辞典</div>
+        <dl>
+          <dt>スタッキングコンテキスト</dt><dd>中身の重なり順をまとめて計算し、外からは 1 つの単位として扱われる要素。ルート要素が最初の 1 つ。</dd>
+          <dt>z-index</dt><dd>属するスタッキングコンテキストの中での重なりの高さ。整数を指定した位置指定要素は自身も新しいコンテキストになる。</dd>
+          <dt>isolation: isolate</dt><dd>他の見た目を変えずに、スタッキングコンテキストを作ることだけを行う指定。</dd>
+          <dt>トップレイヤー</dt><dd>モーダルの <code>&lt;dialog&gt;</code>・ポップオーバー・全画面要素が置かれる、文書の他の層すべての上に描かれる層。</dd>
+          <dt>createPortal</dt><dd>React のコンポーネント位置を保ったまま、DOM ノードだけを別の場所（body 直下など）に描画する API。</dd>
+        </dl>
+      </div>
+
+      <div class="further-reading">
+        <div class="box-title">🔗 もっと深く</div>
+        <ul>
+          <li><a href="https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Positioned_layout/Stacking_context">MDN: Stacking context</a> — スタッキングコンテキストを作る条件の全リストと、入れ子の比較を図で示した例。</li>
+          <li><a href="https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/z-index">MDN: z-index</a> — <code>auto</code> と整数で「新しいコンテキストを作るか」が分かれることの定義。</li>
+          <li><a href="https://www.w3.org/TR/CSS2/zindex.html">CSS 2.1 Appendix E: Elaborate description of Stacking Contexts</a> — 背景・負の z-index・インライン・正の z-index の描画順を定めた仕様本文。</li>
+          <li><a href="https://react.dev/reference/react-dom/createPortal">React: createPortal</a> — モーダルを DOM 上で外へ出す用途と、イベントが React ツリー通りに伝播する注意点。</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- recent:start -->
+    <!-- recent:end -->
+
+    <footer>
+      <p>Generated by Claude Code (GitHub Actions)</p>
+      <a href="./" class="archive-link">過去の記事</a>
+    </footer>
+  </div>
+</body>
+</html>

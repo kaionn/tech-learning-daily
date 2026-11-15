@@ -38,8 +38,8 @@
         <button class="chip" data-cat="security">Security <span class="chip-count">9</span></button>
         <button class="chip" data-cat="ai">AI <span class="chip-count">8</span></button>
         <button class="chip" data-cat="infra">Infra <span class="chip-count">8</span></button>
+        <button class="chip" data-cat="frontend" data-overflow="1" hidden>Frontend <span class="chip-count">6</span></button>
         <button class="chip" data-cat="dev" data-overflow="1" hidden>Dev <span class="chip-count">5</span></button>
-        <button class="chip" data-cat="frontend" data-overflow="1" hidden>Frontend <span class="chip-count">5</span></button>
         <button class="chip" data-cat="obs" data-overflow="1" hidden>Obs <span class="chip-count">5</span></button>
         <button class="chip" data-cat="perf" data-overflow="1" hidden>Perf <span class="chip-count">5</span></button>
         <button class="chip chip-more" id="chip-more">+ 4 件</button>
@@ -56,6 +56,13 @@
 
     <section class="section month" data-month="2026-11">
       <div class="section-title">2026 年 11 月 <span class="count"></span></div>
+      <div class="card" data-cat="frontend" data-diff="基礎"
+           data-search="z-index: 9999 にしたのに、なぜモーダルはヘッダーの下に潜るのか？ z-index は同じスタッキングコンテキストの兄弟同士でしか比べられず、祖先に transform や z-index 付きの板があると 9999 でも外の 10 に負ける仕組みと、isolation・portal・dialog での直し方。" data-terms="スタッキングコンテキスト / z-index / isolation: isolate / トップレイヤー / createPortal">
+        <h3><a href="2026-11-15.html">z-index: 9999 にしたのに、なぜモーダルはヘッダーの下に潜るのか？</a></h3>
+        <div class="summary">z-index は同じスタッキングコンテキストの兄弟同士でしか比べられず、祖先に transform や z-index 付きの板があると 9999 でも外の 10 に負ける仕組みと、isolation・Portal・dialog での直し方。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-frontend">Frontend</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-15</span></div>
+      </div>
       <div class="card" data-cat="frontend" data-diff="基礎"
            data-search="useeffect に書いた api 呼び出しが、なぜ開発中だけ 2 回飛ぶのか？ 開発中だけ useeffect の処理が 2 回走るのは、strictmode がマウント直後にアンマウントと再マウントを行う検査のため。cleanup の書き忘れを炙り出す狙いと、ref で握りつぶさない正しい直し方を解説する。" data-terms="StrictMode / Effect / cleanup 関数 / マウント / アンマウント / AbortController">
         <h3><a href="2026-11-14.html">useEffect に書いた API 呼び出しが、なぜ開発中だけ 2 回飛ぶのか？</a></h3>

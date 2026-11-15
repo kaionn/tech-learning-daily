@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-11-14T10:32:42+09:00</updated>
+  <updated>2026-11-15T10:10:12+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>z-index: 9999 にしたのに、なぜモーダルはヘッダーの下に潜るのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-11-15.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-11-15.html</id>
+    <updated>2026-11-15T10:10:12+09:00</updated>
+    <summary>z-index は同じスタッキングコンテキストの兄弟同士でしか比べられず、transform や opacity でも板が生まれ中身が閉じ込められる。数字を上げず、祖先の板を外すか isolation・Portal・dialog で扱う。</summary>
+  </entry>
   <entry>
     <title>useEffect に書いた API 呼び出しが、なぜ開発中だけ 2 回飛ぶのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-11-14.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-11-02.html</id>
     <updated>2026-11-02T09:54:46+09:00</updated>
     <summary>送信側の Nagle は未 ACK 中の小片を溜め、受信側の delayed ACK は返事を待って ACK を遅らせる。write を分けると両者が待ち合い Linux では約 40ms 止まるため、1 回で書くか TCP_NODELAY を立てる。</summary>
-  </entry>
-  <entry>
-    <title>終了時刻から開始時刻を引いただけなのに、なぜ処理時間がマイナスになるのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-11-01.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-11-01.html</id>
-    <updated>2026-11-01T09:13:03+09:00</updated>
-    <summary>壁時計は NTP や手動設定で後ろへ飛びうるため、時刻の引き算は負になる。経過時間はモノトニッククロックで測り、Go では UTC() や JSON 化でモノトニック時刻が消える点に注意する。</summary>
   </entry>
 </feed>

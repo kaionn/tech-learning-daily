@@ -1,5 +1,15 @@
 [
   {
+    "file": "2026-11-15.html",
+    "date": "2026-11-15",
+    "title": "z-index: 9999 にしたのに、なぜモーダルはヘッダーの下に潜るのか？",
+    "summary": "z-index は同じスタッキングコンテキストの兄弟同士でしか比べられず、祖先に transform や z-index 付きの板があると 9999 でも外の 10 に負ける仕組みと、isolation・Portal・dialog での直し方。",
+    "category": "frontend",
+    "difficulty": "基礎",
+    "readTime": 7,
+    "terms": ["スタッキングコンテキスト", "z-index", "isolation: isolate", "トップレイヤー", "createPortal"]
+  },
+  {
     "file": "2026-11-14.html",
     "date": "2026-11-14",
     "title": "useEffect に書いた API 呼び出しが、なぜ開発中だけ 2 回飛ぶのか？",

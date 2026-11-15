@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tech Learning Daily — useEffect に書いた API 呼び出しが、なぜ開発中だけ 2 回飛ぶのか？</title>
+  <title>Tech Learning Daily — z-index: 9999 にしたのに、なぜモーダルはヘッダーの下に潜るのか？</title>
   <link rel="stylesheet" href="style.css">
   <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="feed.xml">
   <link rel="icon" href="/favicon.ico" sizes="48x48">
@@ -14,7 +14,7 @@
   <div class="container">
     <header>
       <h1>Tech Learning Daily</h1>
-      <div class="date">2026-11-14 (Sat) — 第 120 号</div>
+      <div class="date">2026-11-15 (Sun) — 第 121 号</div>
       <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
     </header>
 
@@ -24,143 +24,150 @@
         <span class="difficulty">🌿 基礎</span>
         <span class="read-time">⏱ 約 7 分</span>
       </div>
-      <h2 class="article-title">useEffect に書いた API 呼び出しが、なぜ開発中だけ 2 回飛ぶのか？</h2>
-      <p class="lead">画面を開いたときにデータを取ってくる <code>useEffect</code> を書いた。ブラウザの Network タブを見ると、同じリクエストが 2 本並んでいる。<code>console.log</code> も 2 回出る。ところが本番ビルドで試すと 1 回しか呼ばれない。React はなぜ、開発中だけわざわざ処理を二重に走らせるのだろうか。</p>
+      <h2 class="article-title">z-index: 9999 にしたのに、なぜモーダルはヘッダーの下に潜るのか？</h2>
+      <p class="lead">固定ヘッダーの <code>z-index</code> は 10、モーダルは 9999。数字の上では圧勝のはずなのに、開いたモーダルの上端がヘッダーの裏に隠れる。焦って 99999 に増やしても何も変わらない。z-index は「ページ全体で比べる 1 本の数直線」だと思っているなら、その前提がずれている。</p>
 
       <div class="tldr">
         <div class="box-title">🎯 3 行まとめ</div>
         <ul>
-          <li>2 回目の呼び出しは、<code>&lt;StrictMode&gt;</code> が開発中だけ行う「マウント直後にいったんアンマウントして、もう一度マウントする」検査の結果である</li>
-          <li>目的は、cleanup 関数の書き忘れを本番より先に表に出すこと。Effect は setup → cleanup → setup と実行されても、1 回だけの場合と見分けがつかないように書くのが正解である</li>
-          <li><code>useRef</code> のフラグで 2 回目を握りつぶすのは誤った対処で、cleanup で接続を閉じる・fetch の結果を無視する・<code>AbortController</code> で中止する、が正しい直し方である</li>
+          <li>z-index は「同じスタッキングコンテキストの中の兄弟同士」でしか比べられない。</li>
+          <li><code>position</code> + 整数の <code>z-index</code>、<code>transform</code>、<code>opacity</code> &lt; 1 などは要素を新しいスタッキングコンテキストにし、中身を 1 つの塊に閉じ込める。</li>
+          <li>直すときは数字を上げず、祖先の塊を探して外す・<code>isolation: isolate</code> で意図的に作る・Portal や <code>&lt;dialog&gt;</code> で外へ出す。</li>
         </ul>
       </div>
 
       <section class="body-section">
-        <h3>2 回目を起こしているのは StrictMode である</h3>
-        <p>犯人はコードのバグではなく、アプリの入り口にある <code>&lt;StrictMode&gt;</code> である。StrictMode は、囲んだコンポーネントに対して開発時だけ追加の検査を行う React の組み込みコンポーネントだ。Vite の React テンプレートで作ったプロジェクトなら、<code>src/main.jsx</code> に最初から書かれている。</p>
-        <pre class="code">createRoot(document.getElementById('root')).render(
-  &lt;StrictMode&gt;
-    &lt;App /&gt;
-  &lt;/StrictMode&gt;,
-)</pre>
-        <p>React の公式リファレンスによれば、StrictMode の内側では「すべての Effect について、開発時に setup と cleanup をもう 1 周余分に実行する」。ここで Effect とは <code>useEffect</code> に渡した関数のことで、setup はその本体、cleanup は本体が <code>return</code> した後片付け用の関数を指す。この検査は React 18 で追加されたもので、公式ドキュメントは開発時専用であり本番ビルドには影響しないと明記している。本番で 1 回しか呼ばれないのはこのためだ。</p>
+        <h3>描画の順番は「スタッキングコンテキスト」単位で決まる</h3>
+        <p>ブラウザは要素を重ねて描くとき、どれを後から（手前に）塗るかを決める必要がある。この重なり順を決める単位が<strong>スタッキングコンテキスト</strong>だ。スタッキングコンテキストとは「中身をまとめて重ね順を計算し、計算し終えたら外からは 1 枚の板として扱われる要素」のことである。ルート要素 <code>&lt;html&gt;</code> が最初の 1 つで、条件を満たす子孫がその中に入れ子の板を作っていく。</p>
+        <p>MDN はこれを「各スタッキングコンテキストは自己完結しており、中身を重ね終えた後は要素全体が親のスタッキングコンテキストの中で 1 つの単位として扱われる」と説明している。<code>z-index</code> の数字はこの「親の中での板の高さ」を指定するだけで、ページ全体の絶対的な高さではない。</p>
+        <p>z-index の初期値は <code>auto</code> で、これは「新しいスタッキングコンテキストを作らず、今いるコンテキストでの高さは 0」を意味する。一方、<code>position: relative</code> や <code>absolute</code> の要素に整数（<code>0</code> も含む）を指定すると、その要素は高さを得ると同時に<strong>自分自身が新しいスタッキングコンテキストになる</strong>。高さを付けたつもりの操作が、子孫を閉じ込める壁も同時に作っている。</p>
       </section>
 
       <section class="body-section">
-        <h3>React は何を確かめているのか</h3>
-        <p>2 回実行と聞くと、単に関数を 2 度呼んでいるように思える。しかし実際は「マウント → アンマウント → 再マウント」という画面の出入りを再現している。マウントはコンポーネントが画面に現れること、アンマウントは画面から消えることだ。React 18 のリリースノートは、この流れを次の順序として示している。</p>
-        <pre class="diagram">開発 + StrictMode       本番
-──────────────────    ──────────────
-① マウント            ① マウント
-   Effect setup          Effect setup
-      │
-      ▼
-② 擬似アンマウント
-   Effect cleanup
-      │
-      ▼
-③ 再マウント
-   (state は保持)
-   Effect setup
+        <h3>9999 が 10 に負ける仕組み</h3>
+        <p>冒頭の状況を DOM に落とすとこうなる。ヘッダーは <code>position: sticky; z-index: 10</code>。モーダルは、ホバーで浮くカード（<code>position: relative; z-index: 1</code>）のコンポーネント内に置かれ、自身は <code>position: fixed; z-index: 9999</code> を持つ。</p>
+        <pre class="diagram">ルート (html) のコンテキスト
+├─ header      z-index: 10
+└─ .card       z-index: 1  ◀ ここが板になる
+   └─ .modal   z-index: 9999
+               (.card の中だけで有効)
 
-正しい cleanup があれば
-①〜③ の最終状態 ＝ 本番の ① の状態</pre>
-        <p>2 回目のマウントでは state が前回の値のまま復元される。つまり React が試しているのは「ユーザーが別の画面へ移って戻ってきたとき、このコンポーネントは壊れないか」という状況である。cleanup を書き忘れたチャット接続のような Effect は、出入りのたびに接続が増え続ける。本番では画面遷移を何度も繰り返して初めて表面化するこの種のバグを、開発中の初回表示だけで見えるようにするのがこの検査の狙いだ。</p>
-        <p>React がここまで「出入り」にこだわるのは、state を保ったまま UI を隠したり戻したりする機能を見据えていたからである。React 18 のリリースノートは将来機能としてこれを予告しており、現在の React には <code>&lt;Activity&gt;</code> として入っている。<code>&lt;Activity mode="hidden"&gt;</code> の中のコンポーネントは state を残したまま Effect だけが cleanup され、表示に戻ると Effect が作り直される。StrictMode の二重実行は、この動き方に耐えられるかを前もって試す検査でもある。</p>
+ルートで比べられるのは header と .card
+  header(10) ＞ .card(1)
+  ▼
+.card の板ごと header の下に描かれる
+  → 中の .modal も道連れ</pre>
+        <p>ルートのコンテキストで比較されるのは直接の住人である <code>header</code> と <code>.card</code> だけだ。<code>.modal</code> の 9999 は <code>.card</code> の板の中で兄弟に勝つための値にすぎず、板の外へは持ち出せない。MDN の例でも、<code>z-index: 6</code> の要素が <code>z-index: 5</code> の要素の下に描かれる理由を「親の値が 4 なので、4-6 は 5-0 より小さい」と説明している。だから 99999 にしても順位は変わらない。</p>
+        <p><code>position: fixed</code> にすれば画面基準で自由に浮けるように思える。しかし fixed は位置の基準を変えるだけで、どの板に属するかは DOM 上の祖先で決まる。さらに祖先に <code>transform</code> があると、fixed の位置基準そのものがその祖先に変わり、ビューポート全体を覆うことすらできなくなる。</p>
       </section>
 
       <div class="analogy">
         <div class="box-title">🍱 たとえるなら</div>
-        <p>ホテルの新人研修で、チェックインの直後に一度チェックアウトさせ、すぐにもう一度チェックインさせる抜き打ち検査である。チェックアウト時にエアコンを切り、鍵を返す手順（cleanup）が抜けている新人の部屋では、2 回目のチェックインの時点でエアコンが 2 台分動き、鍵も 2 本出回っている。本物の客（本番）はこの往復をしないが、長期滞在の客が何度も出入りすれば同じことが起きる。</p>
+        <p>本の章・節番号だ。「第 1 章 第 9999 節」は節番号がどれだけ大きくても「第 10 章」より前に来る。比較はまず章番号で行われ、節番号は同じ章の中でしか意味を持たない。z-index も同じで、まず属する板（章）の高さで比べ、自分の数字（節）はその板の中の順位にしか効かない。</p>
       </div>
 
       <section class="body-section">
-        <h3>正しい直し方は「2 回目を止める」ではなく「cleanup を書く」</h3>
-        <p>公式ドキュメントの言葉では、問うべきは「Effect を 1 回だけ実行するにはどうするか」ではなく「再マウント後も正しく動くように Effect をどう直すか」である。判定基準は、setup → cleanup → setup の結果を、ユーザーが 1 回だけの実行と区別できないことだ。購読や接続なら、cleanup で解除・切断する。</p>
-        <pre class="code">useEffect(() =&gt; {
-  const conn = createConnection(roomId);
-  conn.connect();
-  return () =&gt; conn.disconnect(); // cleanup
-}, [roomId]);</pre>
-        <p>データ取得では、送ってしまったリクエストは取り消せない。そこで cleanup では「もう関係ない結果を state に反映しない」ようにする。公式の例は <code>ignore</code> フラグを使う。</p>
-        <pre class="code">useEffect(() =&gt; {
-  let ignore = false;
-  fetch(`/api/todos?user=${userId}`)
-    .then(r =&gt; r.json())
-    .then(json =&gt; { if (!ignore) setTodos(json); });
-  return () =&gt; { ignore = true; };
-}, [userId]);</pre>
-        <p>開発中は Network タブにリクエストが 2 本出るが、1 本目の結果は <code>ignore</code> により捨てられるので画面には影響しない。この書き方は、<code>userId</code> が素早く切り替わったときに古いレスポンスが後から届いて新しい表示を上書きする、本番でも起きる競合も同時に防ぐ。通信自体を打ち切りたいなら <code>AbortController</code> を併用できるが、公式ドキュメントは中止だけでは競合対策として足りず、明示的なフラグが最も確実だと述べている。</p>
+        <h3>板を作るのは z-index だけではない</h3>
+        <p>厄介なのは、スタッキングコンテキストが z-index と無関係なプロパティでも生まれることだ。MDN が挙げる条件のうち、実務で出会いやすいものを並べる。</p>
+        <pre class="code">/* どれも要素を新しいスタッキングコンテキストにする */
+position: relative;  z-index: 1;  /* absolute も同様。auto 以外 */
+position: fixed;                   /* z-index なしでも作る */
+position: sticky;                  /* 同上 */
+opacity: 0.99;                     /* 1 未満なら作る */
+transform: translateY(-2px);       /* none 以外 */
+filter: blur(4px);                 /* backdrop-filter も同様 */
+will-change: transform;            /* 作る値を予告した時点で作る */
+isolation: isolate;                /* 作るためだけのプロパティ */</pre>
+        <p>ホバーで <code>transform</code> を付けるカード、フェードイン用に <code>opacity</code> をアニメーションさせるラッパー、性能対策で入れた <code>will-change</code>。どれも見た目の調整のつもりで書かれ、重なり順を変える意図はない。それでも付いた瞬間に子孫の z-index が外で効かなくなる。ちなみに z-index 無しの <code>transform</code> や <code>opacity</code> の板は、親の中では <code>z-index: 0</code> 相当の位置に描かれる（CSS 2 の描画順で z-index が 0 または auto の位置指定要素と同じ段）。</p>
+        <p>また、flex アイテムと grid アイテムは <code>position</code> 無しでも z-index が効き、整数を指定すれば板になる。逆に、普通のブロック要素（<code>position: static</code>）に <code>z-index</code> を書いても何も起きない。「書いたのに効かない」の多くはこれだ。</p>
       </section>
 
       <section class="body-section">
-        <h3>やってはいけない対処と、二重に困る処理の扱い</h3>
-        <p>よく見かけるのは、<code>useRef</code> で「実行済み」フラグを持って 2 回目を飛ばす書き方である。公式ドキュメントはこれを誤りとしている。ログは 1 回になるが、cleanup が無いという本当の問題は残り、画面を出入りすれば接続は増え続けるからだ。同様に、<code>&lt;StrictMode&gt;</code> を外せば 2 回目は消えるが、検査をやめただけでバグは残る。</p>
-        <p>決済の POST のように、2 回送ること自体が問題になる処理もある。こうした処理はそもそも Effect に置かない。「画面が表示されたから」ではなく「ユーザーがボタンを押したから」起きる処理なので、イベントハンドラに書くのが筋である。Effect に置くのは、画面が表示されている間ずっと同期させておきたいもの（接続・購読・表示中のデータ）に限る、と考えると判断しやすい。</p>
+        <h3>板は「消す」だけでなく「わざと作る」</h3>
+        <p>原因の板が見つかったら、直し方は 3 つある。1 つ目は不要な板を外すことで、冒頭の例なら <code>.card</code> の <code>z-index: 1</code> を消すか、ホバー効果を <code>transform</code> 以外で表現する。ただし板は他の理由で必要なことも多く、消せないこともある。</p>
+        <p>2 つ目は、モーダルを板の外へ出すことだ。React の <code>createPortal</code> は、コンポーネントの位置はそのままに DOM ノードだけを <code>document.body</code> などへ置く。公式ドキュメントも <code>overflow: hidden</code> などの容器の中から呼んでもページ全体の上に浮くモーダルの用途を挙げている。ネイティブの <code>&lt;dialog&gt;</code> を <code>showModal()</code> で開けば、要素はブラウザが管理する<strong>トップレイヤー</strong>に置かれる。トップレイヤーは文書内の他のすべての層の上に描かれる層で、祖先の板の影響を受けない。</p>
+        <p>3 つ目は、板を意図して作り、z-index の競争範囲を閉じ込めることだ。よくある罠に、装飾用の擬似要素に <code>z-index: -1</code> を付けたら親の背景の裏へ消える、というものがある。CSS 2 の描画順では、負の z-index の子は「属するスタッキングコンテキストの背景」の直後に描かれる。親が板でなければ、その子はもっと外側の板の背景の直後まで沈み、親の背景がその上に塗られてしまう。</p>
+        <pre class="code">.button {
+  position: relative;
+  isolation: isolate; /* ここで板を作る */
+}
+.button::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1; /* .button の背景の上・文字の下に収まる */
+}</pre>
+        <p><code>isolation</code> の初期値は <code>auto</code> で、<code>isolate</code> にすると「スタッキングコンテキストを必ず作る」以外の副作用が無い。z-index の値を付けたり <code>transform</code> を足したりする方法と違い、位置や見た目を一切変えずに板だけを作れるので、コンポーネントの外へ z-index が漏れ出すのを防ぐ目的で使える。</p>
       </section>
 
       <div class="practical">
         <div class="box-title">💼 実務でどう出会うか</div>
-        <p>典型は「開発環境だとアクセスログやアナリティクスのイベントが 2 件ずつ入る」「WebSocket の接続数がサーバー側で 2 倍に見える」という問い合わせである。まず本番ビルドで再現するかを確かめ、再現しなければ StrictMode の検査であると判断できる。コードレビューでは、<code>useEffect</code> の中で接続・購読・<code>setInterval</code>・イベントリスナー登録をしているのに <code>return</code> が無い箇所を探す。これらは本番でも画面遷移のたびにリークする候補である。StrictMode はサブツリーだけを囲むこともできるので、既存アプリに後から入れる場合は一部の画面から始めてもよい。</p>
+        <p>典型はデザインシステムやライブラリの組み合わせだ。ヘッダーやサイドバーは <code>position: sticky</code> / <code>fixed</code> で必ず板になり、その中に置いたドロップダウンは、後ろにある本文側の板との勝負に親ごと巻き込まれる。ツールチップが <code>overflow: hidden</code> のテーブルの中で切れる問題と同じく、「その要素の数字」ではなく「どの板に属しているか」を見るのが調査の起点になる。DevTools の Elements パネルで問題の要素から祖先を 1 つずつ選び、Computed で <code>z-index</code>・<code>transform</code>・<code>opacity</code>・<code>filter</code>・<code>will-change</code>・<code>position</code> を確認していく。条件を満たす祖先が見つかるたびに「その板が親の中で誰と比べられているか」を確かめれば、負けている板に行き着く。チームでは z-index の値を「header: 100 / dropdown: 200 / modal: 300」のように変数で一元管理しても、板の入れ子を無視すれば同じ事故が起きる点に注意したい。</p>
       </div>
 
       <div class="hands-on">
         <div class="box-title">⌨️ 手を動かす（5 分）</div>
-        <p>Vite の React テンプレートで Effect のログ順を確かめ、本番ビルドと比べる。Node.js が入っていれば Mac でそのまま動く（作成時に対話的な質問が出たら、既定値のままで進めてよい。自動で dev サーバーを起動するか聞かれたら No を選ぶ）。</p>
-        <pre class="code">npm create vite@latest strict-demo -- --template react
-cd strict-demo &amp;&amp; npm install
-cat &gt; src/App.jsx &lt;&lt;'EOF'
-import { useEffect } from 'react'
-export default function App() {
-  useEffect(() =&gt; {
-    console.log('setup')
-    return () =&gt; console.log('cleanup')
-  }, [])
-  return &lt;h1&gt;Open DevTools console&lt;/h1&gt;
-}
+        <p>z-index: 9999 のモーダルが z-index: 10 のヘッダーに負ける状況を再現し、親の 1 行を変えるだけで結果が反転することを確かめる。</p>
+        <pre class="code">mkdir -p /tmp/zidx &amp;&amp; cat &gt; /tmp/zidx/index.html &lt;&lt;'EOF'
+&lt;!doctype html&gt;
+&lt;style&gt;
+  body { margin: 0; font: 16px sans-serif; }
+  header { position: sticky; top: 0; z-index: 10;
+           height: 80px; background: tomato; }
+  .card  { position: relative; z-index: 1;
+           margin: 20px; padding: 20px; background: #eee; }
+  .modal { position: fixed; top: 40px; left: 40px;
+           z-index: 9999; width: 240px; height: 120px;
+           background: royalblue; color: #fff; }
+&lt;/style&gt;
+&lt;header&gt;header z-index: 10&lt;/header&gt;
+&lt;div class="card"&gt;card
+  &lt;div class="modal"&gt;modal z-index: 9999&lt;/div&gt;
+&lt;/div&gt;
 EOF
-npm run dev
-# 確認後 Ctrl+C で止めて、本番ビルドを試す
-npm run build &amp;&amp; npm run preview</pre>
-        <p><code>npm run dev</code> で表示された URL を開き、DevTools の Console を見ると <code>setup</code> → <code>cleanup</code> → <code>setup</code> の 3 行が出る。<code>npm run preview</code> の URL では <code>setup</code> が 1 行だけになる。<code>src/main.jsx</code> から <code>&lt;StrictMode&gt;</code> を外して dev を再実行しても 1 行になり、2 回目の出どころが StrictMode であることを確かめられる。</p>
+open /tmp/zidx/index.html</pre>
+        <p>青いモーダルの上部が赤いヘッダーの下に隠れるはずだ。DevTools で <code>.card</code> の <code>z-index: 1</code> のチェックを外すと、<code>.card</code> は板でなくなり、モーダルがルートで直接ヘッダーと比べられて手前に出る。続けて <code>.card</code> に <code>opacity: 0.99</code> を足すと再びヘッダーの下に潜る。z-index を書いていないのに板ができ、親の中で 0 相当の段に描かれるためだ（<code>transform</code> でも板はできるが、fixed の位置基準が <code>.card</code> に変わってモーダルが下へずれるので、この実験では opacity が見やすい）。最後に <code>.modal</code> を <code>&lt;body&gt;</code> 直下へドラッグで移すと、どの設定でも手前に出る。</p>
       </div>
 
       <div class="misconceptions">
         <div class="box-title">🙅 よくある誤解</div>
         <ul>
-          <li><span class="wrong">Effect が 2 回走るのは依存配列の書き方が悪いからだ</span> — 依存配列が <code>[]</code> でも開発中は 2 回走る。これは StrictMode が意図して行う再マウント検査で、本番では起きない。</li>
-          <li><span class="wrong"><code>useRef</code> で実行済みフラグを立てれば直る</span> — ログが 1 回になるだけで、cleanup が無い問題は残る。画面の出入りや <code>&lt;Activity&gt;</code> での非表示・再表示で同じリークが起きる。</li>
-          <li><span class="wrong">開発時専用の挙動なのだから無視してよい</span> — 2 回目で壊れるコードは、本番で画面を出入りしたときにも壊れる。検査が見せているのは本番に潜んでいる不具合である。</li>
+          <li><span class="wrong">z-index を十分大きくすれば必ず最前面に出る</span> — 比べられるのは同じスタッキングコンテキストの兄弟だけで、祖先の板が負けていれば値をいくら上げても順位は変わらない。</li>
+          <li><span class="wrong">z-index はどんな要素にも効く</span> — 効くのは <code>position</code> が <code>static</code> 以外の要素と、flex / grid のアイテムである。普通のブロック要素に書いても無視される。</li>
+          <li><span class="wrong"><code>position: fixed</code> にすれば親から独立する</span> — fixed は位置の基準を変えるだけで、属する板は DOM 上の祖先で決まる。祖先に <code>transform</code> があれば位置の基準もその祖先になる。</li>
         </ul>
       </div>
 
       <div class="glossary">
         <div class="box-title">📖 用語ミニ辞典</div>
         <dl>
-          <dt>StrictMode</dt><dd>囲んだコンポーネントに、開発時だけ二重レンダーや Effect の再実行などの検査を行う React の組み込みコンポーネント。</dd>
-          <dt>Effect</dt><dd><code>useEffect</code> に渡す関数。描画後に外部システム（通信・購読・タイマーなど）と同期するために使う。</dd>
-          <dt>cleanup 関数</dt><dd>Effect が返す後片付け用の関数。次回の Effect 実行前とアンマウント時に呼ばれる。</dd>
-          <dt>マウント / アンマウント</dt><dd>コンポーネントが画面に現れること / 画面から取り除かれること。</dd>
-          <dt>AbortController</dt><dd>実行中の <code>fetch</code> などに中止を伝えるためのブラウザ標準 API。</dd>
+          <dt>スタッキングコンテキスト</dt><dd>中身の重なり順をまとめて計算し、外からは 1 つの単位として扱われる要素。ルート要素が最初の 1 つ。</dd>
+          <dt>z-index</dt><dd>属するスタッキングコンテキストの中での重なりの高さ。整数を指定した位置指定要素は自身も新しいコンテキストになる。</dd>
+          <dt>isolation: isolate</dt><dd>他の見た目を変えずに、スタッキングコンテキストを作ることだけを行う指定。</dd>
+          <dt>トップレイヤー</dt><dd>モーダルの <code>&lt;dialog&gt;</code>・ポップオーバー・全画面要素が置かれる、文書の他の層すべての上に描かれる層。</dd>
+          <dt>createPortal</dt><dd>React のコンポーネント位置を保ったまま、DOM ノードだけを別の場所（body 直下など）に描画する API。</dd>
         </dl>
       </div>
 
       <div class="further-reading">
         <div class="box-title">🔗 もっと深く</div>
         <ul>
-          <li><a href="https://react.dev/learn/synchronizing-with-effects">Synchronizing with Effects (React 公式)</a> — 「開発中に Effect が 2 回走るときの直し方」の節に、接続・fetch・アナリティクスなどパターン別の cleanup がまとまっている。</li>
-          <li><a href="https://react.dev/reference/react/StrictMode">&lt;StrictMode&gt; (React リファレンス)</a> — StrictMode が開発時に行う検査の一覧と、本番に影響しないことの一次資料。</li>
-          <li><a href="https://react.dev/blog/2022/03/29/react-v18">React v18.0 (React Blog)</a> — 再マウント検査が導入された理由と、マウント → アンマウント → 再マウントの順序の説明。</li>
-          <li><a href="https://react.dev/reference/react/Activity">&lt;Activity&gt; (React リファレンス)</a> — state を残したまま Effect だけを片付ける実機能。StrictMode がなぜ出入りを試すのかが腑に落ちる。</li>
+          <li><a href="https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Positioned_layout/Stacking_context">MDN: Stacking context</a> — スタッキングコンテキストを作る条件の全リストと、入れ子の比較を図で示した例。</li>
+          <li><a href="https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/z-index">MDN: z-index</a> — <code>auto</code> と整数で「新しいコンテキストを作るか」が分かれることの定義。</li>
+          <li><a href="https://www.w3.org/TR/CSS2/zindex.html">CSS 2.1 Appendix E: Elaborate description of Stacking Contexts</a> — 背景・負の z-index・インライン・正の z-index の描画順を定めた仕様本文。</li>
+          <li><a href="https://react.dev/reference/react-dom/createPortal">React: createPortal</a> — モーダルを DOM 上で外へ出す用途と、イベントが React ツリー通りに伝播する注意点。</li>
         </ul>
       </div>
     </article>
 
-
     <!-- recent:start -->
     <section class="section recent-articles">
       <div class="section-title">最近の記事</div>
+      <div class="card">
+        <h3><a href="archive/2026-11-14.html">useEffect に書いた API 呼び出しが、なぜ開発中だけ 2 回飛ぶのか？</a></h3>
+        <div class="summary">開発中だけ useEffect の処理が 2 回走るのは、StrictMode がマウント直後にアンマウントと再マウントを行う検査のため。cleanup の書き忘れを炙り出す狙いと、ref で握りつぶさない正しい直し方を解説する。</div>
+        <div class="meta"><span class="tag tag-frontend">Frontend</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-14</span></div>
+      </div>
       <div class="card">
         <h3><a href="archive/2026-11-13.html">ユーザーはもう画面を閉じたのに、なぜサーバーの重い処理は最後まで走り続けるのか？</a></h3>
         <div class="summary">Go の r.Context() は切断でキャンセルされるが、それは Done チャネルを閉じる協調的な合図にすぎない。ctx を QueryContext や NewRequestWithContext へ渡し続けること、WithTimeout と defer cancel、PostgreSQL の client_connection_check_interval まで揃えて初めて重い処理が止まる仕組みを解説。</div>
@@ -175,11 +182,6 @@ npm run build &amp;&amp; npm run preview</pre>
         <h3><a href="archive/2026-11-11.html">ノードの CPU はほぼ空いているのに、なぜ Pod は Pending のまま動かないのか？</a></h3>
         <div class="summary">Kubernetes のスケジューラは CPU 使用率ではなく requests（予約量）の合計と Allocatable で配置を決める。ノードが暇なのに Pod が Pending になる仕組みと、requests の見直し方を解説する。</div>
         <div class="meta"><span class="tag tag-container">Container</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-11</span></div>
-      </div>
-      <div class="card">
-        <h3><a href="archive/2026-11-10.html">ラベルを 1 つ足しただけなのに、なぜ Prometheus のメモリが溢れるのか？</a></h3>
-        <div class="summary">Prometheus はラベル値の組み合わせごとに時系列を作るため、生の URL やユーザー ID をラベルに入れると系列数が掛け算で増えてメモリを圧迫する。仕組みと、計測側・取り込み側での防ぎ方を解説する。</div>
-        <div class="meta"><span class="tag tag-obs">Obs</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-10</span></div>
       </div>
       <div class="recent-more"><a href="archive/">アーカイブですべて見る →</a></div>
     </section>
