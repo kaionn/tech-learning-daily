@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-11-15T10:10:12+09:00</updated>
+  <updated>2026-11-16T10:14:00+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>AWS の鍵は渡していないのに、なぜ署名付き URL だけで非公開の S3 ファイルを落とせるのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-11-16.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-11-16.html</id>
+    <updated>2026-11-16T10:14:00+09:00</updated>
+    <summary>署名付き URL は鍵ではなく条件と HMAC 署名を運び、S3 が同じ計算をやり直して照合する。権限は作成者のもので、一時認証情報なら早く切れ、1 本だけの取り消しはできない。</summary>
+  </entry>
   <entry>
     <title>z-index: 9999 にしたのに、なぜモーダルはヘッダーの下に潜るのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-11-15.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-11-03.html</id>
     <updated>2026-11-03T12:00:00+09:00</updated>
     <summary>コンテナはホストの CPU をそのまま使うため、Mac で build した arm64 のみのイメージは amd64 サーバーで起動を拒否される。イメージインデックスと --platform で複数アーキテクチャを載せて防ぐ。</summary>
-  </entry>
-  <entry>
-    <title>同じサーバーに 200 バイト送るだけなのに、なぜ 2 回に分けて write すると 40ms 遅れるのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-11-02.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-11-02.html</id>
-    <updated>2026-11-02T09:54:46+09:00</updated>
-    <summary>送信側の Nagle は未 ACK 中の小片を溜め、受信側の delayed ACK は返事を待って ACK を遅らせる。write を分けると両者が待ち合い Linux では約 40ms 止まるため、1 回で書くか TCP_NODELAY を立てる。</summary>
   </entry>
 </feed>

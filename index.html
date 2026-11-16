@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tech Learning Daily — z-index: 9999 にしたのに、なぜモーダルはヘッダーの下に潜るのか？</title>
+  <title>Tech Learning Daily — AWS の鍵は渡していないのに、なぜ署名付き URL だけで非公開の S3 ファイルを落とせるのか？</title>
   <link rel="stylesheet" href="style.css">
   <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="feed.xml">
   <link rel="icon" href="/favicon.ico" sizes="48x48">
@@ -14,148 +14,160 @@
   <div class="container">
     <header>
       <h1>Tech Learning Daily</h1>
-      <div class="date">2026-11-15 (Sun) — 第 121 号</div>
+      <div class="date">2026-11-16 (Mon) — 第 122 号</div>
       <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
     </header>
 
     <article class="article">
       <div class="meta-bar">
-        <span class="tag tag-frontend">Frontend</span>
+        <span class="tag tag-security">Security</span>
         <span class="difficulty">🌿 基礎</span>
         <span class="read-time">⏱ 約 7 分</span>
       </div>
-      <h2 class="article-title">z-index: 9999 にしたのに、なぜモーダルはヘッダーの下に潜るのか？</h2>
-      <p class="lead">固定ヘッダーの <code>z-index</code> は 10、モーダルは 9999。数字の上では圧勝のはずなのに、開いたモーダルの上端がヘッダーの裏に隠れる。焦って 99999 に増やしても何も変わらない。z-index は「ページ全体で比べる 1 本の数直線」だと思っているなら、その前提がずれている。</p>
+      <h2 class="article-title">AWS の鍵は渡していないのに、なぜ署名付き URL だけで非公開の S3 ファイルを落とせるのか？</h2>
+      <p class="lead">バケットはパブリックアクセスをすべてブロックしてある。それでもアプリが返した長い URL をブラウザに貼るだけで、請求書 PDF がダウンロードできる。ブラウザは AWS の認証情報を何も持っていない。URL のどこに「入っていい」という証明が埋まっているのか。</p>
 
       <div class="tldr">
         <div class="box-title">🎯 3 行まとめ</div>
         <ul>
-          <li>z-index は「同じスタッキングコンテキストの中の兄弟同士」でしか比べられない。</li>
-          <li><code>position</code> + 整数の <code>z-index</code>、<code>transform</code>、<code>opacity</code> &lt; 1 などは要素を新しいスタッキングコンテキストにし、中身を 1 つの塊に閉じ込める。</li>
-          <li>直すときは数字を上げず、祖先の塊を探して外す・<code>isolation: isolate</code> で意図的に作る・Portal や <code>&lt;dialog&gt;</code> で外へ出す。</li>
+          <li>署名付き URL には鍵そのものではなく、「この操作をこの時刻からこの秒数だけ」という条件と、秘密鍵で計算した署名が入っている。</li>
+          <li>S3 は届いた URL から同じ計算をやり直し、署名が一致して期限内で、URL を作った人にその権限があるときだけ応答する。</li>
+          <li>URL は持っている人なら誰でも使えて、1 本だけを取り消す仕組みはない。だから有効期限は短くし、作成に使う認証情報の寿命も意識する。</li>
         </ul>
       </div>
 
       <section class="body-section">
-        <h3>描画の順番は「スタッキングコンテキスト」単位で決まる</h3>
-        <p>ブラウザは要素を重ねて描くとき、どれを後から（手前に）塗るかを決める必要がある。この重なり順を決める単位が<strong>スタッキングコンテキスト</strong>だ。スタッキングコンテキストとは「中身をまとめて重ね順を計算し、計算し終えたら外からは 1 枚の板として扱われる要素」のことである。ルート要素 <code>&lt;html&gt;</code> が最初の 1 つで、条件を満たす子孫がその中に入れ子の板を作っていく。</p>
-        <p>MDN はこれを「各スタッキングコンテキストは自己完結しており、中身を重ね終えた後は要素全体が親のスタッキングコンテキストの中で 1 つの単位として扱われる」と説明している。<code>z-index</code> の数字はこの「親の中での板の高さ」を指定するだけで、ページ全体の絶対的な高さではない。</p>
-        <p>z-index の初期値は <code>auto</code> で、これは「新しいスタッキングコンテキストを作らず、今いるコンテキストでの高さは 0」を意味する。一方、<code>position: relative</code> や <code>absolute</code> の要素に整数（<code>0</code> も含む）を指定すると、その要素は高さを得ると同時に<strong>自分自身が新しいスタッキングコンテキストになる</strong>。高さを付けたつもりの操作が、子孫を閉じ込める壁も同時に作っている。</p>
+        <h3>URL に入っているのは鍵ではなく「署名」</h3>
+        <p><strong>署名付き URL</strong>（presigned URL）は、S3 のオブジェクトへの 1 回分のリクエストを、条件ごと URL のクエリ文字列に詰めたものだ。<code>aws s3 presign</code> の出力を分解すると次のようになる。</p>
+        <pre class="code">https://demo-bucket.s3.ap-northeast-1.amazonaws.com/report.pdf
+  ?X-Amz-Algorithm=AWS4-HMAC-SHA256
+  &amp;X-Amz-Credential=AKIA.../20261116/ap-northeast-1/s3/aws4_request
+  &amp;X-Amz-Date=20261116T011210Z
+  &amp;X-Amz-Expires=300
+  &amp;X-Amz-SignedHeaders=host
+  &amp;X-Amz-Signature=868b32ba3dadd46a...</pre>
+        <p><code>X-Amz-Credential</code> に入っているのはアクセスキー ID だけで、秘密鍵（シークレットアクセスキー）はどこにも書かれていない。アクセスキー ID はユーザー名のようなもので、知られても単独では何もできない。<code>X-Amz-Date</code> が署名した時刻（UTC）、<code>X-Amz-Expires</code> がそこから何秒有効かを表す。</p>
+        <p>最後の <code>X-Amz-Signature</code> が証明の本体だ。これは <strong>HMAC-SHA256</strong> の出力である。HMAC は秘密鍵とメッセージから固定長の値を計算する関数で、鍵を知らない者は正しい値を作れない。またメッセージが 1 文字でも違えば、まったく別の値になる。つまり署名は「秘密鍵を持つ誰かが、まさにこの条件に同意した」ことを示す。</p>
       </section>
 
       <section class="body-section">
-        <h3>9999 が 10 に負ける仕組み</h3>
-        <p>冒頭の状況を DOM に落とすとこうなる。ヘッダーは <code>position: sticky; z-index: 10</code>。モーダルは、ホバーで浮くカード（<code>position: relative; z-index: 1</code>）のコンポーネント内に置かれ、自身は <code>position: fixed; z-index: 9999</code> を持つ。</p>
-        <pre class="diagram">ルート (html) のコンテキスト
-├─ header      z-index: 10
-└─ .card       z-index: 1  ◀ ここが板になる
-   └─ .modal   z-index: 9999
-               (.card の中だけで有効)
-
-ルートで比べられるのは header と .card
-  header(10) ＞ .card(1)
+        <h3>S3 は同じ計算をやり直して照合する</h3>
+        <p>URL を作るとき、アプリは AWS に「URL を発行してほしい」と頼んでいるように思える。しかし実際は、<code>presign</code> は手元の計算だけで完結し、ネットワーク通信をしない。秘密鍵は AWS 側も知っているので、AWS に問い合わせなくても、S3 が後から同じ答えを計算できるからだ。</p>
+        <pre class="diagram">アプリ（秘密鍵あり）
+  │ 1. 条件 + 秘密鍵 → 署名を計算
+  │    （AWS への通信なし）
   ▼
-.card の板ごと header の下に描かれる
-  → 中の .modal も道連れ</pre>
-        <p>ルートのコンテキストで比較されるのは直接の住人である <code>header</code> と <code>.card</code> だけだ。<code>.modal</code> の 9999 は <code>.card</code> の板の中で兄弟に勝つための値にすぎず、板の外へは持ち出せない。MDN の例でも、<code>z-index: 6</code> の要素が <code>z-index: 5</code> の要素の下に描かれる理由を「親の値が 4 なので、4-6 は 5-0 より小さい」と説明している。だから 99999 にしても順位は変わらない。</p>
-        <p><code>position: fixed</code> にすれば画面基準で自由に浮けるように思える。しかし fixed は位置の基準を変えるだけで、どの板に属するかは DOM 上の祖先で決まる。さらに祖先に <code>transform</code> があると、fixed の位置基準そのものがその祖先に変わり、ビューポート全体を覆うことすらできなくなる。</p>
+URL ＝ 条件 + 署名
+  │ 2. URL だけをブラウザへ返す
+  ▼
+ブラウザ（鍵なし）
+  │ 3. GET report.pdf?X-Amz-...
+  ▼
+S3（同じ秘密鍵を知っている）
+  ├ 4. URL の条件から署名を再計算
+  ├ 5. 署名は一致？ 期限内？
+  └ 6. 作成者に GetObject 権限？
+  ▼
+全部 OK → 200 ／ 1 つでも NG → 403</pre>
+        <p>再計算の材料は<strong>正規リクエスト</strong>（canonical request）と呼ばれる。HTTP メソッド・パス・署名以外のクエリパラメータ・<code>host</code> ヘッダーなどを決まった順序と書式で改行区切りに並べた文字列で、作る側と検証する側が 1 バイトも違わない入力を得るための取り決めだ。S3 の署名付き URL ではリクエスト本文のハッシュの代わりに固定文字列 <code>UNSIGNED-PAYLOAD</code> を入れる。そのため本文は署名の対象外になる。</p>
+        <p>署名に使う鍵は、秘密鍵をそのまま使わずに <code>"AWS4" + 秘密鍵</code> から日付・リージョン・サービス名・<code>aws4_request</code> を順に HMAC にかけて作る。こうして作った鍵はその日・そのリージョン・そのサービス専用になる。だから URL のパスを <code>report.pdf</code> から <code>salary.pdf</code> に書き換えても、<code>X-Amz-Expires</code> を 7 日に伸ばしても、正規リクエストが変わって S3 の再計算結果と一致しなくなる。条件を改ざんするには署名を作り直す必要があり、それには秘密鍵が要る。</p>
       </section>
 
       <div class="analogy">
         <div class="box-title">🍱 たとえるなら</div>
-        <p>本の章・節番号だ。「第 1 章 第 9999 節」は節番号がどれだけ大きくても「第 10 章」より前に来る。比較はまず章番号で行われ、節番号は同じ章の中でしか意味を持たない。z-index も同じで、まず属する板（章）の高さで比べ、自分の数字（節）はその板の中の順位にしか効かない。</p>
+        <p>店主と倉庫番だけが知っている秘密の計算式がある。店主は引換券に「品名・発行時刻・有効時間」を書き、それを計算式にかけた番号を添える。倉庫番は券を受け取ると、書かれた品名と時刻で同じ計算をして番号を確かめ、合っていて時間内なら品物を渡す。品名を書き換えた券は番号が合わない。ただし券を拾っただけの人が持ってきても、番号が合えば倉庫番は渡してしまう。</p>
       </div>
 
       <section class="body-section">
-        <h3>板を作るのは z-index だけではない</h3>
-        <p>厄介なのは、スタッキングコンテキストが z-index と無関係なプロパティでも生まれることだ。MDN が挙げる条件のうち、実務で出会いやすいものを並べる。</p>
-        <pre class="code">/* どれも要素を新しいスタッキングコンテキストにする */
-position: relative;  z-index: 1;  /* absolute も同様。auto 以外 */
-position: fixed;                   /* z-index なしでも作る */
-position: sticky;                  /* 同上 */
-opacity: 0.99;                     /* 1 未満なら作る */
-transform: translateY(-2px);       /* none 以外 */
-filter: blur(4px);                 /* backdrop-filter も同様 */
-will-change: transform;            /* 作る値を予告した時点で作る */
-isolation: isolate;                /* 作るためだけのプロパティ */</pre>
-        <p>ホバーで <code>transform</code> を付けるカード、フェードイン用に <code>opacity</code> をアニメーションさせるラッパー、性能対策で入れた <code>will-change</code>。どれも見た目の調整のつもりで書かれ、重なり順を変える意図はない。それでも付いた瞬間に子孫の z-index が外で効かなくなる。ちなみに z-index 無しの <code>transform</code> や <code>opacity</code> の板は、親の中では <code>z-index: 0</code> 相当の位置に描かれる（CSS 2 の描画順で z-index が 0 または auto の位置指定要素と同じ段）。</p>
-        <p>また、flex アイテムと grid アイテムは <code>position</code> 無しでも z-index が効き、整数を指定すれば板になる。逆に、普通のブロック要素（<code>position: static</code>）に <code>z-index</code> を書いても何も起きない。「書いたのに効かない」の多くはこれだ。</p>
+        <h3>誰の権限で、いつまで使えるのか</h3>
+        <p>署名付き URL は新しい権限を作らない。URL を作った IAM ユーザーやロールの権限で動く。S3 はアクセスのたびに「その作成者に今 <code>s3:GetObject</code> が許されているか」を評価する。だから URL を作る側に権限がなければ、計算自体は成功しても、使った時点で 403 になる。署名の計算は誰でもできるので、URL を作れることと、その URL が通ることは別だ。</p>
+        <p>有効期限は作るときに秒数で渡す。AWS CLI の <code>--expires-in</code> は省略すると 3600 秒（1 時間）で、上限は 604800 秒（7 日）だ。S3 コンソールから作る場合は 1 分〜12 時間の範囲で選ぶ。</p>
+        <pre class="code">aws s3 presign s3://my-bucket/invoices/2026-11.pdf \
+  --expires-in 300 --region ap-northeast-1</pre>
+        <p>ここで落とし穴がある。署名に<strong>一時認証情報</strong>（STS が発行する、期限付きのアクセスキー・秘密鍵・セッショントークンの組）を使った場合、URL はその認証情報が切れた時点で使えなくなる。<code>--expires-in 604800</code> を指定してもだ。AWS のドキュメントによれば、EC2 インスタンスプロファイルの認証情報は最大でおおむね 6 時間、<code>AssumeRole</code> のセッションはデフォルトで 1 時間で切れる。EC2・ECS・Lambda 上のアプリは通常ロールの一時認証情報で動いているので、「7 日有効のはずが数時間で 403 になる」のはこのためだ。何日も有効な URL が必要なら、作成に使う認証情報の寿命から決め直す必要がある。</p>
+        <p>期限の判定はリクエストが届いた時点で行われる。期限直前に始まった大きなファイルのダウンロードは途中で期限を過ぎても続く。しかし切断後に同じ URL で再開しようとすると失敗する。</p>
       </section>
 
       <section class="body-section">
-        <h3>板は「消す」だけでなく「わざと作る」</h3>
-        <p>原因の板が見つかったら、直し方は 3 つある。1 つ目は不要な板を外すことで、冒頭の例なら <code>.card</code> の <code>z-index: 1</code> を消すか、ホバー効果を <code>transform</code> 以外で表現する。ただし板は他の理由で必要なことも多く、消せないこともある。</p>
-        <p>2 つ目は、モーダルを板の外へ出すことだ。React の <code>createPortal</code> は、コンポーネントの位置はそのままに DOM ノードだけを <code>document.body</code> などへ置く。公式ドキュメントも <code>overflow: hidden</code> などの容器の中から呼んでもページ全体の上に浮くモーダルの用途を挙げている。ネイティブの <code>&lt;dialog&gt;</code> を <code>showModal()</code> で開けば、要素はブラウザが管理する<strong>トップレイヤー</strong>に置かれる。トップレイヤーは文書内の他のすべての層の上に描かれる層で、祖先の板の影響を受けない。</p>
-        <p>3 つ目は、板を意図して作り、z-index の競争範囲を閉じ込めることだ。よくある罠に、装飾用の擬似要素に <code>z-index: -1</code> を付けたら親の背景の裏へ消える、というものがある。CSS 2 の描画順では、負の z-index の子は「属するスタッキングコンテキストの背景」の直後に描かれる。親が板でなければ、その子はもっと外側の板の背景の直後まで沈み、親の背景がその上に塗られてしまう。</p>
-        <pre class="code">.button {
-  position: relative;
-  isolation: isolate; /* ここで板を作る */
-}
-.button::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1; /* .button の背景の上・文字の下に収まる */
+        <h3>1 本だけ取り消すことはできない</h3>
+        <p>署名付き URL は<strong>ベアラートークン</strong>だ。ベアラートークンとは、持っていること自体が資格になる証明で、誰が持ってきたかは問われない。チャットに貼った URL・アクセスログに残ったクエリ文字列・転送されたメールは、期限内なら第三者でもそのまま使える。期限内なら何度でも使える。</p>
+        <p>S3 は発行した URL の一覧を持っていない。URL は計算で作られ、計算で検証されるだけなので、「この 1 本だけ無効にする」操作は存在しない。止めたいときは、作成に使った認証情報を無効化・削除するか、作成者の権限を外す。ただしその認証情報で作った他の URL も、まとめて使えなくなる。</p>
+        <p>使える期間に上限をかけたいときは、バケットポリシーの <code>s3:signatureAge</code> 条件を使う。署名からの経過時間をミリ秒で判定するので、作成側が長い期限を指定しても、バケット側で一律に切れる。</p>
+        <pre class="code">"Effect": "Deny",
+"Principal": { "AWS": "*" },
+"Action": "s3:*",
+"Resource": "arn:aws:s3:::my-bucket/*",
+"Condition": {
+  "NumericGreaterThan": { "s3:signatureAge": "600000" }
 }</pre>
-        <p><code>isolation</code> の初期値は <code>auto</code> で、<code>isolate</code> にすると「スタッキングコンテキストを必ず作る」以外の副作用が無い。z-index の値を付けたり <code>transform</code> を足したりする方法と違い、位置や見た目を一切変えずに板だけを作れるので、コンポーネントの外へ z-index が漏れ出すのを防ぐ目的で使える。</p>
+        <p>この例は、署名から 10 分（600000 ミリ秒）を超えたリクエストを拒否する。Deny は Allow より優先されるので、作成者の IAM ポリシーで許可されていても通らない。</p>
       </section>
 
       <div class="practical">
         <div class="box-title">💼 実務でどう出会うか</div>
-        <p>典型はデザインシステムやライブラリの組み合わせだ。ヘッダーやサイドバーは <code>position: sticky</code> / <code>fixed</code> で必ず板になり、その中に置いたドロップダウンは、後ろにある本文側の板との勝負に親ごと巻き込まれる。ツールチップが <code>overflow: hidden</code> のテーブルの中で切れる問題と同じく、「その要素の数字」ではなく「どの板に属しているか」を見るのが調査の起点になる。DevTools の Elements パネルで問題の要素から祖先を 1 つずつ選び、Computed で <code>z-index</code>・<code>transform</code>・<code>opacity</code>・<code>filter</code>・<code>will-change</code>・<code>position</code> を確認していく。条件を満たす祖先が見つかるたびに「その板が親の中で誰と比べられているか」を確かめれば、負けている板に行き着く。チームでは z-index の値を「header: 100 / dropdown: 200 / modal: 300」のように変数で一元管理しても、板の入れ子を無視すれば同じ事故が起きる点に注意したい。</p>
+        <p>非公開の添付ファイルをダウンロードさせる場面では、アプリが権限を確認してから数分だけ有効な URL を返し、ブラウザを S3 へリダイレクトさせる構成が多い。巨大ファイルをアプリサーバー経由で中継しなくて済むからだ。アップロードでも同じで、<code>PUT</code> 用の署名付き URL を返せば、ブラウザがファイルを S3 へ直接送れる。このとき同じキーのオブジェクトが既にあれば上書きされる。キーはクライアントに選ばせず、サーバー側で一意に決める。障害対応で「期限内なのに 403」を見たら、まず URL を作ったロールの権限と一時認証情報の寿命を疑う。<code>SignatureDoesNotMatch</code> なら、署名した時計のずれや、プロキシによるクエリ・ヘッダーの書き換えを疑う。</p>
       </div>
 
       <div class="hands-on">
         <div class="box-title">⌨️ 手を動かす（5 分）</div>
-        <p>z-index: 9999 のモーダルが z-index: 10 のヘッダーに負ける状況を再現し、親の 1 行を変えるだけで結果が反転することを確かめる。</p>
-        <pre class="code">mkdir -p /tmp/zidx &amp;&amp; cat &gt; /tmp/zidx/index.html &lt;&lt;'EOF'
-&lt;!doctype html&gt;
-&lt;style&gt;
-  body { margin: 0; font: 16px sans-serif; }
-  header { position: sticky; top: 0; z-index: 10;
-           height: 80px; background: tomato; }
-  .card  { position: relative; z-index: 1;
-           margin: 20px; padding: 20px; background: #eee; }
-  .modal { position: fixed; top: 40px; left: 40px;
-           z-index: 9999; width: 240px; height: 120px;
-           background: royalblue; color: #fff; }
-&lt;/style&gt;
-&lt;header&gt;header z-index: 10&lt;/header&gt;
-&lt;div class="card"&gt;card
-  &lt;div class="modal"&gt;modal z-index: 9999&lt;/div&gt;
-&lt;/div&gt;
-EOF
-open /tmp/zidx/index.html</pre>
-        <p>青いモーダルの上部が赤いヘッダーの下に隠れるはずだ。DevTools で <code>.card</code> の <code>z-index: 1</code> のチェックを外すと、<code>.card</code> は板でなくなり、モーダルがルートで直接ヘッダーと比べられて手前に出る。続けて <code>.card</code> に <code>opacity: 0.99</code> を足すと再びヘッダーの下に潜る。z-index を書いていないのに板ができ、親の中で 0 相当の段に描かれるためだ（<code>transform</code> でも板はできるが、fixed の位置基準が <code>.card</code> に変わってモーダルが下へずれるので、この実験では opacity が見やすい）。最後に <code>.modal</code> を <code>&lt;body&gt;</code> 直下へドラッグで移すと、どの設定でも手前に出る。</p>
+        <p>AWS アカウントは要らない。AWS ドキュメントに載っているダミーのキーで URL を作り、S3 がやる検証を Python で再現する。まず URL を作る。<code>presign</code> は通信しないので、存在しないバケットとダミーキーでも URL が出てくる。</p>
+        <pre class="code">export AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
+export AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+URL=$(aws s3 presign s3://demo-bucket/report.pdf \
+  --expires-in 300 --region ap-northeast-1)
+echo "$URL"</pre>
+        <p>次に、URL と秘密鍵だけから署名を再計算するスクリプトを <code>verify.py</code> として保存する。</p>
+        <pre class="code">import hmac, hashlib, os, sys
+from urllib.parse import urlsplit, parse_qsl, quote
+u = urlsplit(sys.argv[1])
+q = dict(parse_qsl(u.query))
+sig = q.pop("X-Amz-Signature")
+cq = "&amp;".join(f"{quote(k, safe='-_.~')}={quote(v, safe='-_.~')}"
+              for k, v in sorted(q.items()))
+creq = "\n".join(["GET", u.path, cq, f"host:{u.netloc}\n",
+                  "host", "UNSIGNED-PAYLOAD"])
+_, date, region, svc, _ = q["X-Amz-Credential"].split("/")
+sts = "\n".join(["AWS4-HMAC-SHA256", q["X-Amz-Date"],
+                 f"{date}/{region}/{svc}/aws4_request",
+                 hashlib.sha256(creq.encode()).hexdigest()])
+k = ("AWS4" + os.environ["AWS_SECRET_ACCESS_KEY"]).encode()
+for part in (date, region, svc, "aws4_request"):
+    k = hmac.new(k, part.encode(), hashlib.sha256).digest()
+mine = hmac.new(k, sts.encode(), hashlib.sha256).hexdigest()
+print("一致" if hmac.compare_digest(sig, mine) else "不一致")</pre>
+        <pre class="code">python3 verify.py "$URL"
+python3 verify.py "${URL/report.pdf/salary.pdf}"
+python3 verify.py "${URL/X-Amz-Expires=300/X-Amz-Expires=604800}"</pre>
+        <p>1 行目は「一致」、パスを書き換えた 2 行目と期限を伸ばした 3 行目は「不一致」になるはずだ。S3 が受け取るたびにやっているのは、この再計算に期限と権限の確認を足したものだ。</p>
       </div>
 
       <div class="misconceptions">
         <div class="box-title">🙅 よくある誤解</div>
         <ul>
-          <li><span class="wrong">z-index を十分大きくすれば必ず最前面に出る</span> — 比べられるのは同じスタッキングコンテキストの兄弟だけで、祖先の板が負けていれば値をいくら上げても順位は変わらない。</li>
-          <li><span class="wrong">z-index はどんな要素にも効く</span> — 効くのは <code>position</code> が <code>static</code> 以外の要素と、flex / grid のアイテムである。普通のブロック要素に書いても無視される。</li>
-          <li><span class="wrong"><code>position: fixed</code> にすれば親から独立する</span> — fixed は位置の基準を変えるだけで、属する板は DOM 上の祖先で決まる。祖先に <code>transform</code> があれば位置の基準もその祖先になる。</li>
+          <li><span class="wrong">署名付き URL は AWS に頼んで発行してもらうもの</span> — 手元の秘密鍵で計算するだけで、作成時に AWS とは通信しない。S3 はアクセスされた時点で初めてその URL を見る。</li>
+          <li><span class="wrong">期限を 7 日にすれば 7 日間使える</span> — ロールなどの一時認証情報で作った URL は、その認証情報が切れた時点で使えなくなる。作成者の権限が外された場合も同じだ。</li>
+          <li><span class="wrong">漏れた URL は、その 1 本だけ無効化できる</span> — S3 は URL を記録していないので個別の取り消しはできない。作成に使った認証情報や権限を止めるか、期限切れを待つしかない。</li>
         </ul>
       </div>
 
       <div class="glossary">
         <div class="box-title">📖 用語ミニ辞典</div>
         <dl>
-          <dt>スタッキングコンテキスト</dt><dd>中身の重なり順をまとめて計算し、外からは 1 つの単位として扱われる要素。ルート要素が最初の 1 つ。</dd>
-          <dt>z-index</dt><dd>属するスタッキングコンテキストの中での重なりの高さ。整数を指定した位置指定要素は自身も新しいコンテキストになる。</dd>
-          <dt>isolation: isolate</dt><dd>他の見た目を変えずに、スタッキングコンテキストを作ることだけを行う指定。</dd>
-          <dt>トップレイヤー</dt><dd>モーダルの <code>&lt;dialog&gt;</code>・ポップオーバー・全画面要素が置かれる、文書の他の層すべての上に描かれる層。</dd>
-          <dt>createPortal</dt><dd>React のコンポーネント位置を保ったまま、DOM ノードだけを別の場所（body 直下など）に描画する API。</dd>
+          <dt>署名付き URL</dt><dd>操作・対象・期限と、その署名をクエリ文字列に入れた URL。鍵を持たない相手に期限付きでアクセスさせる。</dd>
+          <dt>HMAC-SHA256</dt><dd>秘密鍵とメッセージから 256 ビットの値を計算する関数。鍵がなければ正しい値は作れず、メッセージが変われば値も変わる。</dd>
+          <dt>正規リクエスト</dt><dd>メソッド・パス・クエリ・ヘッダーを決まった書式で並べた文字列。署名する側と検証する側が同じ入力を得るためのもの。</dd>
+          <dt>一時認証情報</dt><dd>STS が発行する期限付きのアクセスキー・秘密鍵・セッショントークンの組。IAM ロールで動くアプリはこれを使う。</dd>
+          <dt>ベアラートークン</dt><dd>持っていること自体が資格になる証明。誰が持ってきたかは確認されない。</dd>
+          <dt>s3:signatureAge</dt><dd>署名からの経過時間（ミリ秒）を表すバケットポリシーの条件キー。署名付き URL の寿命をバケット側で制限できる。</dd>
         </dl>
       </div>
 
       <div class="further-reading">
         <div class="box-title">🔗 もっと深く</div>
         <ul>
-          <li><a href="https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Positioned_layout/Stacking_context">MDN: Stacking context</a> — スタッキングコンテキストを作る条件の全リストと、入れ子の比較を図で示した例。</li>
-          <li><a href="https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/z-index">MDN: z-index</a> — <code>auto</code> と整数で「新しいコンテキストを作るか」が分かれることの定義。</li>
-          <li><a href="https://www.w3.org/TR/CSS2/zindex.html">CSS 2.1 Appendix E: Elaborate description of Stacking Contexts</a> — 背景・負の z-index・インライン・正の z-index の描画順を定めた仕様本文。</li>
-          <li><a href="https://react.dev/reference/react-dom/createPortal">React: createPortal</a> — モーダルを DOM 上で外へ出す用途と、イベントが React ツリー通りに伝播する注意点。</li>
+          <li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-presigned-url.html">Download and upload objects with presigned URLs（Amazon S3 User Guide）</a> — 有効期限の上限、一時認証情報で早く切れる理由、<code>s3:signatureAge</code> の例、FAQ がまとまっている。</li>
+          <li><a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_sigv-create-signed-request.html">Create a signed AWS API request（IAM User Guide）</a> — 正規リクエスト、署名対象文字列、鍵の導出の手順を 1 ページで追える。</li>
+          <li><a href="https://docs.aws.amazon.com/cli/latest/reference/s3/presign.html">aws s3 presign（AWS CLI Command Reference）</a> — <code>--expires-in</code> のデフォルトと上限、出力される URL の例。</li>
         </ul>
       </div>
     </article>
@@ -163,6 +175,11 @@ open /tmp/zidx/index.html</pre>
     <!-- recent:start -->
     <section class="section recent-articles">
       <div class="section-title">最近の記事</div>
+      <div class="card">
+        <h3><a href="archive/2026-11-15.html">z-index: 9999 にしたのに、なぜモーダルはヘッダーの下に潜るのか？</a></h3>
+        <div class="summary">z-index は同じスタッキングコンテキストの兄弟同士でしか比べられず、祖先に transform や z-index 付きの板があると 9999 でも外の 10 に負ける仕組みと、isolation・Portal・dialog での直し方。</div>
+        <div class="meta"><span class="tag tag-frontend">Frontend</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-15</span></div>
+      </div>
       <div class="card">
         <h3><a href="archive/2026-11-14.html">useEffect に書いた API 呼び出しが、なぜ開発中だけ 2 回飛ぶのか？</a></h3>
         <div class="summary">開発中だけ useEffect の処理が 2 回走るのは、StrictMode がマウント直後にアンマウントと再マウントを行う検査のため。cleanup の書き忘れを炙り出す狙いと、ref で握りつぶさない正しい直し方を解説する。</div>
@@ -177,11 +194,6 @@ open /tmp/zidx/index.html</pre>
         <h3><a href="archive/2026-11-12.html">100 万回ずつ count++ しただけなのに、なぜ 2 つの goroutine の合計は 200 万にならないのか？</a></h3>
         <div class="summary">count++ は 1 行でも読む・足す・書くの 3 手順に分かれ、並行する goroutine が割り込むと加算が消える。データ競合の仕組みと、Mutex・atomic での直し方、race detector での検出を解説する。</div>
         <div class="meta"><span class="tag tag-lang">Lang</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-12</span></div>
-      </div>
-      <div class="card">
-        <h3><a href="archive/2026-11-11.html">ノードの CPU はほぼ空いているのに、なぜ Pod は Pending のまま動かないのか？</a></h3>
-        <div class="summary">Kubernetes のスケジューラは CPU 使用率ではなく requests（予約量）の合計と Allocatable で配置を決める。ノードが暇なのに Pod が Pending になる仕組みと、requests の見直し方を解説する。</div>
-        <div class="meta"><span class="tag tag-container">Container</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-11</span></div>
       </div>
       <div class="recent-more"><a href="archive/">アーカイブですべて見る →</a></div>
     </section>

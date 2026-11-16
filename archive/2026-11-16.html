@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tech Learning Daily — AWS の鍵は渡していないのに、なぜ署名付き URL だけで非公開の S3 ファイルを落とせるのか？</title>
+  <link rel="stylesheet" href="../style.css">
+  <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="../feed.xml">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Tech Learning Daily</h1>
+      <div class="date">2026-11-16 (Mon) — 第 122 号</div>
+      <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
+    </header>
+
+    <article class="article">
+      <div class="meta-bar">
+        <span class="tag tag-security">Security</span>
+        <span class="difficulty">🌿 基礎</span>
+        <span class="read-time">⏱ 約 7 分</span>
+      </div>
+      <h2 class="article-title">AWS の鍵は渡していないのに、なぜ署名付き URL だけで非公開の S3 ファイルを落とせるのか？</h2>
+      <p class="lead">バケットはパブリックアクセスをすべてブロックしてある。それでもアプリが返した長い URL をブラウザに貼るだけで、請求書 PDF がダウンロードできる。ブラウザは AWS の認証情報を何も持っていない。URL のどこに「入っていい」という証明が埋まっているのか。</p>
+
+      <div class="tldr">
+        <div class="box-title">🎯 3 行まとめ</div>
+        <ul>
+          <li>署名付き URL には鍵そのものではなく、「この操作をこの時刻からこの秒数だけ」という条件と、秘密鍵で計算した署名が入っている。</li>
+          <li>S3 は届いた URL から同じ計算をやり直し、署名が一致して期限内で、URL を作った人にその権限があるときだけ応答する。</li>
+          <li>URL は持っている人なら誰でも使えて、1 本だけを取り消す仕組みはない。だから有効期限は短くし、作成に使う認証情報の寿命も意識する。</li>
+        </ul>
+      </div>
+
+      <section class="body-section">
+        <h3>URL に入っているのは鍵ではなく「署名」</h3>
+        <p><strong>署名付き URL</strong>（presigned URL）は、S3 のオブジェクトへの 1 回分のリクエストを、条件ごと URL のクエリ文字列に詰めたものだ。<code>aws s3 presign</code> の出力を分解すると次のようになる。</p>
+        <pre class="code">https://demo-bucket.s3.ap-northeast-1.amazonaws.com/report.pdf
+  ?X-Amz-Algorithm=AWS4-HMAC-SHA256
+  &amp;X-Amz-Credential=AKIA.../20261116/ap-northeast-1/s3/aws4_request
+  &amp;X-Amz-Date=20261116T011210Z
+  &amp;X-Amz-Expires=300
+  &amp;X-Amz-SignedHeaders=host
+  &amp;X-Amz-Signature=868b32ba3dadd46a...</pre>
+        <p><code>X-Amz-Credential</code> に入っているのはアクセスキー ID だけで、秘密鍵（シークレットアクセスキー）はどこにも書かれていない。アクセスキー ID はユーザー名のようなもので、知られても単独では何もできない。<code>X-Amz-Date</code> が署名した時刻（UTC）、<code>X-Amz-Expires</code> がそこから何秒有効かを表す。</p>
+        <p>最後の <code>X-Amz-Signature</code> が証明の本体だ。これは <strong>HMAC-SHA256</strong> の出力である。HMAC は秘密鍵とメッセージから固定長の値を計算する関数で、鍵を知らない者は正しい値を作れない。またメッセージが 1 文字でも違えば、まったく別の値になる。つまり署名は「秘密鍵を持つ誰かが、まさにこの条件に同意した」ことを示す。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>S3 は同じ計算をやり直して照合する</h3>
+        <p>URL を作るとき、アプリは AWS に「URL を発行してほしい」と頼んでいるように思える。しかし実際は、<code>presign</code> は手元の計算だけで完結し、ネットワーク通信をしない。秘密鍵は AWS 側も知っているので、AWS に問い合わせなくても、S3 が後から同じ答えを計算できるからだ。</p>
+        <pre class="diagram">アプリ（秘密鍵あり）
+  │ 1. 条件 + 秘密鍵 → 署名を計算
+  │    （AWS への通信なし）
+  ▼
+URL ＝ 条件 + 署名
+  │ 2. URL だけをブラウザへ返す
+  ▼
+ブラウザ（鍵なし）
+  │ 3. GET report.pdf?X-Amz-...
+  ▼
+S3（同じ秘密鍵を知っている）
+  ├ 4. URL の条件から署名を再計算
+  ├ 5. 署名は一致？ 期限内？
+  └ 6. 作成者に GetObject 権限？
+  ▼
+全部 OK → 200 ／ 1 つでも NG → 403</pre>
+        <p>再計算の材料は<strong>正規リクエスト</strong>（canonical request）と呼ばれる。HTTP メソッド・パス・署名以外のクエリパラメータ・<code>host</code> ヘッダーなどを決まった順序と書式で改行区切りに並べた文字列で、作る側と検証する側が 1 バイトも違わない入力を得るための取り決めだ。S3 の署名付き URL ではリクエスト本文のハッシュの代わりに固定文字列 <code>UNSIGNED-PAYLOAD</code> を入れる。そのため本文は署名の対象外になる。</p>
+        <p>署名に使う鍵は、秘密鍵をそのまま使わずに <code>"AWS4" + 秘密鍵</code> から日付・リージョン・サービス名・<code>aws4_request</code> を順に HMAC にかけて作る。こうして作った鍵はその日・そのリージョン・そのサービス専用になる。だから URL のパスを <code>report.pdf</code> から <code>salary.pdf</code> に書き換えても、<code>X-Amz-Expires</code> を 7 日に伸ばしても、正規リクエストが変わって S3 の再計算結果と一致しなくなる。条件を改ざんするには署名を作り直す必要があり、それには秘密鍵が要る。</p>
+      </section>
+
+      <div class="analogy">
+        <div class="box-title">🍱 たとえるなら</div>
+        <p>店主と倉庫番だけが知っている秘密の計算式がある。店主は引換券に「品名・発行時刻・有効時間」を書き、それを計算式にかけた番号を添える。倉庫番は券を受け取ると、書かれた品名と時刻で同じ計算をして番号を確かめ、合っていて時間内なら品物を渡す。品名を書き換えた券は番号が合わない。ただし券を拾っただけの人が持ってきても、番号が合えば倉庫番は渡してしまう。</p>
+      </div>
+
+      <section class="body-section">
+        <h3>誰の権限で、いつまで使えるのか</h3>
+        <p>署名付き URL は新しい権限を作らない。URL を作った IAM ユーザーやロールの権限で動く。S3 はアクセスのたびに「その作成者に今 <code>s3:GetObject</code> が許されているか」を評価する。だから URL を作る側に権限がなければ、計算自体は成功しても、使った時点で 403 になる。署名の計算は誰でもできるので、URL を作れることと、その URL が通ることは別だ。</p>
+        <p>有効期限は作るときに秒数で渡す。AWS CLI の <code>--expires-in</code> は省略すると 3600 秒（1 時間）で、上限は 604800 秒（7 日）だ。S3 コンソールから作る場合は 1 分〜12 時間の範囲で選ぶ。</p>
+        <pre class="code">aws s3 presign s3://my-bucket/invoices/2026-11.pdf \
+  --expires-in 300 --region ap-northeast-1</pre>
+        <p>ここで落とし穴がある。署名に<strong>一時認証情報</strong>（STS が発行する、期限付きのアクセスキー・秘密鍵・セッショントークンの組）を使った場合、URL はその認証情報が切れた時点で使えなくなる。<code>--expires-in 604800</code> を指定してもだ。AWS のドキュメントによれば、EC2 インスタンスプロファイルの認証情報は最大でおおむね 6 時間、<code>AssumeRole</code> のセッションはデフォルトで 1 時間で切れる。EC2・ECS・Lambda 上のアプリは通常ロールの一時認証情報で動いているので、「7 日有効のはずが数時間で 403 になる」のはこのためだ。何日も有効な URL が必要なら、作成に使う認証情報の寿命から決め直す必要がある。</p>
+        <p>期限の判定はリクエストが届いた時点で行われる。期限直前に始まった大きなファイルのダウンロードは途中で期限を過ぎても続く。しかし切断後に同じ URL で再開しようとすると失敗する。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>1 本だけ取り消すことはできない</h3>
+        <p>署名付き URL は<strong>ベアラートークン</strong>だ。ベアラートークンとは、持っていること自体が資格になる証明で、誰が持ってきたかは問われない。チャットに貼った URL・アクセスログに残ったクエリ文字列・転送されたメールは、期限内なら第三者でもそのまま使える。期限内なら何度でも使える。</p>
+        <p>S3 は発行した URL の一覧を持っていない。URL は計算で作られ、計算で検証されるだけなので、「この 1 本だけ無効にする」操作は存在しない。止めたいときは、作成に使った認証情報を無効化・削除するか、作成者の権限を外す。ただしその認証情報で作った他の URL も、まとめて使えなくなる。</p>
+        <p>使える期間に上限をかけたいときは、バケットポリシーの <code>s3:signatureAge</code> 条件を使う。署名からの経過時間をミリ秒で判定するので、作成側が長い期限を指定しても、バケット側で一律に切れる。</p>
+        <pre class="code">"Effect": "Deny",
+"Principal": { "AWS": "*" },
+"Action": "s3:*",
+"Resource": "arn:aws:s3:::my-bucket/*",
+"Condition": {
+  "NumericGreaterThan": { "s3:signatureAge": "600000" }
+}</pre>
+        <p>この例は、署名から 10 分（600000 ミリ秒）を超えたリクエストを拒否する。Deny は Allow より優先されるので、作成者の IAM ポリシーで許可されていても通らない。</p>
+      </section>
+
+      <div class="practical">
+        <div class="box-title">💼 実務でどう出会うか</div>
+        <p>非公開の添付ファイルをダウンロードさせる場面では、アプリが権限を確認してから数分だけ有効な URL を返し、ブラウザを S3 へリダイレクトさせる構成が多い。巨大ファイルをアプリサーバー経由で中継しなくて済むからだ。アップロードでも同じで、<code>PUT</code> 用の署名付き URL を返せば、ブラウザがファイルを S3 へ直接送れる。このとき同じキーのオブジェクトが既にあれば上書きされる。キーはクライアントに選ばせず、サーバー側で一意に決める。障害対応で「期限内なのに 403」を見たら、まず URL を作ったロールの権限と一時認証情報の寿命を疑う。<code>SignatureDoesNotMatch</code> なら、署名した時計のずれや、プロキシによるクエリ・ヘッダーの書き換えを疑う。</p>
+      </div>
+
+      <div class="hands-on">
+        <div class="box-title">⌨️ 手を動かす（5 分）</div>
+        <p>AWS アカウントは要らない。AWS ドキュメントに載っているダミーのキーで URL を作り、S3 がやる検証を Python で再現する。まず URL を作る。<code>presign</code> は通信しないので、存在しないバケットとダミーキーでも URL が出てくる。</p>
+        <pre class="code">export AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
+export AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+URL=$(aws s3 presign s3://demo-bucket/report.pdf \
+  --expires-in 300 --region ap-northeast-1)
+echo "$URL"</pre>
+        <p>次に、URL と秘密鍵だけから署名を再計算するスクリプトを <code>verify.py</code> として保存する。</p>
+        <pre class="code">import hmac, hashlib, os, sys
+from urllib.parse import urlsplit, parse_qsl, quote
+u = urlsplit(sys.argv[1])
+q = dict(parse_qsl(u.query))
+sig = q.pop("X-Amz-Signature")
+cq = "&amp;".join(f"{quote(k, safe='-_.~')}={quote(v, safe='-_.~')}"
+              for k, v in sorted(q.items()))
+creq = "\n".join(["GET", u.path, cq, f"host:{u.netloc}\n",
+                  "host", "UNSIGNED-PAYLOAD"])
+_, date, region, svc, _ = q["X-Amz-Credential"].split("/")
+sts = "\n".join(["AWS4-HMAC-SHA256", q["X-Amz-Date"],
+                 f"{date}/{region}/{svc}/aws4_request",
+                 hashlib.sha256(creq.encode()).hexdigest()])
+k = ("AWS4" + os.environ["AWS_SECRET_ACCESS_KEY"]).encode()
+for part in (date, region, svc, "aws4_request"):
+    k = hmac.new(k, part.encode(), hashlib.sha256).digest()
+mine = hmac.new(k, sts.encode(), hashlib.sha256).hexdigest()
+print("一致" if hmac.compare_digest(sig, mine) else "不一致")</pre>
+        <pre class="code">python3 verify.py "$URL"
+python3 verify.py "${URL/report.pdf/salary.pdf}"
+python3 verify.py "${URL/X-Amz-Expires=300/X-Amz-Expires=604800}"</pre>
+        <p>1 行目は「一致」、パスを書き換えた 2 行目と期限を伸ばした 3 行目は「不一致」になるはずだ。S3 が受け取るたびにやっているのは、この再計算に期限と権限の確認を足したものだ。</p>
+      </div>
+
+      <div class="misconceptions">
+        <div class="box-title">🙅 よくある誤解</div>
+        <ul>
+          <li><span class="wrong">署名付き URL は AWS に頼んで発行してもらうもの</span> — 手元の秘密鍵で計算するだけで、作成時に AWS とは通信しない。S3 はアクセスされた時点で初めてその URL を見る。</li>
+          <li><span class="wrong">期限を 7 日にすれば 7 日間使える</span> — ロールなどの一時認証情報で作った URL は、その認証情報が切れた時点で使えなくなる。作成者の権限が外された場合も同じだ。</li>
+          <li><span class="wrong">漏れた URL は、その 1 本だけ無効化できる</span> — S3 は URL を記録していないので個別の取り消しはできない。作成に使った認証情報や権限を止めるか、期限切れを待つしかない。</li>
+        </ul>
+      </div>
+
+      <div class="glossary">
+        <div class="box-title">📖 用語ミニ辞典</div>
+        <dl>
+          <dt>署名付き URL</dt><dd>操作・対象・期限と、その署名をクエリ文字列に入れた URL。鍵を持たない相手に期限付きでアクセスさせる。</dd>
+          <dt>HMAC-SHA256</dt><dd>秘密鍵とメッセージから 256 ビットの値を計算する関数。鍵がなければ正しい値は作れず、メッセージが変われば値も変わる。</dd>
+          <dt>正規リクエスト</dt><dd>メソッド・パス・クエリ・ヘッダーを決まった書式で並べた文字列。署名する側と検証する側が同じ入力を得るためのもの。</dd>
+          <dt>一時認証情報</dt><dd>STS が発行する期限付きのアクセスキー・秘密鍵・セッショントークンの組。IAM ロールで動くアプリはこれを使う。</dd>
+          <dt>ベアラートークン</dt><dd>持っていること自体が資格になる証明。誰が持ってきたかは確認されない。</dd>
+          <dt>s3:signatureAge</dt><dd>署名からの経過時間（ミリ秒）を表すバケットポリシーの条件キー。署名付き URL の寿命をバケット側で制限できる。</dd>
+        </dl>
+      </div>
+
+      <div class="further-reading">
+        <div class="box-title">🔗 もっと深く</div>
+        <ul>
+          <li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-presigned-url.html">Download and upload objects with presigned URLs（Amazon S3 User Guide）</a> — 有効期限の上限、一時認証情報で早く切れる理由、<code>s3:signatureAge</code> の例、FAQ がまとまっている。</li>
+          <li><a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_sigv-create-signed-request.html">Create a signed AWS API request（IAM User Guide）</a> — 正規リクエスト、署名対象文字列、鍵の導出の手順を 1 ページで追える。</li>
+          <li><a href="https://docs.aws.amazon.com/cli/latest/reference/s3/presign.html">aws s3 presign（AWS CLI Command Reference）</a> — <code>--expires-in</code> のデフォルトと上限、出力される URL の例。</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- recent:start -->
+    <!-- recent:end -->
+
+    <footer>
+      <p>Generated by Claude Code (GitHub Actions)</p>
+      <a href="./" class="archive-link">過去の記事</a>
+    </footer>
+  </div>
+</body>
+</html>
