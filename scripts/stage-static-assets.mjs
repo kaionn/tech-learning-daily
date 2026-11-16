@@ -5,7 +5,7 @@ import { realpathSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const ROOT_FILES = ['index.html', 'style.css', 'feed.xml', 'favicon.ico', 'icon-192.png', 'apple-touch-icon.png'];
+const ROOT_FILES = ['index.html', 'style.css', 'feed.xml', 'favicon.ico', 'icon-192.png', 'apple-touch-icon.png', 'og.png'];
 const PUBLIC_TREES = { archive: '.html', data: '.json' };
 const MAX_FILES = 20000, MAX_BYTES = 25 * 1024 * 1024;
 

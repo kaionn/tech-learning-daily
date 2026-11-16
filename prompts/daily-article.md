@@ -61,6 +61,7 @@ YESTERDAY=$(TZ=Asia/Tokyo date -d 'yesterday' '+%Y-%m-%d' 2>/dev/null || TZ=Asia
 if [ -f index.html ] && grep -q "$YESTERDAY" index.html && [ ! -f "archive/${YESTERDAY}.html" ]; then
   cp index.html "archive/${YESTERDAY}.html"
   sed -i 's|href="style.css"|href="../style.css"|; s|href="feed.xml"|href="../feed.xml"|; s|href="archive/"|href="./"|' "archive/${YESTERDAY}.html"
+  sed -i "s|<meta property=\"og:url\" content=\"[^\"]*\">|<meta property=\"og:url\" content=\"https://tech-learn.kaion-lab.com/archive/${YESTERDAY}.html\">|" "archive/${YESTERDAY}.html"
 fi
 ```
 
@@ -77,6 +78,14 @@ Write a complete HTML file to `index.html` with this exact structure:
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Tech Learning Daily — {記事タイトル}</title>
+  <meta name="description" content="{リード文または 3 行まとめを 1 文に圧縮し 120 文字以内}">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Tech Learning Daily">
+  <meta property="og:title" content="Tech Learning Daily — {記事タイトル}">
+  <meta property="og:description" content="{description と同じ値}">
+  <meta property="og:url" content="https://tech-learn.kaion-lab.com/">
+  <meta property="og:image" content="https://tech-learn.kaion-lab.com/og.png">
+  <meta name="twitter:card" content="summary_large_image">
   <link rel="stylesheet" href="style.css">
   <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="feed.xml">
   <link rel="icon" href="/favicon.ico" sizes="48x48">
@@ -273,6 +282,7 @@ Re-read the generated index.html, feed.xml, data/articles.json, and topics.md, a
 8. TOPICS: topics.md からキューの先頭が消え、消化済みに今日の行が追加されている。
 9. DUPLICATION: data/articles.json に同じトピックの過去記事が無い（続編の場合はタイトルでその旨が分かる）。
 10. JSON: data/articles.json が valid JSON（Step 7 の python3 ワンライナーが exit 0）で、先頭 entry の file が Step 3 の `$ARCHIVE` のファイル名部分と一致する。
+11. OGP: `index.html` の `<head>` に og:title / og:description / og:image（https://tech-learn.kaion-lab.com/og.png）/ og:url / og:type / twitter:card（summary_large_image）がある。description と og:description は同値。
 
 ## Step 10: Create Today's Archive Page
 
@@ -284,6 +294,7 @@ N=1; ARCHIVE="archive/${TODAY}.html"
 while [ -f "$ARCHIVE" ]; do N=$((N+1)); ARCHIVE="archive/${TODAY}-${N}.html"; done
 cp index.html "$ARCHIVE"
 sed -i 's|href="style.css"|href="../style.css"|; s|href="feed.xml"|href="../feed.xml"|; s|href="archive/"|href="./"|' "$ARCHIVE"
+sed -i "s|<meta property=\"og:url\" content=\"[^\"]*\">|<meta property=\"og:url\" content=\"https://tech-learn.kaion-lab.com/${ARCHIVE}\">|" "$ARCHIVE"
 ```
 
 Verify `$ARCHIVE` matches the filename used in the feed entry (Step 6) and the data/articles.json entry (Step 7). If they diverge, fix the feed/entry to match.

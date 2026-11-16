@@ -17,6 +17,7 @@ on:
       - favicon.ico
       - icon-192.png
       - apple-touch-icon.png
+      - og.png
       - wrangler.jsonc
 
 permissions:

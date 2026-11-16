@@ -220,6 +220,13 @@ def main() -> None:
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Tech Learning Daily — アーカイブ</title>
   <meta name="description" content="Tech Learning Daily の全記事アーカイブ。カテゴリ・難易度・キーワードで検索できる。">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Tech Learning Daily">
+  <meta property="og:title" content="Tech Learning Daily — アーカイブ">
+  <meta property="og:description" content="Tech Learning Daily の全記事アーカイブ。カテゴリ・難易度・キーワードで検索できる。">
+  <meta property="og:url" content="https://tech-learn.kaion-lab.com/archive/">
+  <meta property="og:image" content="https://tech-learn.kaion-lab.com/og.png">
+  <meta name="twitter:card" content="summary_large_image">
   <link rel="stylesheet" href="../style.css">
   <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="../feed.xml">
 </head>

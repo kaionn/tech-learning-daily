@@ -43,7 +43,7 @@ export async function verifySite(source, origin, { log = console.log } = {}) {
   try {
     const staged = path.join(temp, 'public');
     const stats = await stageAssets(source, staged);
-    const files = ['index.html', 'style.css', 'feed.xml', 'favicon.ico', 'icon-192.png', 'apple-touch-icon.png',
+    const files = ['index.html', 'style.css', 'feed.xml', 'favicon.ico', 'icon-192.png', 'apple-touch-icon.png', 'og.png',
       'archive/index.html', latestArticle(await readdir(path.join(staged, 'archive'))), 'data/articles.json'];
     async function get(route) {
       let url = new URL(route, base);

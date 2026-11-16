@@ -23,7 +23,7 @@ export const dangerousConfigs = {
   'SPA fallback': { assets: { ...reviewedAssets, not_found_handling: 'single-page-application' } },
   'assets binding': { assets: { ...reviewedAssets, binding: 'ASSETS' } },
 };
-const PUBLIC_ROOT_FILES = ['index.html', 'style.css', 'feed.xml', 'favicon.ico', 'icon-192.png', 'apple-touch-icon.png'];
+const PUBLIC_ROOT_FILES = ['index.html', 'style.css', 'feed.xml', 'favicon.ico', 'icon-192.png', 'apple-touch-icon.png', 'og.png'];
 const INTERNAL_FILES = ['prompts/daily-article.md', 'topics.md', 'CLAUDE.md', 'README.md', 'docs/SETUP.md',
   '.github/workflows/daily-article.yml', 'archive/notes.md', 'data/.private/token.json'];
 const COPIED_FROM_REPO = ['wrangler.jsonc', 'scripts/stage-static-assets.mjs', 'scripts/workers-config.mjs','scripts/build_archive.py', 'scripts/build_recent.py'];
