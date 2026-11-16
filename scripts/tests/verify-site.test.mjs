@@ -10,7 +10,7 @@ import { verifySite } from '../verify-site.mjs';
 
 const repoRoot = path.resolve(import.meta.dirname, '../..');
 const LATEST = 'archive/2026-11-02-10.html';
-const FILES = ['index.html', 'style.css', 'feed.xml', 'favicon.ico', 'icon-192.png', 'apple-touch-icon.png',
+const FILES = ['index.html', 'style.css', 'feed.xml', 'favicon.ico', 'icon-192.png', 'apple-touch-icon.png', 'og.png',
   'archive/index.html', 'archive/2026-11-01.html', 'archive/2026-11-02.html', 'archive/2026-11-02-2.html', LATEST,
   'data/articles.json'];
 const EXCLUDED = ['/scripts/stage-static-assets.mjs', '/scripts/build_archive.py', '/prompts/daily-article.md',
@@ -58,7 +58,7 @@ async function site(t, overrides = {}, fallback) {
 test('a host matching the snapshot passes every sample and excluded path', async t => {
   const { source, origin, requests } = await site(t);
   const result = await verifySite(source, origin, quiet);
-  assert.equal(result.checked, 9 + EXCLUDED.length);
+  assert.equal(result.checked, 10 + EXCLUDED.length);
   assert.equal(result.staged.files, FILES.length);
   for (const route of EXCLUDED) assert.ok(requests.includes(route), `${route} was requested`);
 });
@@ -83,7 +83,7 @@ for (const [route, file, types] of [
   }
 }
 
-for (const route of ['/', '/archive/', '/style.css', '/feed.xml', '/favicon.ico', '/icon-192.png', '/apple-touch-icon.png', '/data/articles.json', `/${LATEST.replace(/\.html$/, '')}`]) {
+for (const route of ['/', '/archive/', '/style.css', '/feed.xml', '/favicon.ico', '/icon-192.png', '/apple-touch-icon.png', '/og.png', '/data/articles.json', `/${LATEST.replace(/\.html$/, '')}`]) {
   test(`stale bytes at ${route} are rejected`, async t => {
     const { source, origin } = await site(t, { [route]: reply(200, TYPES[path.extname(route)] ?? TYPES['.html'], 'stale') });
     await assert.rejects(verifySite(source, origin, quiet), /bytes differ/);
@@ -167,7 +167,7 @@ test('command line reports pass and failure by exit code, also when reached thro
 
   const good = await site(t);
   const { stdout } = await run('node', [script, good.source, good.origin]);
-  assert.match(stdout, /"checked":21/);
+  assert.match(stdout, /"checked":22/);
 
   const bad = await site(t, { '/': reply(200, TYPES['.html'], 'stale') });
   await assert.rejects(run('node', [script, bad.source, bad.origin]), error => error.code === 1);

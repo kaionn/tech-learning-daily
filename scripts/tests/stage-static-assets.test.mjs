@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { stageAssets } from '../stage-static-assets.mjs';
 
 const repoRoot = path.resolve(import.meta.dirname, '../..');
-const PUBLIC_FIXTURE = ['index.html', 'style.css', 'feed.xml', 'favicon.ico', 'icon-192.png', 'apple-touch-icon.png',
+const PUBLIC_FIXTURE = ['index.html', 'style.css', 'feed.xml', 'favicon.ico', 'icon-192.png', 'apple-touch-icon.png', 'og.png',
   'archive/index.html', 'archive/2026-11-02.html', 'archive/nested/page.html', 'data/articles.json'];
 const write = (base, name, text = name) => {
   mkdirSync(path.dirname(path.join(base, name)), { recursive: true });
@@ -114,7 +114,7 @@ test('the real repository stages, and local links of the published pages resolve
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const staged = path.join(dir, 'public');
   await stageAssets(repoRoot, staged);
-  assert.deepEqual(readdirSync(staged).sort(), ['apple-touch-icon.png', 'archive', 'data', 'favicon.ico', 'feed.xml', 'icon-192.png', 'index.html', 'style.css']);
+  assert.deepEqual(readdirSync(staged).sort(), ['apple-touch-icon.png', 'archive', 'data', 'favicon.ico', 'feed.xml', 'icon-192.png', 'index.html', 'og.png', 'style.css']);
   assert.ok(tree(staged).every(name => /^archive\/.*\.html$/.test(name) || /^data\/.*\.json$/.test(name) || !name.includes(path.sep)));
 
   const articles = JSON.parse(readFileSync(path.join(repoRoot, 'data/articles.json'), 'utf8'));
