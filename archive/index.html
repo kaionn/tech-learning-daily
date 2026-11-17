@@ -39,8 +39,8 @@
         <button class="chip on" data-cat="">すべて</button>
         <button class="chip" data-cat="container">Container <span class="chip-count">19</span></button>
         <button class="chip" data-cat="network">Network <span class="chip-count">18</span></button>
+        <button class="chip" data-cat="db">DB <span class="chip-count">15</span></button>
         <button class="chip" data-cat="lang">Lang <span class="chip-count">15</span></button>
-        <button class="chip" data-cat="db">DB <span class="chip-count">14</span></button>
         <button class="chip" data-cat="security">Security <span class="chip-count">10</span></button>
         <button class="chip" data-cat="arch">Arch <span class="chip-count">9</span></button>
         <button class="chip" data-cat="ai">AI <span class="chip-count">8</span></button>
@@ -63,6 +63,13 @@
 
     <section class="section month" data-month="2026-11">
       <div class="section-title">2026 年 11 月 <span class="count"></span></div>
+      <div class="card" data-cat="db" data-diff="基礎"
+           data-search="pgbouncer を挟んだだけなのに、なぜ「prepared statement &quot;a1&quot; does not exist」で落ちるのか？ pgbouncer の transaction pooling では prepared statement・set・advisory lock が接続の付け替えで壊れる。その仕組みと、1.21 以降の対応範囲、rails・pgx の設定での合わせ方。" data-terms="prepared statement / セッション / transaction pooling / max_prepared_statements / advisory lock">
+        <h3><a href="2026-11-17.html">PgBouncer を挟んだだけなのに、なぜ「prepared statement &quot;a1&quot; does not exist」で落ちるのか？</a></h3>
+        <div class="summary">PgBouncer の transaction pooling では prepared statement・SET・advisory lock が接続の付け替えで壊れる。その仕組みと、1.21 以降の対応範囲、Rails・pgx の設定での合わせ方。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-db">DB</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-17</span></div>
+      </div>
       <div class="card" data-cat="security" data-diff="基礎"
            data-search="aws の鍵は渡していないのに、なぜ署名付き url だけで非公開の s3 ファイルを落とせるのか？ 署名付き url に入っているのは鍵ではなく条件と hmac 署名で、s3 は同じ計算をやり直して照合する。作成者の権限で動き、一時認証情報なら早く切れ、1 本だけの取り消しはできない仕組みを解説する。" data-terms="署名付き URL / HMAC-SHA256 / 正規リクエスト / 一時認証情報 / ベアラートークン / s3:signatureAge">
         <h3><a href="2026-11-16.html">AWS の鍵は渡していないのに、なぜ署名付き URL だけで非公開の S3 ファイルを落とせるのか？</a></h3>

@@ -1,4 +1,5 @@
 [
+  {"file": "2026-11-17.html", "date": "2026-11-17", "title": "PgBouncer を挟んだだけなのに、なぜ「prepared statement \"a1\" does not exist」で落ちるのか？", "summary": "PgBouncer の transaction pooling では prepared statement・SET・advisory lock が接続の付け替えで壊れる。その仕組みと、1.21 以降の対応範囲、Rails・pgx の設定での合わせ方。", "category": "db", "difficulty": "基礎", "readTime": 7, "terms": ["prepared statement", "セッション", "transaction pooling", "max_prepared_statements", "advisory lock"]},
   {"file": "2026-11-16.html", "date": "2026-11-16", "title": "AWS の鍵は渡していないのに、なぜ署名付き URL だけで非公開の S3 ファイルを落とせるのか？", "summary": "署名付き URL に入っているのは鍵ではなく条件と HMAC 署名で、S3 は同じ計算をやり直して照合する。作成者の権限で動き、一時認証情報なら早く切れ、1 本だけの取り消しはできない仕組みを解説する。", "category": "security", "difficulty": "基礎", "readTime": 7, "terms": ["署名付き URL", "HMAC-SHA256", "正規リクエスト", "一時認証情報", "ベアラートークン", "s3:signatureAge"]},
   {
     "file": "2026-11-15.html",

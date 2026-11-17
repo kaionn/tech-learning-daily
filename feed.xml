@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-11-16T10:14:00+09:00</updated>
+  <updated>2026-11-17T13:04:10+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>PgBouncer を挟んだだけなのに、なぜ「prepared statement &quot;a1&quot; does not exist」で落ちるのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-11-17.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-11-17.html</id>
+    <updated>2026-11-17T13:04:10+09:00</updated>
+    <summary>transaction pooling は接続をトランザクションごとに貸し替えるため、接続に住む prepared statement・SET・advisory lock が別の接続へ届いて壊れる。1.21 以降の対応範囲とドライバ設定で合わせる。</summary>
+  </entry>
   <entry>
     <title>AWS の鍵は渡していないのに、なぜ署名付き URL だけで非公開の S3 ファイルを落とせるのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-11-16.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-11-04.html</id>
     <updated>2026-11-04T10:32:42+09:00</updated>
     <summary>OFFSET は読み飛ばす行も DB 内で読んで捨てるため深いページほど遅い。前ページ最後のキー値を起点にする keyset ページネーションなら深さに関係なく速く、行の増減によるずれも起きにくい。</summary>
-  </entry>
-  <entry>
-    <title>Mac では動いたイメージなのに、なぜ本番サーバーでは exec format error で起動しないのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-11-03.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-11-03.html</id>
-    <updated>2026-11-03T12:00:00+09:00</updated>
-    <summary>コンテナはホストの CPU をそのまま使うため、Mac で build した arm64 のみのイメージは amd64 サーバーで起動を拒否される。イメージインデックスと --platform で複数アーキテクチャを載せて防ぐ。</summary>
   </entry>
 </feed>

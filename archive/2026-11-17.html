@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tech Learning Daily — PgBouncer を挟んだだけなのに、なぜ「prepared statement "a1" does not exist」で落ちるのか？</title>
+  <meta name="description" content="PgBouncer の transaction pooling は接続をトランザクションごとに貸し替えるため、接続にひも付く prepared statement・SET・advisory lock が別の接続へ届く。壊れる理由と設定での直し方を解説する。">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Tech Learning Daily">
+  <meta property="og:title" content="Tech Learning Daily — PgBouncer を挟んだだけなのに、なぜ「prepared statement &quot;a1&quot; does not exist」で落ちるのか？">
+  <meta property="og:description" content="PgBouncer の transaction pooling は接続をトランザクションごとに貸し替えるため、接続にひも付く prepared statement・SET・advisory lock が別の接続へ届く。壊れる理由と設定での直し方を解説する。">
+  <meta property="og:url" content="https://tech-learn.kaion-lab.com/archive/2026-11-17.html">
+  <meta property="og:image" content="https://tech-learn.kaion-lab.com/og.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="stylesheet" href="../style.css">
+  <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="../feed.xml">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Tech Learning Daily</h1>
+      <div class="date">2026-11-17 (Tue) — 第 123 号</div>
+      <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
+    </header>
+
+    <article class="article">
+      <div class="meta-bar">
+        <span class="tag tag-db">DB</span>
+        <span class="difficulty">🌿 基礎</span>
+        <span class="read-time">⏱ 約 7 分</span>
+      </div>
+      <h2 class="article-title">PgBouncer を挟んだだけなのに、なぜ「prepared statement "a1" does not exist」で落ちるのか？</h2>
+      <p class="lead">Postgres の接続数が上限に近づいたので、アプリと DB の間に PgBouncer を入れた。接続先のポートを書き換えただけで、SQL は 1 行も変えていない。なのにデプロイ後、ときどき <code>prepared statement "a1" does not exist</code> が出てトランザクションごと失敗する。さっきまで存在していた文が、なぜ急に「無い」と言われるのか。</p>
+
+      <div class="tldr">
+        <div class="box-title">🎯 3 行まとめ</div>
+        <ul>
+          <li>prepared statement や <code>SET</code> は PostgreSQL の「接続（セッション）」に保存される状態で、別の接続からは見えない。</li>
+          <li>PgBouncer の transaction pooling は接続をトランザクション単位で貸し替えるので、前の文で作った状態が次の文の接続には無い。</li>
+          <li>PgBouncer 1.21 以降はプロトコルレベルの prepared statement を肩代わりできるが、SQL の <code>PREPARE</code>・<code>SET</code>・advisory lock は今も壊れるので、ドライバ側の設定を合わせる。</li>
+        </ul>
+      </div>
+
+      <section class="body-section">
+        <h3>prepared statement は「接続」に住んでいる</h3>
+        <p><strong>prepared statement</strong> は、SQL の構文解析と実行計画づくりを先に済ませ、名前を付けてサーバーに置いておく仕組みだ。2 回目以降は名前とパラメータだけを送ればよいので、同じ形のクエリを何度も投げる Web アプリでは解析の手間が省ける。Rails（Active Record）の PostgreSQL アダプタも pgx（Go）も、既定でこれを使う。</p>
+        <p>見落としやすいのは保存場所だ。PostgreSQL の公式ドキュメントは「prepared statement は現在のデータベースセッションの間だけ存在する」と明記している。<strong>セッション</strong>とは 1 本の接続の生存期間のことで、PostgreSQL は接続ごとにバックエンドプロセスを 1 つ立てて状態を持たせる。接続 1 で作った <code>a1</code> は、接続 2 からは存在しない。</p>
+        <p>同じ性質を持つものはほかにもある。<code>SET statement_timeout</code> のようなセッション変数、<code>LISTEN</code>、セッションレベルの advisory lock（アプリが任意の番号で取る協調用ロック）、一時テーブルも、すべて接続にひも付く。アプリが接続を握り続けている限り、これらが問題になることはなかった。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>transaction pooling は接続を「又貸し」する</h3>
+        <p>PgBouncer にはプールモードが 3 つある。設定 <code>pool_mode</code> の既定値は <code>session</code> で、クライアントが接続している間ずっと同じサーバー接続を割り当てる。この場合は接続が減らないので、接続数対策として入れるなら <code>transaction</code> を選ぶことになる。</p>
+        <pre class="code">; pgbouncer.ini
+[pgbouncer]
+pool_mode = transaction
+default_pool_size = 20   ; 既定値も 20</pre>
+        <p><code>transaction</code> モードでは、サーバー接続はトランザクションの間だけクライアントに貸し出され、終わった瞬間にプールへ返る。<code>BEGIN</code> を書かない単発クエリは自動コミットで 1 文 1 トランザクションなので、文ごとに別の接続へ行きうる。数百のアプリ側接続を、<code>default_pool_size</code> 本ぶんのサーバー接続で使い回せるのはこのためだ。</p>
+        <pre class="diagram">Rails          PgBouncer        Postgres
+  │               │
+  │ PREPARE a1 ──▶│──▶ 接続 1 に a1 作成
+  │               │   (文が終わり接続 1 返却)
+  │ EXECUTE a1 ──▶│──▶ 接続 2 へ転送
+  │               │   接続 2 に a1 は無い
+  │◀── ERROR: prepared statement
+  │        "a1" does not exist</pre>
+        <p>アプリから見れば接続は 1 本のままなので、「さっき作った文がある」と信じて名前で呼ぶ。しかし実際に届いた先は、別のクライアントが使い終えた接続 2 だ。冒頭のエラーはこうして出る。同じ接続にたまたま戻れば成功するため、症状は「ときどき」になる。</p>
+      </section>
+
+      <div class="analogy">
+        <div class="box-title">🍱 たとえるなら</div>
+        <p>ホテルのフロントに荷物を預け、預かり札をもらったとする。ところがこのホテルは用件が 1 つ済むたびに担当者が交代し、各担当者は自分の引き出しにしか荷物を入れない。次に札を出した相手が別の担当者なら「そんな荷物はありません」と言われる。荷物は消えていない。別の担当者の引き出しにあるだけだ。</p>
+      </div>
+
+      <section class="body-section">
+        <h3>1.21 で直ったはず、なのにまだ落ちる</h3>
+        <p>PgBouncer 1.21.0（2023 年 10 月）は、プロトコルレベルの名前付き prepared statement に対応した。<strong>プロトコルレベル</strong>とは、SQL 文の <code>PREPARE</code> ではなく、ドライバが通信プロトコルの Parse メッセージで文を準備する方式を指す。設定 <code>max_prepared_statements</code> を 0 以外にすると、PgBouncer はクライアントが付けた名前を覚え、どのサーバー接続に行っても文が用意されているよう内部名に書き換えて転送する。既定値は 1.24.0 から 200 になり、何もしなくても有効だ。</p>
+        <p>これで解決したように思える。しかし実際には、新しい PgBouncer の前でも Rails が同じエラーで落ちる例がある。原因は文を捨てる側だ。Active Record は接続ごとに既定で最大 1000 個（<code>statement_limit</code>）の文を作り、上限を超えると古い文を捨てる。古い <code>pg</code> gem / libpq はこれを SQL の <code>DEALLOCATE a1</code> で送る。PgBouncer の書き換えは SQL レベルのコマンドには効かず、そのまま Postgres へ素通しされるので、実在しない名前 <code>a1</code> を消そうとしてエラーになり、トランザクション内なら全体が中断する。</p>
+        <p>ClickHouse の Managed Postgres ガイドによれば、<code>pg</code> gem 1.6 以降で libpq 17 以降を使う組み合わせなら、捨てる処理もプロトコルの Close メッセージで送られ、Rails の既定設定のまま動く。プリコンパイル版の <code>pg</code> 1.6 には libpq 18 が同梱されている。アップグレードできないなら、prepared statement を切るのが確実な回避策だ。</p>
+        <pre class="code"># config/database.yml
+production:
+  adapter: postgresql
+  prepared_statements: false  # 毎回 SQL を送る
+  advisory_locks: false       # マイグレーション用ロックを止める</pre>
+        <p><code>prepared_statements: false</code> にすると、クエリは毎回パラメータ付きで解析し直されるため、解析コストは戻ってくる。その代わり接続をまたいでも壊れない。Go の pgx も既定の <code>cache_statement</code> モードが prepared statement を使う。PgBouncer が 1.21 より古いか機能が無効なら、接続文字列に <code>default_query_exec_mode=exec</code> を足す。pgx のドキュメントは、<code>describe_exec</code> は準備と実行が別の接続に振られうるため transaction pooling では使わないよう注意している。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>SET と advisory lock はもっと静かに壊れる</h3>
+        <p>PgBouncer の機能表では、<code>SET</code>/<code>RESET</code>・<code>LISTEN</code>・SQL の <code>PREPARE</code>・セッションレベルの advisory lock は transaction pooling で「Never」（使えない）とされている。prepared statement はエラーで気づけるが、こちらはエラーにならないものがある分、たちが悪い。</p>
+        <p>たとえば単発の <code>SET statement_timeout = '5s'</code> を送ると、その設定は送った瞬間のサーバー接続に残る。続く重いクエリは別の接続に行ってタイムアウトが効かず、逆に設定が残った接続は、無関係な別クライアントのクエリを 5 秒で打ち切る。session モードなら返却時に <code>server_reset_query</code>（既定 <code>DISCARD ALL</code>）で状態を消すが、transaction モードではこのリセットは使われない。トランザクション内で <code>SET LOCAL</code> を使えば、効果はそのトランザクションの終わりで消えるので安全だ。Heroku のドキュメントも、<code>database.yml</code> の <code>variables</code> に書いたセッション変数は PgBouncer 越しでは効かないと注意している。</p>
+        <p>Rails のマイグレーションは同時実行を防ぐためにセッションレベルの advisory lock を取る。transaction pooling では解放の命令が別の接続に届きうるので、ロックが握られたまま残り、次のマイグレーションが失敗する。<code>advisory_locks: false</code> にするか、マイグレーションだけ PgBouncer を通さず Postgres に直接つなぐ。前者を選ぶなら、マイグレーションを走らせるデプロイが同時に 1 つだけになるよう運用で担保する。</p>
+      </section>
+
+      <div class="practical">
+        <div class="box-title">💼 実務でどう出会うか</div>
+        <p>典型はマネージドの接続プーラーだ。Heroku Postgres の connection pooling は PgBouncer の transaction モードで動き、同じ構成のプーラーを提供するマネージド Postgres は多い。接続数対策でプーラー経由の URL に切り替えた直後に、<code>prepared statement ... does not exist</code>、マイグレーションの lock 取得失敗、<code>statement_timeout</code> の効きムラが出たら、まず <code>pool_mode</code> と PgBouncer のバージョン、ドライバの prepared statement 設定を確認する。DB 側のログに出るのは「名前が無い」というエラーだけなので、アプリのバグと見誤りやすい。</p>
+      </div>
+
+      <div class="hands-on">
+        <div class="box-title">⌨️ 手を動かす（5 分）</div>
+        <p>PgBouncer を立てなくても、核心は再現できる。<code>psql</code> を起動し直すと新しい接続になるので、「別の接続に回された」状態を手で作れる。1 回の <code>psql</code> に複数の <code>-c</code> を渡すと、同じ接続で順に実行される。</p>
+        <pre class="code">docker run -d --name pg -e POSTGRES_PASSWORD=pw postgres:17
+sleep 5
+# 同じ接続: PREPARE して EXECUTE
+docker exec pg psql -U postgres -c "PREPARE q1 AS SELECT 42;" -c "EXECUTE q1;"
+# 別の接続: EXECUTE だけ
+docker exec pg psql -U postgres -c "EXECUTE q1;"
+# SET も接続にしか残らない
+docker exec pg psql -U postgres -c "SET statement_timeout = '1s';" -c "SHOW statement_timeout;"
+docker exec pg psql -U postgres -c "SHOW statement_timeout;"
+docker rm -f pg</pre>
+        <p>1 本目は <code>42</code> を返し、2 本目は <code>ERROR:  prepared statement "q1" does not exist</code> になるはずだ。<code>SET</code> も同様で、同じ接続では <code>1s</code>、新しい接続では既定の <code>0</code>（無効）に戻る。transaction pooling は、この「接続の付け替え」をアプリに知らせずに毎トランザクション行っている。</p>
+      </div>
+
+      <div class="misconceptions">
+        <div class="box-title">🙅 よくある誤解</div>
+        <ul>
+          <li><span class="wrong">PgBouncer は透過的なので、接続先を変えるだけで導入できる</span> — 透過的なのは session モードだけだ。接続数を減らせる transaction モードでは、接続にひも付く機能（prepared statement・<code>SET</code>・<code>LISTEN</code>・advisory lock）の前提が崩れるので、アプリ側の設定を合わせる必要がある。</li>
+          <li><span class="wrong">PgBouncer を新しくすれば prepared statement の問題は全部消える</span> — 1.21 以降が肩代わりするのはプロトコルレベルの準備と実行だけだ。SQL の <code>PREPARE</code>/<code>DEALLOCATE</code> は素通しなので、古い <code>pg</code> gem のように SQL で文を捨てるドライバはまだ壊れる。</li>
+          <li><span class="wrong">エラーが出ていなければ transaction pooling に対応できている</span> — <code>SET</code> で変えたセッション変数は、別の接続に行ってもエラーにならず単に効かないだけで、残った接続では別クライアントに効いてしまう。エラーの有無ではなく、接続にひも付く機能を使っていないかで判断する。</li>
+        </ul>
+      </div>
+
+      <div class="glossary">
+        <div class="box-title">📖 用語ミニ辞典</div>
+        <dl>
+          <dt>prepared statement</dt><dd>解析済みの SQL に名前を付けてサーバーに置き、名前とパラメータだけで実行する仕組み。接続ごとに存在する。</dd>
+          <dt>セッション</dt><dd>1 本の DB 接続の生存期間と、その間に積み上がる状態（変数・準備済みの文・ロック）。</dd>
+          <dt>transaction pooling</dt><dd>PgBouncer がサーバー接続をトランザクションの間だけ貸し出し、終わるとプールへ戻すモード。</dd>
+          <dt>max_prepared_statements</dt><dd>PgBouncer がプロトコルレベルの prepared statement を追跡・書き換えする機能の設定。0 で無効、1.24.0 から既定 200。</dd>
+          <dt>advisory lock</dt><dd>アプリが任意の番号で取る PostgreSQL の協調用ロック。セッションレベルのものは接続にひも付く。</dd>
+        </dl>
+      </div>
+
+      <div class="further-reading">
+        <div class="box-title">🔗 もっと深く</div>
+        <ul>
+          <li><a href="https://www.pgbouncer.org/features.html">PgBouncer: Features</a> — プールモードごとに使える SQL 機能の対応表。導入前に一度目を通す価値がある。</li>
+          <li><a href="https://www.pgbouncer.org/config.html#max_prepared_statements">PgBouncer: max_prepared_statements</a> — 名前の書き換えの仕組みと、SQL レベルのコマンドが対象外である理由。</li>
+          <li><a href="https://www.postgresql.org/docs/current/sql-prepare.html">PostgreSQL: PREPARE</a> — prepared statement がセッションに閉じることと、generic plan / custom plan の切り替え規則。</li>
+          <li><a href="https://devcenter.heroku.com/articles/postgres-connection-pooling">Heroku Dev Center: Postgres Connection Pooling</a> — transaction モードのプーラーを前提にした Rails の <code>database.yml</code> 設定例と制限事項。</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- recent:start -->
+    <!-- recent:end -->
+
+    <footer>
+      <p>Generated by Claude Code (GitHub Actions)</p>
+      <a href="./" class="archive-link">過去の記事</a>
+    </footer>
+  </div>
+</body>
+</html>

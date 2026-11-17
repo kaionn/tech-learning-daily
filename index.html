@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tech Learning Daily — AWS の鍵は渡していないのに、なぜ署名付き URL だけで非公開の S3 ファイルを落とせるのか？</title>
-  <meta name="description" content="署名付き URL に入っているのは鍵ではなく条件と HMAC 署名で、S3 は同じ計算をやり直して照合する。作成者の権限で動き、一時認証情報なら早く切れ、1 本だけの取り消しはできない仕組みを解説する。">
+  <title>Tech Learning Daily — PgBouncer を挟んだだけなのに、なぜ「prepared statement "a1" does not exist」で落ちるのか？</title>
+  <meta name="description" content="PgBouncer の transaction pooling は接続をトランザクションごとに貸し替えるため、接続にひも付く prepared statement・SET・advisory lock が別の接続へ届く。壊れる理由と設定での直し方を解説する。">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Tech Learning Daily">
-  <meta property="og:title" content="Tech Learning Daily — AWS の鍵は渡していないのに、なぜ署名付き URL だけで非公開の S3 ファイルを落とせるのか？">
-  <meta property="og:description" content="署名付き URL に入っているのは鍵ではなく条件と HMAC 署名で、S3 は同じ計算をやり直して照合する。作成者の権限で動き、一時認証情報なら早く切れ、1 本だけの取り消しはできない仕組みを解説する。">
+  <meta property="og:title" content="Tech Learning Daily — PgBouncer を挟んだだけなのに、なぜ「prepared statement &quot;a1&quot; does not exist」で落ちるのか？">
+  <meta property="og:description" content="PgBouncer の transaction pooling は接続をトランザクションごとに貸し替えるため、接続にひも付く prepared statement・SET・advisory lock が別の接続へ届く。壊れる理由と設定での直し方を解説する。">
   <meta property="og:url" content="https://tech-learn.kaion-lab.com/">
   <meta property="og:image" content="https://tech-learn.kaion-lab.com/og.png">
   <meta name="twitter:card" content="summary_large_image">
@@ -22,160 +22,127 @@
   <div class="container">
     <header>
       <h1>Tech Learning Daily</h1>
-      <div class="date">2026-11-16 (Mon) — 第 122 号</div>
+      <div class="date">2026-11-17 (Tue) — 第 123 号</div>
       <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
     </header>
 
     <article class="article">
       <div class="meta-bar">
-        <span class="tag tag-security">Security</span>
+        <span class="tag tag-db">DB</span>
         <span class="difficulty">🌿 基礎</span>
         <span class="read-time">⏱ 約 7 分</span>
       </div>
-      <h2 class="article-title">AWS の鍵は渡していないのに、なぜ署名付き URL だけで非公開の S3 ファイルを落とせるのか？</h2>
-      <p class="lead">バケットはパブリックアクセスをすべてブロックしてある。それでもアプリが返した長い URL をブラウザに貼るだけで、請求書 PDF がダウンロードできる。ブラウザは AWS の認証情報を何も持っていない。URL のどこに「入っていい」という証明が埋まっているのか。</p>
+      <h2 class="article-title">PgBouncer を挟んだだけなのに、なぜ「prepared statement "a1" does not exist」で落ちるのか？</h2>
+      <p class="lead">Postgres の接続数が上限に近づいたので、アプリと DB の間に PgBouncer を入れた。接続先のポートを書き換えただけで、SQL は 1 行も変えていない。なのにデプロイ後、ときどき <code>prepared statement "a1" does not exist</code> が出てトランザクションごと失敗する。さっきまで存在していた文が、なぜ急に「無い」と言われるのか。</p>
 
       <div class="tldr">
         <div class="box-title">🎯 3 行まとめ</div>
         <ul>
-          <li>署名付き URL には鍵そのものではなく、「この操作をこの時刻からこの秒数だけ」という条件と、秘密鍵で計算した署名が入っている。</li>
-          <li>S3 は届いた URL から同じ計算をやり直し、署名が一致して期限内で、URL を作った人にその権限があるときだけ応答する。</li>
-          <li>URL は持っている人なら誰でも使えて、1 本だけを取り消す仕組みはない。だから有効期限は短くし、作成に使う認証情報の寿命も意識する。</li>
+          <li>prepared statement や <code>SET</code> は PostgreSQL の「接続（セッション）」に保存される状態で、別の接続からは見えない。</li>
+          <li>PgBouncer の transaction pooling は接続をトランザクション単位で貸し替えるので、前の文で作った状態が次の文の接続には無い。</li>
+          <li>PgBouncer 1.21 以降はプロトコルレベルの prepared statement を肩代わりできるが、SQL の <code>PREPARE</code>・<code>SET</code>・advisory lock は今も壊れるので、ドライバ側の設定を合わせる。</li>
         </ul>
       </div>
 
       <section class="body-section">
-        <h3>URL に入っているのは鍵ではなく「署名」</h3>
-        <p><strong>署名付き URL</strong>（presigned URL）は、S3 のオブジェクトへの 1 回分のリクエストを、条件ごと URL のクエリ文字列に詰めたものだ。<code>aws s3 presign</code> の出力を分解すると次のようになる。</p>
-        <pre class="code">https://demo-bucket.s3.ap-northeast-1.amazonaws.com/report.pdf
-  ?X-Amz-Algorithm=AWS4-HMAC-SHA256
-  &amp;X-Amz-Credential=AKIA.../20261116/ap-northeast-1/s3/aws4_request
-  &amp;X-Amz-Date=20261116T011210Z
-  &amp;X-Amz-Expires=300
-  &amp;X-Amz-SignedHeaders=host
-  &amp;X-Amz-Signature=868b32ba3dadd46a...</pre>
-        <p><code>X-Amz-Credential</code> に入っているのはアクセスキー ID だけで、秘密鍵（シークレットアクセスキー）はどこにも書かれていない。アクセスキー ID はユーザー名のようなもので、知られても単独では何もできない。<code>X-Amz-Date</code> が署名した時刻（UTC）、<code>X-Amz-Expires</code> がそこから何秒有効かを表す。</p>
-        <p>最後の <code>X-Amz-Signature</code> が証明の本体だ。これは <strong>HMAC-SHA256</strong> の出力である。HMAC は秘密鍵とメッセージから固定長の値を計算する関数で、鍵を知らない者は正しい値を作れない。またメッセージが 1 文字でも違えば、まったく別の値になる。つまり署名は「秘密鍵を持つ誰かが、まさにこの条件に同意した」ことを示す。</p>
+        <h3>prepared statement は「接続」に住んでいる</h3>
+        <p><strong>prepared statement</strong> は、SQL の構文解析と実行計画づくりを先に済ませ、名前を付けてサーバーに置いておく仕組みだ。2 回目以降は名前とパラメータだけを送ればよいので、同じ形のクエリを何度も投げる Web アプリでは解析の手間が省ける。Rails（Active Record）の PostgreSQL アダプタも pgx（Go）も、既定でこれを使う。</p>
+        <p>見落としやすいのは保存場所だ。PostgreSQL の公式ドキュメントは「prepared statement は現在のデータベースセッションの間だけ存在する」と明記している。<strong>セッション</strong>とは 1 本の接続の生存期間のことで、PostgreSQL は接続ごとにバックエンドプロセスを 1 つ立てて状態を持たせる。接続 1 で作った <code>a1</code> は、接続 2 からは存在しない。</p>
+        <p>同じ性質を持つものはほかにもある。<code>SET statement_timeout</code> のようなセッション変数、<code>LISTEN</code>、セッションレベルの advisory lock（アプリが任意の番号で取る協調用ロック）、一時テーブルも、すべて接続にひも付く。アプリが接続を握り続けている限り、これらが問題になることはなかった。</p>
       </section>
 
       <section class="body-section">
-        <h3>S3 は同じ計算をやり直して照合する</h3>
-        <p>URL を作るとき、アプリは AWS に「URL を発行してほしい」と頼んでいるように思える。しかし実際は、<code>presign</code> は手元の計算だけで完結し、ネットワーク通信をしない。秘密鍵は AWS 側も知っているので、AWS に問い合わせなくても、S3 が後から同じ答えを計算できるからだ。</p>
-        <pre class="diagram">アプリ（秘密鍵あり）
-  │ 1. 条件 + 秘密鍵 → 署名を計算
-  │    （AWS への通信なし）
-  ▼
-URL ＝ 条件 + 署名
-  │ 2. URL だけをブラウザへ返す
-  ▼
-ブラウザ（鍵なし）
-  │ 3. GET report.pdf?X-Amz-...
-  ▼
-S3（同じ秘密鍵を知っている）
-  ├ 4. URL の条件から署名を再計算
-  ├ 5. 署名は一致？ 期限内？
-  └ 6. 作成者に GetObject 権限？
-  ▼
-全部 OK → 200 ／ 1 つでも NG → 403</pre>
-        <p>再計算の材料は<strong>正規リクエスト</strong>（canonical request）と呼ばれる。HTTP メソッド・パス・署名以外のクエリパラメータ・<code>host</code> ヘッダーなどを決まった順序と書式で改行区切りに並べた文字列で、作る側と検証する側が 1 バイトも違わない入力を得るための取り決めだ。S3 の署名付き URL ではリクエスト本文のハッシュの代わりに固定文字列 <code>UNSIGNED-PAYLOAD</code> を入れる。そのため本文は署名の対象外になる。</p>
-        <p>署名に使う鍵は、秘密鍵をそのまま使わずに <code>"AWS4" + 秘密鍵</code> から日付・リージョン・サービス名・<code>aws4_request</code> を順に HMAC にかけて作る。こうして作った鍵はその日・そのリージョン・そのサービス専用になる。だから URL のパスを <code>report.pdf</code> から <code>salary.pdf</code> に書き換えても、<code>X-Amz-Expires</code> を 7 日に伸ばしても、正規リクエストが変わって S3 の再計算結果と一致しなくなる。条件を改ざんするには署名を作り直す必要があり、それには秘密鍵が要る。</p>
+        <h3>transaction pooling は接続を「又貸し」する</h3>
+        <p>PgBouncer にはプールモードが 3 つある。設定 <code>pool_mode</code> の既定値は <code>session</code> で、クライアントが接続している間ずっと同じサーバー接続を割り当てる。この場合は接続が減らないので、接続数対策として入れるなら <code>transaction</code> を選ぶことになる。</p>
+        <pre class="code">; pgbouncer.ini
+[pgbouncer]
+pool_mode = transaction
+default_pool_size = 20   ; 既定値も 20</pre>
+        <p><code>transaction</code> モードでは、サーバー接続はトランザクションの間だけクライアントに貸し出され、終わった瞬間にプールへ返る。<code>BEGIN</code> を書かない単発クエリは自動コミットで 1 文 1 トランザクションなので、文ごとに別の接続へ行きうる。数百のアプリ側接続を、<code>default_pool_size</code> 本ぶんのサーバー接続で使い回せるのはこのためだ。</p>
+        <pre class="diagram">Rails          PgBouncer        Postgres
+  │               │
+  │ PREPARE a1 ──▶│──▶ 接続 1 に a1 作成
+  │               │   (文が終わり接続 1 返却)
+  │ EXECUTE a1 ──▶│──▶ 接続 2 へ転送
+  │               │   接続 2 に a1 は無い
+  │◀── ERROR: prepared statement
+  │        "a1" does not exist</pre>
+        <p>アプリから見れば接続は 1 本のままなので、「さっき作った文がある」と信じて名前で呼ぶ。しかし実際に届いた先は、別のクライアントが使い終えた接続 2 だ。冒頭のエラーはこうして出る。同じ接続にたまたま戻れば成功するため、症状は「ときどき」になる。</p>
       </section>
 
       <div class="analogy">
         <div class="box-title">🍱 たとえるなら</div>
-        <p>店主と倉庫番だけが知っている秘密の計算式がある。店主は引換券に「品名・発行時刻・有効時間」を書き、それを計算式にかけた番号を添える。倉庫番は券を受け取ると、書かれた品名と時刻で同じ計算をして番号を確かめ、合っていて時間内なら品物を渡す。品名を書き換えた券は番号が合わない。ただし券を拾っただけの人が持ってきても、番号が合えば倉庫番は渡してしまう。</p>
+        <p>ホテルのフロントに荷物を預け、預かり札をもらったとする。ところがこのホテルは用件が 1 つ済むたびに担当者が交代し、各担当者は自分の引き出しにしか荷物を入れない。次に札を出した相手が別の担当者なら「そんな荷物はありません」と言われる。荷物は消えていない。別の担当者の引き出しにあるだけだ。</p>
       </div>
 
       <section class="body-section">
-        <h3>誰の権限で、いつまで使えるのか</h3>
-        <p>署名付き URL は新しい権限を作らない。URL を作った IAM ユーザーやロールの権限で動く。S3 はアクセスのたびに「その作成者に今 <code>s3:GetObject</code> が許されているか」を評価する。だから URL を作る側に権限がなければ、計算自体は成功しても、使った時点で 403 になる。署名の計算は誰でもできるので、URL を作れることと、その URL が通ることは別だ。</p>
-        <p>有効期限は作るときに秒数で渡す。AWS CLI の <code>--expires-in</code> は省略すると 3600 秒（1 時間）で、上限は 604800 秒（7 日）だ。S3 コンソールから作る場合は 1 分〜12 時間の範囲で選ぶ。</p>
-        <pre class="code">aws s3 presign s3://my-bucket/invoices/2026-11.pdf \
-  --expires-in 300 --region ap-northeast-1</pre>
-        <p>ここで落とし穴がある。署名に<strong>一時認証情報</strong>（STS が発行する、期限付きのアクセスキー・秘密鍵・セッショントークンの組）を使った場合、URL はその認証情報が切れた時点で使えなくなる。<code>--expires-in 604800</code> を指定してもだ。AWS のドキュメントによれば、EC2 インスタンスプロファイルの認証情報は最大でおおむね 6 時間、<code>AssumeRole</code> のセッションはデフォルトで 1 時間で切れる。EC2・ECS・Lambda 上のアプリは通常ロールの一時認証情報で動いているので、「7 日有効のはずが数時間で 403 になる」のはこのためだ。何日も有効な URL が必要なら、作成に使う認証情報の寿命から決め直す必要がある。</p>
-        <p>期限の判定はリクエストが届いた時点で行われる。期限直前に始まった大きなファイルのダウンロードは途中で期限を過ぎても続く。しかし切断後に同じ URL で再開しようとすると失敗する。</p>
+        <h3>1.21 で直ったはず、なのにまだ落ちる</h3>
+        <p>PgBouncer 1.21.0（2023 年 10 月）は、プロトコルレベルの名前付き prepared statement に対応した。<strong>プロトコルレベル</strong>とは、SQL 文の <code>PREPARE</code> ではなく、ドライバが通信プロトコルの Parse メッセージで文を準備する方式を指す。設定 <code>max_prepared_statements</code> を 0 以外にすると、PgBouncer はクライアントが付けた名前を覚え、どのサーバー接続に行っても文が用意されているよう内部名に書き換えて転送する。既定値は 1.24.0 から 200 になり、何もしなくても有効だ。</p>
+        <p>これで解決したように思える。しかし実際には、新しい PgBouncer の前でも Rails が同じエラーで落ちる例がある。原因は文を捨てる側だ。Active Record は接続ごとに既定で最大 1000 個（<code>statement_limit</code>）の文を作り、上限を超えると古い文を捨てる。古い <code>pg</code> gem / libpq はこれを SQL の <code>DEALLOCATE a1</code> で送る。PgBouncer の書き換えは SQL レベルのコマンドには効かず、そのまま Postgres へ素通しされるので、実在しない名前 <code>a1</code> を消そうとしてエラーになり、トランザクション内なら全体が中断する。</p>
+        <p>ClickHouse の Managed Postgres ガイドによれば、<code>pg</code> gem 1.6 以降で libpq 17 以降を使う組み合わせなら、捨てる処理もプロトコルの Close メッセージで送られ、Rails の既定設定のまま動く。プリコンパイル版の <code>pg</code> 1.6 には libpq 18 が同梱されている。アップグレードできないなら、prepared statement を切るのが確実な回避策だ。</p>
+        <pre class="code"># config/database.yml
+production:
+  adapter: postgresql
+  prepared_statements: false  # 毎回 SQL を送る
+  advisory_locks: false       # マイグレーション用ロックを止める</pre>
+        <p><code>prepared_statements: false</code> にすると、クエリは毎回パラメータ付きで解析し直されるため、解析コストは戻ってくる。その代わり接続をまたいでも壊れない。Go の pgx も既定の <code>cache_statement</code> モードが prepared statement を使う。PgBouncer が 1.21 より古いか機能が無効なら、接続文字列に <code>default_query_exec_mode=exec</code> を足す。pgx のドキュメントは、<code>describe_exec</code> は準備と実行が別の接続に振られうるため transaction pooling では使わないよう注意している。</p>
       </section>
 
       <section class="body-section">
-        <h3>1 本だけ取り消すことはできない</h3>
-        <p>署名付き URL は<strong>ベアラートークン</strong>だ。ベアラートークンとは、持っていること自体が資格になる証明で、誰が持ってきたかは問われない。チャットに貼った URL・アクセスログに残ったクエリ文字列・転送されたメールは、期限内なら第三者でもそのまま使える。期限内なら何度でも使える。</p>
-        <p>S3 は発行した URL の一覧を持っていない。URL は計算で作られ、計算で検証されるだけなので、「この 1 本だけ無効にする」操作は存在しない。止めたいときは、作成に使った認証情報を無効化・削除するか、作成者の権限を外す。ただしその認証情報で作った他の URL も、まとめて使えなくなる。</p>
-        <p>使える期間に上限をかけたいときは、バケットポリシーの <code>s3:signatureAge</code> 条件を使う。署名からの経過時間をミリ秒で判定するので、作成側が長い期限を指定しても、バケット側で一律に切れる。</p>
-        <pre class="code">"Effect": "Deny",
-"Principal": { "AWS": "*" },
-"Action": "s3:*",
-"Resource": "arn:aws:s3:::my-bucket/*",
-"Condition": {
-  "NumericGreaterThan": { "s3:signatureAge": "600000" }
-}</pre>
-        <p>この例は、署名から 10 分（600000 ミリ秒）を超えたリクエストを拒否する。Deny は Allow より優先されるので、作成者の IAM ポリシーで許可されていても通らない。</p>
+        <h3>SET と advisory lock はもっと静かに壊れる</h3>
+        <p>PgBouncer の機能表では、<code>SET</code>/<code>RESET</code>・<code>LISTEN</code>・SQL の <code>PREPARE</code>・セッションレベルの advisory lock は transaction pooling で「Never」（使えない）とされている。prepared statement はエラーで気づけるが、こちらはエラーにならないものがある分、たちが悪い。</p>
+        <p>たとえば単発の <code>SET statement_timeout = '5s'</code> を送ると、その設定は送った瞬間のサーバー接続に残る。続く重いクエリは別の接続に行ってタイムアウトが効かず、逆に設定が残った接続は、無関係な別クライアントのクエリを 5 秒で打ち切る。session モードなら返却時に <code>server_reset_query</code>（既定 <code>DISCARD ALL</code>）で状態を消すが、transaction モードではこのリセットは使われない。トランザクション内で <code>SET LOCAL</code> を使えば、効果はそのトランザクションの終わりで消えるので安全だ。Heroku のドキュメントも、<code>database.yml</code> の <code>variables</code> に書いたセッション変数は PgBouncer 越しでは効かないと注意している。</p>
+        <p>Rails のマイグレーションは同時実行を防ぐためにセッションレベルの advisory lock を取る。transaction pooling では解放の命令が別の接続に届きうるので、ロックが握られたまま残り、次のマイグレーションが失敗する。<code>advisory_locks: false</code> にするか、マイグレーションだけ PgBouncer を通さず Postgres に直接つなぐ。前者を選ぶなら、マイグレーションを走らせるデプロイが同時に 1 つだけになるよう運用で担保する。</p>
       </section>
 
       <div class="practical">
         <div class="box-title">💼 実務でどう出会うか</div>
-        <p>非公開の添付ファイルをダウンロードさせる場面では、アプリが権限を確認してから数分だけ有効な URL を返し、ブラウザを S3 へリダイレクトさせる構成が多い。巨大ファイルをアプリサーバー経由で中継しなくて済むからだ。アップロードでも同じで、<code>PUT</code> 用の署名付き URL を返せば、ブラウザがファイルを S3 へ直接送れる。このとき同じキーのオブジェクトが既にあれば上書きされる。キーはクライアントに選ばせず、サーバー側で一意に決める。障害対応で「期限内なのに 403」を見たら、まず URL を作ったロールの権限と一時認証情報の寿命を疑う。<code>SignatureDoesNotMatch</code> なら、署名した時計のずれや、プロキシによるクエリ・ヘッダーの書き換えを疑う。</p>
+        <p>典型はマネージドの接続プーラーだ。Heroku Postgres の connection pooling は PgBouncer の transaction モードで動き、同じ構成のプーラーを提供するマネージド Postgres は多い。接続数対策でプーラー経由の URL に切り替えた直後に、<code>prepared statement ... does not exist</code>、マイグレーションの lock 取得失敗、<code>statement_timeout</code> の効きムラが出たら、まず <code>pool_mode</code> と PgBouncer のバージョン、ドライバの prepared statement 設定を確認する。DB 側のログに出るのは「名前が無い」というエラーだけなので、アプリのバグと見誤りやすい。</p>
       </div>
 
       <div class="hands-on">
         <div class="box-title">⌨️ 手を動かす（5 分）</div>
-        <p>AWS アカウントは要らない。AWS ドキュメントに載っているダミーのキーで URL を作り、S3 がやる検証を Python で再現する。まず URL を作る。<code>presign</code> は通信しないので、存在しないバケットとダミーキーでも URL が出てくる。</p>
-        <pre class="code">export AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
-export AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
-URL=$(aws s3 presign s3://demo-bucket/report.pdf \
-  --expires-in 300 --region ap-northeast-1)
-echo "$URL"</pre>
-        <p>次に、URL と秘密鍵だけから署名を再計算するスクリプトを <code>verify.py</code> として保存する。</p>
-        <pre class="code">import hmac, hashlib, os, sys
-from urllib.parse import urlsplit, parse_qsl, quote
-u = urlsplit(sys.argv[1])
-q = dict(parse_qsl(u.query))
-sig = q.pop("X-Amz-Signature")
-cq = "&amp;".join(f"{quote(k, safe='-_.~')}={quote(v, safe='-_.~')}"
-              for k, v in sorted(q.items()))
-creq = "\n".join(["GET", u.path, cq, f"host:{u.netloc}\n",
-                  "host", "UNSIGNED-PAYLOAD"])
-_, date, region, svc, _ = q["X-Amz-Credential"].split("/")
-sts = "\n".join(["AWS4-HMAC-SHA256", q["X-Amz-Date"],
-                 f"{date}/{region}/{svc}/aws4_request",
-                 hashlib.sha256(creq.encode()).hexdigest()])
-k = ("AWS4" + os.environ["AWS_SECRET_ACCESS_KEY"]).encode()
-for part in (date, region, svc, "aws4_request"):
-    k = hmac.new(k, part.encode(), hashlib.sha256).digest()
-mine = hmac.new(k, sts.encode(), hashlib.sha256).hexdigest()
-print("一致" if hmac.compare_digest(sig, mine) else "不一致")</pre>
-        <pre class="code">python3 verify.py "$URL"
-python3 verify.py "${URL/report.pdf/salary.pdf}"
-python3 verify.py "${URL/X-Amz-Expires=300/X-Amz-Expires=604800}"</pre>
-        <p>1 行目は「一致」、パスを書き換えた 2 行目と期限を伸ばした 3 行目は「不一致」になるはずだ。S3 が受け取るたびにやっているのは、この再計算に期限と権限の確認を足したものだ。</p>
+        <p>PgBouncer を立てなくても、核心は再現できる。<code>psql</code> を起動し直すと新しい接続になるので、「別の接続に回された」状態を手で作れる。1 回の <code>psql</code> に複数の <code>-c</code> を渡すと、同じ接続で順に実行される。</p>
+        <pre class="code">docker run -d --name pg -e POSTGRES_PASSWORD=pw postgres:17
+sleep 5
+# 同じ接続: PREPARE して EXECUTE
+docker exec pg psql -U postgres -c "PREPARE q1 AS SELECT 42;" -c "EXECUTE q1;"
+# 別の接続: EXECUTE だけ
+docker exec pg psql -U postgres -c "EXECUTE q1;"
+# SET も接続にしか残らない
+docker exec pg psql -U postgres -c "SET statement_timeout = '1s';" -c "SHOW statement_timeout;"
+docker exec pg psql -U postgres -c "SHOW statement_timeout;"
+docker rm -f pg</pre>
+        <p>1 本目は <code>42</code> を返し、2 本目は <code>ERROR:  prepared statement "q1" does not exist</code> になるはずだ。<code>SET</code> も同様で、同じ接続では <code>1s</code>、新しい接続では既定の <code>0</code>（無効）に戻る。transaction pooling は、この「接続の付け替え」をアプリに知らせずに毎トランザクション行っている。</p>
       </div>
 
       <div class="misconceptions">
         <div class="box-title">🙅 よくある誤解</div>
         <ul>
-          <li><span class="wrong">署名付き URL は AWS に頼んで発行してもらうもの</span> — 手元の秘密鍵で計算するだけで、作成時に AWS とは通信しない。S3 はアクセスされた時点で初めてその URL を見る。</li>
-          <li><span class="wrong">期限を 7 日にすれば 7 日間使える</span> — ロールなどの一時認証情報で作った URL は、その認証情報が切れた時点で使えなくなる。作成者の権限が外された場合も同じだ。</li>
-          <li><span class="wrong">漏れた URL は、その 1 本だけ無効化できる</span> — S3 は URL を記録していないので個別の取り消しはできない。作成に使った認証情報や権限を止めるか、期限切れを待つしかない。</li>
+          <li><span class="wrong">PgBouncer は透過的なので、接続先を変えるだけで導入できる</span> — 透過的なのは session モードだけだ。接続数を減らせる transaction モードでは、接続にひも付く機能（prepared statement・<code>SET</code>・<code>LISTEN</code>・advisory lock）の前提が崩れるので、アプリ側の設定を合わせる必要がある。</li>
+          <li><span class="wrong">PgBouncer を新しくすれば prepared statement の問題は全部消える</span> — 1.21 以降が肩代わりするのはプロトコルレベルの準備と実行だけだ。SQL の <code>PREPARE</code>/<code>DEALLOCATE</code> は素通しなので、古い <code>pg</code> gem のように SQL で文を捨てるドライバはまだ壊れる。</li>
+          <li><span class="wrong">エラーが出ていなければ transaction pooling に対応できている</span> — <code>SET</code> で変えたセッション変数は、別の接続に行ってもエラーにならず単に効かないだけで、残った接続では別クライアントに効いてしまう。エラーの有無ではなく、接続にひも付く機能を使っていないかで判断する。</li>
         </ul>
       </div>
 
       <div class="glossary">
         <div class="box-title">📖 用語ミニ辞典</div>
         <dl>
-          <dt>署名付き URL</dt><dd>操作・対象・期限と、その署名をクエリ文字列に入れた URL。鍵を持たない相手に期限付きでアクセスさせる。</dd>
-          <dt>HMAC-SHA256</dt><dd>秘密鍵とメッセージから 256 ビットの値を計算する関数。鍵がなければ正しい値は作れず、メッセージが変われば値も変わる。</dd>
-          <dt>正規リクエスト</dt><dd>メソッド・パス・クエリ・ヘッダーを決まった書式で並べた文字列。署名する側と検証する側が同じ入力を得るためのもの。</dd>
-          <dt>一時認証情報</dt><dd>STS が発行する期限付きのアクセスキー・秘密鍵・セッショントークンの組。IAM ロールで動くアプリはこれを使う。</dd>
-          <dt>ベアラートークン</dt><dd>持っていること自体が資格になる証明。誰が持ってきたかは確認されない。</dd>
-          <dt>s3:signatureAge</dt><dd>署名からの経過時間（ミリ秒）を表すバケットポリシーの条件キー。署名付き URL の寿命をバケット側で制限できる。</dd>
+          <dt>prepared statement</dt><dd>解析済みの SQL に名前を付けてサーバーに置き、名前とパラメータだけで実行する仕組み。接続ごとに存在する。</dd>
+          <dt>セッション</dt><dd>1 本の DB 接続の生存期間と、その間に積み上がる状態（変数・準備済みの文・ロック）。</dd>
+          <dt>transaction pooling</dt><dd>PgBouncer がサーバー接続をトランザクションの間だけ貸し出し、終わるとプールへ戻すモード。</dd>
+          <dt>max_prepared_statements</dt><dd>PgBouncer がプロトコルレベルの prepared statement を追跡・書き換えする機能の設定。0 で無効、1.24.0 から既定 200。</dd>
+          <dt>advisory lock</dt><dd>アプリが任意の番号で取る PostgreSQL の協調用ロック。セッションレベルのものは接続にひも付く。</dd>
         </dl>
       </div>
 
       <div class="further-reading">
         <div class="box-title">🔗 もっと深く</div>
         <ul>
-          <li><a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-presigned-url.html">Download and upload objects with presigned URLs（Amazon S3 User Guide）</a> — 有効期限の上限、一時認証情報で早く切れる理由、<code>s3:signatureAge</code> の例、FAQ がまとまっている。</li>
-          <li><a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_sigv-create-signed-request.html">Create a signed AWS API request（IAM User Guide）</a> — 正規リクエスト、署名対象文字列、鍵の導出の手順を 1 ページで追える。</li>
-          <li><a href="https://docs.aws.amazon.com/cli/latest/reference/s3/presign.html">aws s3 presign（AWS CLI Command Reference）</a> — <code>--expires-in</code> のデフォルトと上限、出力される URL の例。</li>
+          <li><a href="https://www.pgbouncer.org/features.html">PgBouncer: Features</a> — プールモードごとに使える SQL 機能の対応表。導入前に一度目を通す価値がある。</li>
+          <li><a href="https://www.pgbouncer.org/config.html#max_prepared_statements">PgBouncer: max_prepared_statements</a> — 名前の書き換えの仕組みと、SQL レベルのコマンドが対象外である理由。</li>
+          <li><a href="https://www.postgresql.org/docs/current/sql-prepare.html">PostgreSQL: PREPARE</a> — prepared statement がセッションに閉じることと、generic plan / custom plan の切り替え規則。</li>
+          <li><a href="https://devcenter.heroku.com/articles/postgres-connection-pooling">Heroku Dev Center: Postgres Connection Pooling</a> — transaction モードのプーラーを前提にした Rails の <code>database.yml</code> 設定例と制限事項。</li>
         </ul>
       </div>
     </article>
@@ -183,6 +150,11 @@ python3 verify.py "${URL/X-Amz-Expires=300/X-Amz-Expires=604800}"</pre>
     <!-- recent:start -->
     <section class="section recent-articles">
       <div class="section-title">最近の記事</div>
+      <div class="card">
+        <h3><a href="archive/2026-11-16.html">AWS の鍵は渡していないのに、なぜ署名付き URL だけで非公開の S3 ファイルを落とせるのか？</a></h3>
+        <div class="summary">署名付き URL に入っているのは鍵ではなく条件と HMAC 署名で、S3 は同じ計算をやり直して照合する。作成者の権限で動き、一時認証情報なら早く切れ、1 本だけの取り消しはできない仕組みを解説する。</div>
+        <div class="meta"><span class="tag tag-security">Security</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-16</span></div>
+      </div>
       <div class="card">
         <h3><a href="archive/2026-11-15.html">z-index: 9999 にしたのに、なぜモーダルはヘッダーの下に潜るのか？</a></h3>
         <div class="summary">z-index は同じスタッキングコンテキストの兄弟同士でしか比べられず、祖先に transform や z-index 付きの板があると 9999 でも外の 10 に負ける仕組みと、isolation・Portal・dialog での直し方。</div>
@@ -197,11 +169,6 @@ python3 verify.py "${URL/X-Amz-Expires=300/X-Amz-Expires=604800}"</pre>
         <h3><a href="archive/2026-11-13.html">ユーザーはもう画面を閉じたのに、なぜサーバーの重い処理は最後まで走り続けるのか？</a></h3>
         <div class="summary">Go の r.Context() は切断でキャンセルされるが、それは Done チャネルを閉じる協調的な合図にすぎない。ctx を QueryContext や NewRequestWithContext へ渡し続けること、WithTimeout と defer cancel、PostgreSQL の client_connection_check_interval まで揃えて初めて重い処理が止まる仕組みを解説。</div>
         <div class="meta"><span class="tag tag-lang">Lang</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-13</span></div>
-      </div>
-      <div class="card">
-        <h3><a href="archive/2026-11-12.html">100 万回ずつ count++ しただけなのに、なぜ 2 つの goroutine の合計は 200 万にならないのか？</a></h3>
-        <div class="summary">count++ は 1 行でも読む・足す・書くの 3 手順に分かれ、並行する goroutine が割り込むと加算が消える。データ競合の仕組みと、Mutex・atomic での直し方、race detector での検出を解説する。</div>
-        <div class="meta"><span class="tag tag-lang">Lang</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-12</span></div>
       </div>
       <div class="recent-more"><a href="archive/">アーカイブですべて見る →</a></div>
     </section>
