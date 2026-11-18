@@ -39,8 +39,8 @@
         <button class="chip on" data-cat="">すべて</button>
         <button class="chip" data-cat="container">Container <span class="chip-count">19</span></button>
         <button class="chip" data-cat="network">Network <span class="chip-count">18</span></button>
+        <button class="chip" data-cat="lang">Lang <span class="chip-count">16</span></button>
         <button class="chip" data-cat="db">DB <span class="chip-count">15</span></button>
-        <button class="chip" data-cat="lang">Lang <span class="chip-count">15</span></button>
         <button class="chip" data-cat="security">Security <span class="chip-count">10</span></button>
         <button class="chip" data-cat="arch">Arch <span class="chip-count">9</span></button>
         <button class="chip" data-cat="ai">AI <span class="chip-count">8</span></button>
@@ -63,6 +63,13 @@
 
     <section class="section month" data-month="2026-11">
       <div class="section-title">2026 年 11 月 <span class="count"></span></div>
+      <div class="card" data-cat="lang" data-diff="基礎"
+           data-search="import と書いただけなのに、なぜ node は「cannot use import statement outside a module」で落ちるのか？ node が .js を commonjs と es modules のどちらで読むかは拡張子と package.json の type で決まる。冒頭のエラーの正体と、require(esm) が top-level await で止まる理由を解説する。" data-terms="CommonJS / ES Modules / &quot;type&quot; フィールド / require(esm) / top-level await">
+        <h3><a href="2026-11-18.html">import と書いただけなのに、なぜ Node は「Cannot use import statement outside a module」で落ちるのか？</a></h3>
+        <div class="summary">Node が .js を CommonJS と ES Modules のどちらで読むかは拡張子と package.json の type で決まる。冒頭のエラーの正体と、require(esm) が top-level await で止まる理由を解説する。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-lang">Lang</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-18</span></div>
+      </div>
       <div class="card" data-cat="db" data-diff="基礎"
            data-search="pgbouncer を挟んだだけなのに、なぜ「prepared statement &quot;a1&quot; does not exist」で落ちるのか？ pgbouncer の transaction pooling では prepared statement・set・advisory lock が接続の付け替えで壊れる。その仕組みと、1.21 以降の対応範囲、rails・pgx の設定での合わせ方。" data-terms="prepared statement / セッション / transaction pooling / max_prepared_statements / advisory lock">
         <h3><a href="2026-11-17.html">PgBouncer を挟んだだけなのに、なぜ「prepared statement &quot;a1&quot; does not exist」で落ちるのか？</a></h3>

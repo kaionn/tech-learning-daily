@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tech Learning Daily — import と書いただけなのに、なぜ Node は「Cannot use import statement outside a module」で落ちるのか？</title>
+  <meta name="description" content="Node は .js を CommonJS と ES Modules のどちらで読むかを構文ではなく package.json の type と拡張子で決める。2 つのローダーの違いと require(esm) の条件を解説する。">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Tech Learning Daily">
+  <meta property="og:title" content="Tech Learning Daily — import と書いただけなのに、なぜ Node は「Cannot use import statement outside a module」で落ちるのか？">
+  <meta property="og:description" content="Node は .js を CommonJS と ES Modules のどちらで読むかを構文ではなく package.json の type と拡張子で決める。2 つのローダーの違いと require(esm) の条件を解説する。">
+  <meta property="og:url" content="https://tech-learn.kaion-lab.com/archive/2026-11-18.html">
+  <meta property="og:image" content="https://tech-learn.kaion-lab.com/og.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="stylesheet" href="../style.css">
+  <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="../feed.xml">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Tech Learning Daily</h1>
+      <div class="date">2026-11-18 (Wed) — 第 124 号</div>
+      <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
+    </header>
+
+    <article class="article">
+      <div class="meta-bar">
+        <span class="tag tag-lang">Lang</span>
+        <span class="difficulty">🌿 基礎</span>
+        <span class="read-time">⏱ 約 7 分</span>
+      </div>
+      <h2 class="article-title">import と書いただけなのに、なぜ Node は「Cannot use import statement outside a module」で落ちるのか？</h2>
+      <p class="lead">TypeScript でもフロントエンドでも毎日 <code>import</code> を書いている。ところが Node でスクリプトを直接動かした途端、1 行目の <code>import</code> を指して <code>SyntaxError: Cannot use import statement outside a module</code> と怒られる。JavaScript の正式な構文を書いただけなのに、なぜ「モジュールの外」扱いされるのか。</p>
+
+      <div class="tldr">
+        <div class="box-title">🎯 3 行まとめ</div>
+        <ul>
+          <li>Node には CommonJS（<code>require</code>）と ES Modules（<code>import</code>）という 2 つのモジュールローダーがあり、同じ <code>.js</code> をどちらで読むかを決める必要がある。</li>
+          <li>判定に使うのは拡張子（<code>.mjs</code>/<code>.cjs</code>）と最寄りの <code>package.json</code> の <code>"type"</code> で、<code>"type": "commonjs"</code> の下の <code>.js</code> に <code>import</code> を書くと冒頭のエラーになる。</li>
+          <li>Node 22.12 / 20.19 以降は <code>require()</code> で ESM を読めるが、top-level <code>await</code> を含むモジュールは同期的に評価できないので今も <code>import()</code> が必要だ。</li>
+        </ul>
+      </div>
+
+      <section class="body-section">
+        <h3>同じ .js に 2 つの読み方がある</h3>
+        <p>Node が生まれた当時、JavaScript には標準のモジュール構文が無かった。そこで Node は <strong>CommonJS</strong>（CJS）という独自方式を採った。CJS はファイルの中身を関数で包んで実行し、その関数の引数として <code>require</code>・<code>module</code>・<code>exports</code>・<code>__dirname</code> を渡す方式だ。<code>require()</code> は普通の関数呼び出しなので、実行中のどこからでも同期的に呼べる。</p>
+        <p>のちに言語仕様に <strong>ES Modules</strong>（ESM）が入った。ESM は <code>import</code>/<code>export</code> を構文として持ち、ブラウザと共通の仕組みで動く。ESM では <code>require</code> も <code>__dirname</code> も定義されていない。代わりに <code>import.meta.dirname</code> と <code>import.meta.filename</code> がある（v21.2.0 / v20.11.0 で追加）。</p>
+        <p>問題は、どちらの形式も拡張子 <code>.js</code> を使うことだ。CJS として読むなら <code>import</code> 文は文法エラーで、ESM として読むなら <code>require</code> は未定義になる。つまり Node はファイルを実行する前に「どちらのローダーに渡すか」を決めなければならない。冒頭のエラーは、<code>import</code> を含むファイルが CJS ローダーに渡されたときに出る。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>判定するのは中身ではなく「ファイルの外」</h3>
+        <p>Node は書かれた構文を見て賢く判断してくれるように思える。しかし判定の主役はファイルの外にある情報だ。<code>.mjs</code> は常に ESM、<code>.cjs</code> は常に CJS として読まれる。<code>.js</code> の場合は、カレントから親ディレクトリへ遡って最初に見つかった <code>package.json</code>（<code>node_modules</code> かルートで探索は止まる）の <code>"type"</code> フィールドを見る。</p>
+        <pre class="code">{
+  "name": "my-app",
+  "type": "module"
+}</pre>
+        <p><code>"type": "module"</code> にすると、そのパッケージ配下の <code>.js</code> はすべて ESM になり、<code>require</code> を書いた古いスクリプトは <code>require is not defined</code> で落ちるようになる。<code>"type": "commonjs"</code> なら <code>.js</code> はすべて CJS で、<code>import</code> を書けば冒頭のエラーになる。中身が ESM でも、明示された <code>"type"</code> が優先される。</p>
+        <p><code>"type"</code> を書かなかった場合だけ、構文の検出が働く。Node はまず CJS として解析し、失敗して <code>import</code>/<code>export</code> などの ESM 構文が見つかれば ESM として読み直す。この検出は v22.7.0 と v20.19.0 で既定で有効になった。ただし 2 回解析する分のコストがあり、<code>package.json</code> があるのに <code>"type"</code> が無いと <code>MODULE_TYPELESS_PACKAGE_JSON</code> の警告が出る。公式ドキュメントは、すべて CJS のパッケージでも <code>"type"</code> を明示するよう勧めている。</p>
+        <pre class="diagram">  node app.js
+      │
+      ▼
+ ┌──────────────┐ .mjs ▶ ESM
+ │ 拡張子は？   │ .cjs ▶ CJS
+ └──────┬───────┘
+        │ .js
+        ▼
+ ┌──────────────┐ module   ▶ ESM
+ │ 最寄りの     │ commonjs ▶ CJS
+ │ package.json │  （import は
+ │ の "type"    │   SyntaxError）
+ └──────┬───────┘
+        │ 指定なし
+        ▼
+ CJS で解析 → 失敗したら ESM 構文を
+ 探して読み直す（警告・余分なコスト）</pre>
+      </section>
+
+      <div class="analogy">
+        <div class="box-title">🍱 たとえるなら</div>
+        <p>同じ形の封筒が、国内便の窓口と国際便の窓口のどちらかに振り分けられる郵便局だ。振り分け係は封筒を開けて中身を読まず、封筒の色（拡張子）か、差出人の住所録に書かれた「この事業所の封筒は全部国際便」という登録（<code>"type"</code>）で決める。国際便の書式で書いた手紙でも、国内便の窓口に回されれば「書式が違う」と突き返される。登録が無いときだけ、係が一度開けて中を確かめるが、その分だけ遅くなる。</p>
+      </div>
+
+      <section class="body-section">
+        <h3>require で ESM を読めなかった本当の理由</h3>
+        <p>CJS から ESM 専用ライブラリを <code>require()</code> すると、以前の Node は <code>ERR_REQUIRE_ESM</code> で拒否した。当時の公式ドキュメントは「ES モジュールは非同期に実行されるため」と説明していた。ESM の読み込みは、依存ファイルを全部集めて解析する段階、<code>import</code> と <code>export</code> を結び付ける段階、実際にコードを評価する段階の 3 つに分かれており、ローダーもこれを非同期処理として実装していたからだ。</p>
+        <p>ところが言語仕様上、評価が非同期になるのは依存グラフのどこかに <strong>top-level <code>await</code></strong>（関数の外に書いた <code>await</code>）がある場合に限られる。Node のコア開発者 Joyee Cheung がこの点を指摘し、top-level <code>await</code> を含まない ESM だけを同期的に読む <code>require(esm)</code> を実装した。この機能は v22.12.0 と v20.19.0 でフラグ無しで使えるようになり、v25.4.0 で experimental が外れている。</p>
+        <pre class="code">// CJS から ESM を読む（Node 22.12+ / 20.19+）
+const m = require("./lib.mjs");
+m.hi();        // named export はそのまま使える
+m.default;     // default export は .default にある</pre>
+        <p><code>require()</code> が返すのはモジュール名前空間オブジェクトで、default export は <code>.default</code> に入る。読み込む ESM の依存グラフに top-level <code>await</code> が 1 つでもあれば <code>ERR_REQUIRE_ASYNC_MODULE</code> になり、その場合は <code>await import()</code> で読むしかない。同期の <code>require()</code> は、終わるまで待つ必要のある処理を途中で止めて待つ手段を持たないからだ。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>逆向きの import は「推測」で成り立っている</h3>
+        <p>ESM から CJS を <code>import</code> する方向は昔から動く。このとき CJS の <code>module.exports</code> がまるごと default export になる。<code>import { name } from "./cjs.cjs"</code> のような名前付き import も多くの場合動くが、これは Node がコードを実行せずに静的解析で <code>exports.name = ...</code> のような典型パターンを拾っているだけだ。</p>
+        <p>解析で見えない書き方、たとえば <code>exports[key] = ...</code> のように計算したキーで足したプロパティは名前付き export にならず、<code>SyntaxError: Named export 'c' not found</code> で落ちる。CJS の中身は実行してみるまで確定しないが、ESM は実行前の結び付け段階で名前を確定させる必要があるので、推測に頼るしかない。迷ったら <code>import pkg from "pkg"</code> で default を受け取り、<code>pkg.c</code> と参照すれば、実行後の <code>module.exports</code> から値を取り出せる。</p>
+        <p>ライブラリ側は <code>package.json</code> の <code>"exports"</code> で、読み手ごとに入口を分けられる。<code>"import"</code> 条件は <code>import</code> から、<code>"require"</code> 条件は <code>require()</code> から解決されたときに選ばれ、キーは書いた順に優先される。</p>
+        <pre class="code">"exports": {
+  "import": "./dist/index.js",
+  "require": "./dist/index.cjs"
+}</pre>
+        <p>この 2 つの入口が別々のファイルを指すと、同じライブラリが 2 回読み込まれて状態を共有しない、という事故が起こりうる。ESM 版と CJS 版を併せて配るパッケージを使うときは、この「二重読み込み」の可能性を頭に置いておくとよい。</p>
+      </section>
+
+      <div class="practical">
+        <div class="box-title">💼 実務でどう出会うか</div>
+        <p>よくあるのは、依存ライブラリの新メジャー版が ESM 専用になり、CJS のままのアプリで <code>ERR_REQUIRE_ESM</code> が出る場面だ。まず <code>node --version</code> を見る。22.12 / 20.19 以降なら <code>require(esm)</code> で読める可能性が高く、それでも落ちるならライブラリ側の top-level <code>await</code> を疑う。もう一つは、TypeScript では動いていたのにビルド結果を <code>node</code> で直接動かすと落ちる場面だ。TypeScript は設定次第で <code>import</code> を <code>require</code> に変換して出力するため、ソース上の構文と実際に Node が受け取る形式がずれる。どちらも、最寄りの <code>package.json</code> の <code>"type"</code> と出力ファイルの拡張子を確認すれば原因の当たりが付く。</p>
+      </div>
+
+      <div class="hands-on">
+        <div class="box-title">⌨️ 手を動かす（5 分）</div>
+        <p>Node 22.12 以降を入れた Mac で、<code>"type"</code> の有無で同じファイルの扱いが変わること、<code>require(esm)</code> の境界、名前付き import の推測の限界を確かめる。</p>
+        <pre class="code">cd "$(mktemp -d)"
+echo '{"name":"modtest"}' &gt; package.json
+echo 'import { sep } from "node:path"; console.log("ESM として実行", sep);' &gt; app.js
+node app.js
+echo '{"name":"modtest","type":"commonjs"}' &gt; package.json
+node app.js
+echo 'export const hi = () =&gt; "hi";' &gt; lib.mjs
+echo 'console.log(require("./lib.mjs"));' &gt; use.cjs
+node use.cjs
+printf 'await 0;\nexport const x = 1;\n' &gt; tla.mjs
+echo 'require("./tla.mjs");' &gt; use2.cjs
+node use2.cjs
+printf 'exports.b = 2;\nconst k = "c";\nexports[k] = 3;\n' &gt; c.cjs
+echo 'import * as ns from "./c.cjs"; console.log(Object.keys(ns), ns.default);' &gt; imp.mjs
+node imp.mjs</pre>
+        <p>1 回目の <code>app.js</code> は <code>MODULE_TYPELESS_PACKAGE_JSON</code> の警告付きで ESM として動き、<code>"type": "commonjs"</code> にした 2 回目は <code>Cannot use import statement outside a module</code> で落ちる。<code>use.cjs</code> は <code>[Module: null prototype] { hi: [Function: hi] }</code> を表示し、<code>use2.cjs</code> は <code>ERR_REQUIRE_ASYNC_MODULE</code> になる。最後の <code>imp.mjs</code> では名前付き export に <code>b</code> は現れるが <code>c</code> は現れず、default の中身には両方が入っていることが見えるはずだ。</p>
+      </div>
+
+      <div class="misconceptions">
+        <div class="box-title">🙅 よくある誤解</div>
+        <ul>
+          <li><span class="wrong">Node はファイルの中身を見て CJS か ESM かを判断する</span> — 判定の主役は拡張子と最寄りの <code>package.json</code> の <code>"type"</code> だ。構文の検出が働くのは <code>"type"</code> が無いときだけで、明示された <code>"commonjs"</code> の下では <code>import</code> は文法エラーになる。</li>
+          <li><span class="wrong">CJS から ESM は絶対に require できない</span> — Node 22.12 / 20.19 以降は、top-level <code>await</code> を含まない ESM なら <code>require()</code> で同期的に読める。読めないのは依存グラフのどこかに top-level <code>await</code> がある場合だ。</li>
+          <li><span class="wrong">CJS ライブラリでも名前付き import は常に使える</span> — 名前付き export は静的解析による推測で、計算したキーなどで足したプロパティは拾われない。default import なら <code>module.exports</code> 全体を受け取れる。</li>
+        </ul>
+      </div>
+
+      <div class="glossary">
+        <div class="box-title">📖 用語ミニ辞典</div>
+        <dl>
+          <dt>CommonJS</dt><dd>Node が独自に採用したモジュール方式。ファイルを関数で包み、<code>require()</code> で同期的に読み込む。</dd>
+          <dt>ES Modules</dt><dd>言語仕様に定められたモジュール方式。<code>import</code>/<code>export</code> 構文を持ち、実行前に依存関係を結び付ける。</dd>
+          <dt>"type" フィールド</dt><dd>最寄りの <code>package.json</code> で <code>.js</code> を ESM（<code>module</code>）と CJS（<code>commonjs</code>）のどちらで読むかを決める設定。</dd>
+          <dt>require(esm)</dt><dd>top-level <code>await</code> を含まない ESM を <code>require()</code> で同期的に読む機能。Node 22.12 / 20.19 からフラグ不要。</dd>
+          <dt>top-level await</dt><dd>関数の外、モジュールの最上位に書いた <code>await</code>。これがあるとモジュールの評価が非同期になる。</dd>
+        </dl>
+      </div>
+
+      <div class="further-reading">
+        <div class="box-title">🔗 もっと深く</div>
+        <ul>
+          <li><a href="https://nodejs.org/api/packages.html#determining-module-system">Node.js: Determining module system</a> — 拡張子・<code>"type"</code>・構文検出の判定規則と、<code>"exports"</code> の条件付き export の一次ソース。</li>
+          <li><a href="https://nodejs.org/api/modules.html#loading-ecmascript-modules-using-require">Node.js: Loading ECMAScript modules using require()</a> — <code>require(esm)</code> が使える条件、戻り値の形、バージョンごとの変更履歴。</li>
+          <li><a href="https://joyeecheung.github.io/blog/2024/03/18/require-esm-in-node-js/">Joyee Cheung: require(esm) in Node.js</a> — 「ESM は非同期だから require できない」が誤解だった経緯を実装者自身が説明している。</li>
+          <li><a href="https://hacks.mozilla.org/2018/03/es-modules-a-cartoon-deep-dive/">Mozilla Hacks: ES modules: A cartoon deep-dive</a> — 解析・結び付け・評価の 3 段階を図で追える。ESM が名前を実行前に確定させる理由が分かる。</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- recent:start -->
+    <!-- recent:end -->
+
+    <footer>
+      <p>Generated by Claude Code (GitHub Actions)</p>
+      <a href="./" class="archive-link">過去の記事</a>
+    </footer>
+  </div>
+</body>
+</html>

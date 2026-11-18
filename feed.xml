@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-11-17T13:04:10+09:00</updated>
+  <updated>2026-11-18T12:01:37+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>import と書いただけなのに、なぜ Node は「Cannot use import statement outside a module」で落ちるのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-11-18.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-11-18.html</id>
+    <updated>2026-11-18T12:01:37+09:00</updated>
+    <summary>Node は .js を CJS と ESM のどちらで読むかを拡張子と package.json の type で決める。require(esm) は 22.12 / 20.19 以降で使えるが top-level await を含むと不可。</summary>
+  </entry>
   <entry>
     <title>PgBouncer を挟んだだけなのに、なぜ「prepared statement &quot;a1&quot; does not exist」で落ちるのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-11-17.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-11-05.html</id>
     <updated>2026-11-05T10:37:27+09:00</updated>
     <summary>ALB とアプリは keep-alive 接続の無通信タイマーを別々に持つ。アプリ側が短いと、閉じた瞬間に ALB が次のリクエストを送ってすれ違い、アプリに届かない 502 になる。受ける側のタイマーを ALB より長くする。</summary>
-  </entry>
-  <entry>
-    <title>同じ 20 件を取るだけなのに、なぜ 5 万ページ目は 1 ページ目より何百倍も遅いのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-11-04.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-11-04.html</id>
-    <updated>2026-11-04T10:32:42+09:00</updated>
-    <summary>OFFSET は読み飛ばす行も DB 内で読んで捨てるため深いページほど遅い。前ページ最後のキー値を起点にする keyset ページネーションなら深さに関係なく速く、行の増減によるずれも起きにくい。</summary>
   </entry>
 </feed>

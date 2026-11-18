@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tech Learning Daily — PgBouncer を挟んだだけなのに、なぜ「prepared statement "a1" does not exist」で落ちるのか？</title>
-  <meta name="description" content="PgBouncer の transaction pooling は接続をトランザクションごとに貸し替えるため、接続にひも付く prepared statement・SET・advisory lock が別の接続へ届く。壊れる理由と設定での直し方を解説する。">
+  <title>Tech Learning Daily — import と書いただけなのに、なぜ Node は「Cannot use import statement outside a module」で落ちるのか？</title>
+  <meta name="description" content="Node は .js を CommonJS と ES Modules のどちらで読むかを構文ではなく package.json の type と拡張子で決める。2 つのローダーの違いと require(esm) の条件を解説する。">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Tech Learning Daily">
-  <meta property="og:title" content="Tech Learning Daily — PgBouncer を挟んだだけなのに、なぜ「prepared statement &quot;a1&quot; does not exist」で落ちるのか？">
-  <meta property="og:description" content="PgBouncer の transaction pooling は接続をトランザクションごとに貸し替えるため、接続にひも付く prepared statement・SET・advisory lock が別の接続へ届く。壊れる理由と設定での直し方を解説する。">
+  <meta property="og:title" content="Tech Learning Daily — import と書いただけなのに、なぜ Node は「Cannot use import statement outside a module」で落ちるのか？">
+  <meta property="og:description" content="Node は .js を CommonJS と ES Modules のどちらで読むかを構文ではなく package.json の type と拡張子で決める。2 つのローダーの違いと require(esm) の条件を解説する。">
   <meta property="og:url" content="https://tech-learn.kaion-lab.com/">
   <meta property="og:image" content="https://tech-learn.kaion-lab.com/og.png">
   <meta name="twitter:card" content="summary_large_image">
@@ -22,127 +22,144 @@
   <div class="container">
     <header>
       <h1>Tech Learning Daily</h1>
-      <div class="date">2026-11-17 (Tue) — 第 123 号</div>
+      <div class="date">2026-11-18 (Wed) — 第 124 号</div>
       <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
     </header>
 
     <article class="article">
       <div class="meta-bar">
-        <span class="tag tag-db">DB</span>
+        <span class="tag tag-lang">Lang</span>
         <span class="difficulty">🌿 基礎</span>
         <span class="read-time">⏱ 約 7 分</span>
       </div>
-      <h2 class="article-title">PgBouncer を挟んだだけなのに、なぜ「prepared statement "a1" does not exist」で落ちるのか？</h2>
-      <p class="lead">Postgres の接続数が上限に近づいたので、アプリと DB の間に PgBouncer を入れた。接続先のポートを書き換えただけで、SQL は 1 行も変えていない。なのにデプロイ後、ときどき <code>prepared statement "a1" does not exist</code> が出てトランザクションごと失敗する。さっきまで存在していた文が、なぜ急に「無い」と言われるのか。</p>
+      <h2 class="article-title">import と書いただけなのに、なぜ Node は「Cannot use import statement outside a module」で落ちるのか？</h2>
+      <p class="lead">TypeScript でもフロントエンドでも毎日 <code>import</code> を書いている。ところが Node でスクリプトを直接動かした途端、1 行目の <code>import</code> を指して <code>SyntaxError: Cannot use import statement outside a module</code> と怒られる。JavaScript の正式な構文を書いただけなのに、なぜ「モジュールの外」扱いされるのか。</p>
 
       <div class="tldr">
         <div class="box-title">🎯 3 行まとめ</div>
         <ul>
-          <li>prepared statement や <code>SET</code> は PostgreSQL の「接続（セッション）」に保存される状態で、別の接続からは見えない。</li>
-          <li>PgBouncer の transaction pooling は接続をトランザクション単位で貸し替えるので、前の文で作った状態が次の文の接続には無い。</li>
-          <li>PgBouncer 1.21 以降はプロトコルレベルの prepared statement を肩代わりできるが、SQL の <code>PREPARE</code>・<code>SET</code>・advisory lock は今も壊れるので、ドライバ側の設定を合わせる。</li>
+          <li>Node には CommonJS（<code>require</code>）と ES Modules（<code>import</code>）という 2 つのモジュールローダーがあり、同じ <code>.js</code> をどちらで読むかを決める必要がある。</li>
+          <li>判定に使うのは拡張子（<code>.mjs</code>/<code>.cjs</code>）と最寄りの <code>package.json</code> の <code>"type"</code> で、<code>"type": "commonjs"</code> の下の <code>.js</code> に <code>import</code> を書くと冒頭のエラーになる。</li>
+          <li>Node 22.12 / 20.19 以降は <code>require()</code> で ESM を読めるが、top-level <code>await</code> を含むモジュールは同期的に評価できないので今も <code>import()</code> が必要だ。</li>
         </ul>
       </div>
 
       <section class="body-section">
-        <h3>prepared statement は「接続」に住んでいる</h3>
-        <p><strong>prepared statement</strong> は、SQL の構文解析と実行計画づくりを先に済ませ、名前を付けてサーバーに置いておく仕組みだ。2 回目以降は名前とパラメータだけを送ればよいので、同じ形のクエリを何度も投げる Web アプリでは解析の手間が省ける。Rails（Active Record）の PostgreSQL アダプタも pgx（Go）も、既定でこれを使う。</p>
-        <p>見落としやすいのは保存場所だ。PostgreSQL の公式ドキュメントは「prepared statement は現在のデータベースセッションの間だけ存在する」と明記している。<strong>セッション</strong>とは 1 本の接続の生存期間のことで、PostgreSQL は接続ごとにバックエンドプロセスを 1 つ立てて状態を持たせる。接続 1 で作った <code>a1</code> は、接続 2 からは存在しない。</p>
-        <p>同じ性質を持つものはほかにもある。<code>SET statement_timeout</code> のようなセッション変数、<code>LISTEN</code>、セッションレベルの advisory lock（アプリが任意の番号で取る協調用ロック）、一時テーブルも、すべて接続にひも付く。アプリが接続を握り続けている限り、これらが問題になることはなかった。</p>
+        <h3>同じ .js に 2 つの読み方がある</h3>
+        <p>Node が生まれた当時、JavaScript には標準のモジュール構文が無かった。そこで Node は <strong>CommonJS</strong>（CJS）という独自方式を採った。CJS はファイルの中身を関数で包んで実行し、その関数の引数として <code>require</code>・<code>module</code>・<code>exports</code>・<code>__dirname</code> を渡す方式だ。<code>require()</code> は普通の関数呼び出しなので、実行中のどこからでも同期的に呼べる。</p>
+        <p>のちに言語仕様に <strong>ES Modules</strong>（ESM）が入った。ESM は <code>import</code>/<code>export</code> を構文として持ち、ブラウザと共通の仕組みで動く。ESM では <code>require</code> も <code>__dirname</code> も定義されていない。代わりに <code>import.meta.dirname</code> と <code>import.meta.filename</code> がある（v21.2.0 / v20.11.0 で追加）。</p>
+        <p>問題は、どちらの形式も拡張子 <code>.js</code> を使うことだ。CJS として読むなら <code>import</code> 文は文法エラーで、ESM として読むなら <code>require</code> は未定義になる。つまり Node はファイルを実行する前に「どちらのローダーに渡すか」を決めなければならない。冒頭のエラーは、<code>import</code> を含むファイルが CJS ローダーに渡されたときに出る。</p>
       </section>
 
       <section class="body-section">
-        <h3>transaction pooling は接続を「又貸し」する</h3>
-        <p>PgBouncer にはプールモードが 3 つある。設定 <code>pool_mode</code> の既定値は <code>session</code> で、クライアントが接続している間ずっと同じサーバー接続を割り当てる。この場合は接続が減らないので、接続数対策として入れるなら <code>transaction</code> を選ぶことになる。</p>
-        <pre class="code">; pgbouncer.ini
-[pgbouncer]
-pool_mode = transaction
-default_pool_size = 20   ; 既定値も 20</pre>
-        <p><code>transaction</code> モードでは、サーバー接続はトランザクションの間だけクライアントに貸し出され、終わった瞬間にプールへ返る。<code>BEGIN</code> を書かない単発クエリは自動コミットで 1 文 1 トランザクションなので、文ごとに別の接続へ行きうる。数百のアプリ側接続を、<code>default_pool_size</code> 本ぶんのサーバー接続で使い回せるのはこのためだ。</p>
-        <pre class="diagram">Rails          PgBouncer        Postgres
-  │               │
-  │ PREPARE a1 ──▶│──▶ 接続 1 に a1 作成
-  │               │   (文が終わり接続 1 返却)
-  │ EXECUTE a1 ──▶│──▶ 接続 2 へ転送
-  │               │   接続 2 に a1 は無い
-  │◀── ERROR: prepared statement
-  │        "a1" does not exist</pre>
-        <p>アプリから見れば接続は 1 本のままなので、「さっき作った文がある」と信じて名前で呼ぶ。しかし実際に届いた先は、別のクライアントが使い終えた接続 2 だ。冒頭のエラーはこうして出る。同じ接続にたまたま戻れば成功するため、症状は「ときどき」になる。</p>
+        <h3>判定するのは中身ではなく「ファイルの外」</h3>
+        <p>Node は書かれた構文を見て賢く判断してくれるように思える。しかし判定の主役はファイルの外にある情報だ。<code>.mjs</code> は常に ESM、<code>.cjs</code> は常に CJS として読まれる。<code>.js</code> の場合は、カレントから親ディレクトリへ遡って最初に見つかった <code>package.json</code>（<code>node_modules</code> かルートで探索は止まる）の <code>"type"</code> フィールドを見る。</p>
+        <pre class="code">{
+  "name": "my-app",
+  "type": "module"
+}</pre>
+        <p><code>"type": "module"</code> にすると、そのパッケージ配下の <code>.js</code> はすべて ESM になり、<code>require</code> を書いた古いスクリプトは <code>require is not defined</code> で落ちるようになる。<code>"type": "commonjs"</code> なら <code>.js</code> はすべて CJS で、<code>import</code> を書けば冒頭のエラーになる。中身が ESM でも、明示された <code>"type"</code> が優先される。</p>
+        <p><code>"type"</code> を書かなかった場合だけ、構文の検出が働く。Node はまず CJS として解析し、失敗して <code>import</code>/<code>export</code> などの ESM 構文が見つかれば ESM として読み直す。この検出は v22.7.0 と v20.19.0 で既定で有効になった。ただし 2 回解析する分のコストがあり、<code>package.json</code> があるのに <code>"type"</code> が無いと <code>MODULE_TYPELESS_PACKAGE_JSON</code> の警告が出る。公式ドキュメントは、すべて CJS のパッケージでも <code>"type"</code> を明示するよう勧めている。</p>
+        <pre class="diagram">  node app.js
+      │
+      ▼
+ ┌──────────────┐ .mjs ▶ ESM
+ │ 拡張子は？   │ .cjs ▶ CJS
+ └──────┬───────┘
+        │ .js
+        ▼
+ ┌──────────────┐ module   ▶ ESM
+ │ 最寄りの     │ commonjs ▶ CJS
+ │ package.json │  （import は
+ │ の "type"    │   SyntaxError）
+ └──────┬───────┘
+        │ 指定なし
+        ▼
+ CJS で解析 → 失敗したら ESM 構文を
+ 探して読み直す（警告・余分なコスト）</pre>
       </section>
 
       <div class="analogy">
         <div class="box-title">🍱 たとえるなら</div>
-        <p>ホテルのフロントに荷物を預け、預かり札をもらったとする。ところがこのホテルは用件が 1 つ済むたびに担当者が交代し、各担当者は自分の引き出しにしか荷物を入れない。次に札を出した相手が別の担当者なら「そんな荷物はありません」と言われる。荷物は消えていない。別の担当者の引き出しにあるだけだ。</p>
+        <p>同じ形の封筒が、国内便の窓口と国際便の窓口のどちらかに振り分けられる郵便局だ。振り分け係は封筒を開けて中身を読まず、封筒の色（拡張子）か、差出人の住所録に書かれた「この事業所の封筒は全部国際便」という登録（<code>"type"</code>）で決める。国際便の書式で書いた手紙でも、国内便の窓口に回されれば「書式が違う」と突き返される。登録が無いときだけ、係が一度開けて中を確かめるが、その分だけ遅くなる。</p>
       </div>
 
       <section class="body-section">
-        <h3>1.21 で直ったはず、なのにまだ落ちる</h3>
-        <p>PgBouncer 1.21.0（2023 年 10 月）は、プロトコルレベルの名前付き prepared statement に対応した。<strong>プロトコルレベル</strong>とは、SQL 文の <code>PREPARE</code> ではなく、ドライバが通信プロトコルの Parse メッセージで文を準備する方式を指す。設定 <code>max_prepared_statements</code> を 0 以外にすると、PgBouncer はクライアントが付けた名前を覚え、どのサーバー接続に行っても文が用意されているよう内部名に書き換えて転送する。既定値は 1.24.0 から 200 になり、何もしなくても有効だ。</p>
-        <p>これで解決したように思える。しかし実際には、新しい PgBouncer の前でも Rails が同じエラーで落ちる例がある。原因は文を捨てる側だ。Active Record は接続ごとに既定で最大 1000 個（<code>statement_limit</code>）の文を作り、上限を超えると古い文を捨てる。古い <code>pg</code> gem / libpq はこれを SQL の <code>DEALLOCATE a1</code> で送る。PgBouncer の書き換えは SQL レベルのコマンドには効かず、そのまま Postgres へ素通しされるので、実在しない名前 <code>a1</code> を消そうとしてエラーになり、トランザクション内なら全体が中断する。</p>
-        <p>ClickHouse の Managed Postgres ガイドによれば、<code>pg</code> gem 1.6 以降で libpq 17 以降を使う組み合わせなら、捨てる処理もプロトコルの Close メッセージで送られ、Rails の既定設定のまま動く。プリコンパイル版の <code>pg</code> 1.6 には libpq 18 が同梱されている。アップグレードできないなら、prepared statement を切るのが確実な回避策だ。</p>
-        <pre class="code"># config/database.yml
-production:
-  adapter: postgresql
-  prepared_statements: false  # 毎回 SQL を送る
-  advisory_locks: false       # マイグレーション用ロックを止める</pre>
-        <p><code>prepared_statements: false</code> にすると、クエリは毎回パラメータ付きで解析し直されるため、解析コストは戻ってくる。その代わり接続をまたいでも壊れない。Go の pgx も既定の <code>cache_statement</code> モードが prepared statement を使う。PgBouncer が 1.21 より古いか機能が無効なら、接続文字列に <code>default_query_exec_mode=exec</code> を足す。pgx のドキュメントは、<code>describe_exec</code> は準備と実行が別の接続に振られうるため transaction pooling では使わないよう注意している。</p>
+        <h3>require で ESM を読めなかった本当の理由</h3>
+        <p>CJS から ESM 専用ライブラリを <code>require()</code> すると、以前の Node は <code>ERR_REQUIRE_ESM</code> で拒否した。当時の公式ドキュメントは「ES モジュールは非同期に実行されるため」と説明していた。ESM の読み込みは、依存ファイルを全部集めて解析する段階、<code>import</code> と <code>export</code> を結び付ける段階、実際にコードを評価する段階の 3 つに分かれており、ローダーもこれを非同期処理として実装していたからだ。</p>
+        <p>ところが言語仕様上、評価が非同期になるのは依存グラフのどこかに <strong>top-level <code>await</code></strong>（関数の外に書いた <code>await</code>）がある場合に限られる。Node のコア開発者 Joyee Cheung がこの点を指摘し、top-level <code>await</code> を含まない ESM だけを同期的に読む <code>require(esm)</code> を実装した。この機能は v22.12.0 と v20.19.0 でフラグ無しで使えるようになり、v25.4.0 で experimental が外れている。</p>
+        <pre class="code">// CJS から ESM を読む（Node 22.12+ / 20.19+）
+const m = require("./lib.mjs");
+m.hi();        // named export はそのまま使える
+m.default;     // default export は .default にある</pre>
+        <p><code>require()</code> が返すのはモジュール名前空間オブジェクトで、default export は <code>.default</code> に入る。読み込む ESM の依存グラフに top-level <code>await</code> が 1 つでもあれば <code>ERR_REQUIRE_ASYNC_MODULE</code> になり、その場合は <code>await import()</code> で読むしかない。同期の <code>require()</code> は、終わるまで待つ必要のある処理を途中で止めて待つ手段を持たないからだ。</p>
       </section>
 
       <section class="body-section">
-        <h3>SET と advisory lock はもっと静かに壊れる</h3>
-        <p>PgBouncer の機能表では、<code>SET</code>/<code>RESET</code>・<code>LISTEN</code>・SQL の <code>PREPARE</code>・セッションレベルの advisory lock は transaction pooling で「Never」（使えない）とされている。prepared statement はエラーで気づけるが、こちらはエラーにならないものがある分、たちが悪い。</p>
-        <p>たとえば単発の <code>SET statement_timeout = '5s'</code> を送ると、その設定は送った瞬間のサーバー接続に残る。続く重いクエリは別の接続に行ってタイムアウトが効かず、逆に設定が残った接続は、無関係な別クライアントのクエリを 5 秒で打ち切る。session モードなら返却時に <code>server_reset_query</code>（既定 <code>DISCARD ALL</code>）で状態を消すが、transaction モードではこのリセットは使われない。トランザクション内で <code>SET LOCAL</code> を使えば、効果はそのトランザクションの終わりで消えるので安全だ。Heroku のドキュメントも、<code>database.yml</code> の <code>variables</code> に書いたセッション変数は PgBouncer 越しでは効かないと注意している。</p>
-        <p>Rails のマイグレーションは同時実行を防ぐためにセッションレベルの advisory lock を取る。transaction pooling では解放の命令が別の接続に届きうるので、ロックが握られたまま残り、次のマイグレーションが失敗する。<code>advisory_locks: false</code> にするか、マイグレーションだけ PgBouncer を通さず Postgres に直接つなぐ。前者を選ぶなら、マイグレーションを走らせるデプロイが同時に 1 つだけになるよう運用で担保する。</p>
+        <h3>逆向きの import は「推測」で成り立っている</h3>
+        <p>ESM から CJS を <code>import</code> する方向は昔から動く。このとき CJS の <code>module.exports</code> がまるごと default export になる。<code>import { name } from "./cjs.cjs"</code> のような名前付き import も多くの場合動くが、これは Node がコードを実行せずに静的解析で <code>exports.name = ...</code> のような典型パターンを拾っているだけだ。</p>
+        <p>解析で見えない書き方、たとえば <code>exports[key] = ...</code> のように計算したキーで足したプロパティは名前付き export にならず、<code>SyntaxError: Named export 'c' not found</code> で落ちる。CJS の中身は実行してみるまで確定しないが、ESM は実行前の結び付け段階で名前を確定させる必要があるので、推測に頼るしかない。迷ったら <code>import pkg from "pkg"</code> で default を受け取り、<code>pkg.c</code> と参照すれば、実行後の <code>module.exports</code> から値を取り出せる。</p>
+        <p>ライブラリ側は <code>package.json</code> の <code>"exports"</code> で、読み手ごとに入口を分けられる。<code>"import"</code> 条件は <code>import</code> から、<code>"require"</code> 条件は <code>require()</code> から解決されたときに選ばれ、キーは書いた順に優先される。</p>
+        <pre class="code">"exports": {
+  "import": "./dist/index.js",
+  "require": "./dist/index.cjs"
+}</pre>
+        <p>この 2 つの入口が別々のファイルを指すと、同じライブラリが 2 回読み込まれて状態を共有しない、という事故が起こりうる。ESM 版と CJS 版を併せて配るパッケージを使うときは、この「二重読み込み」の可能性を頭に置いておくとよい。</p>
       </section>
 
       <div class="practical">
         <div class="box-title">💼 実務でどう出会うか</div>
-        <p>典型はマネージドの接続プーラーだ。Heroku Postgres の connection pooling は PgBouncer の transaction モードで動き、同じ構成のプーラーを提供するマネージド Postgres は多い。接続数対策でプーラー経由の URL に切り替えた直後に、<code>prepared statement ... does not exist</code>、マイグレーションの lock 取得失敗、<code>statement_timeout</code> の効きムラが出たら、まず <code>pool_mode</code> と PgBouncer のバージョン、ドライバの prepared statement 設定を確認する。DB 側のログに出るのは「名前が無い」というエラーだけなので、アプリのバグと見誤りやすい。</p>
+        <p>よくあるのは、依存ライブラリの新メジャー版が ESM 専用になり、CJS のままのアプリで <code>ERR_REQUIRE_ESM</code> が出る場面だ。まず <code>node --version</code> を見る。22.12 / 20.19 以降なら <code>require(esm)</code> で読める可能性が高く、それでも落ちるならライブラリ側の top-level <code>await</code> を疑う。もう一つは、TypeScript では動いていたのにビルド結果を <code>node</code> で直接動かすと落ちる場面だ。TypeScript は設定次第で <code>import</code> を <code>require</code> に変換して出力するため、ソース上の構文と実際に Node が受け取る形式がずれる。どちらも、最寄りの <code>package.json</code> の <code>"type"</code> と出力ファイルの拡張子を確認すれば原因の当たりが付く。</p>
       </div>
 
       <div class="hands-on">
         <div class="box-title">⌨️ 手を動かす（5 分）</div>
-        <p>PgBouncer を立てなくても、核心は再現できる。<code>psql</code> を起動し直すと新しい接続になるので、「別の接続に回された」状態を手で作れる。1 回の <code>psql</code> に複数の <code>-c</code> を渡すと、同じ接続で順に実行される。</p>
-        <pre class="code">docker run -d --name pg -e POSTGRES_PASSWORD=pw postgres:17
-sleep 5
-# 同じ接続: PREPARE して EXECUTE
-docker exec pg psql -U postgres -c "PREPARE q1 AS SELECT 42;" -c "EXECUTE q1;"
-# 別の接続: EXECUTE だけ
-docker exec pg psql -U postgres -c "EXECUTE q1;"
-# SET も接続にしか残らない
-docker exec pg psql -U postgres -c "SET statement_timeout = '1s';" -c "SHOW statement_timeout;"
-docker exec pg psql -U postgres -c "SHOW statement_timeout;"
-docker rm -f pg</pre>
-        <p>1 本目は <code>42</code> を返し、2 本目は <code>ERROR:  prepared statement "q1" does not exist</code> になるはずだ。<code>SET</code> も同様で、同じ接続では <code>1s</code>、新しい接続では既定の <code>0</code>（無効）に戻る。transaction pooling は、この「接続の付け替え」をアプリに知らせずに毎トランザクション行っている。</p>
+        <p>Node 22.12 以降を入れた Mac で、<code>"type"</code> の有無で同じファイルの扱いが変わること、<code>require(esm)</code> の境界、名前付き import の推測の限界を確かめる。</p>
+        <pre class="code">cd "$(mktemp -d)"
+echo '{"name":"modtest"}' &gt; package.json
+echo 'import { sep } from "node:path"; console.log("ESM として実行", sep);' &gt; app.js
+node app.js
+echo '{"name":"modtest","type":"commonjs"}' &gt; package.json
+node app.js
+echo 'export const hi = () =&gt; "hi";' &gt; lib.mjs
+echo 'console.log(require("./lib.mjs"));' &gt; use.cjs
+node use.cjs
+printf 'await 0;\nexport const x = 1;\n' &gt; tla.mjs
+echo 'require("./tla.mjs");' &gt; use2.cjs
+node use2.cjs
+printf 'exports.b = 2;\nconst k = "c";\nexports[k] = 3;\n' &gt; c.cjs
+echo 'import * as ns from "./c.cjs"; console.log(Object.keys(ns), ns.default);' &gt; imp.mjs
+node imp.mjs</pre>
+        <p>1 回目の <code>app.js</code> は <code>MODULE_TYPELESS_PACKAGE_JSON</code> の警告付きで ESM として動き、<code>"type": "commonjs"</code> にした 2 回目は <code>Cannot use import statement outside a module</code> で落ちる。<code>use.cjs</code> は <code>[Module: null prototype] { hi: [Function: hi] }</code> を表示し、<code>use2.cjs</code> は <code>ERR_REQUIRE_ASYNC_MODULE</code> になる。最後の <code>imp.mjs</code> では名前付き export に <code>b</code> は現れるが <code>c</code> は現れず、default の中身には両方が入っていることが見えるはずだ。</p>
       </div>
 
       <div class="misconceptions">
         <div class="box-title">🙅 よくある誤解</div>
         <ul>
-          <li><span class="wrong">PgBouncer は透過的なので、接続先を変えるだけで導入できる</span> — 透過的なのは session モードだけだ。接続数を減らせる transaction モードでは、接続にひも付く機能（prepared statement・<code>SET</code>・<code>LISTEN</code>・advisory lock）の前提が崩れるので、アプリ側の設定を合わせる必要がある。</li>
-          <li><span class="wrong">PgBouncer を新しくすれば prepared statement の問題は全部消える</span> — 1.21 以降が肩代わりするのはプロトコルレベルの準備と実行だけだ。SQL の <code>PREPARE</code>/<code>DEALLOCATE</code> は素通しなので、古い <code>pg</code> gem のように SQL で文を捨てるドライバはまだ壊れる。</li>
-          <li><span class="wrong">エラーが出ていなければ transaction pooling に対応できている</span> — <code>SET</code> で変えたセッション変数は、別の接続に行ってもエラーにならず単に効かないだけで、残った接続では別クライアントに効いてしまう。エラーの有無ではなく、接続にひも付く機能を使っていないかで判断する。</li>
+          <li><span class="wrong">Node はファイルの中身を見て CJS か ESM かを判断する</span> — 判定の主役は拡張子と最寄りの <code>package.json</code> の <code>"type"</code> だ。構文の検出が働くのは <code>"type"</code> が無いときだけで、明示された <code>"commonjs"</code> の下では <code>import</code> は文法エラーになる。</li>
+          <li><span class="wrong">CJS から ESM は絶対に require できない</span> — Node 22.12 / 20.19 以降は、top-level <code>await</code> を含まない ESM なら <code>require()</code> で同期的に読める。読めないのは依存グラフのどこかに top-level <code>await</code> がある場合だ。</li>
+          <li><span class="wrong">CJS ライブラリでも名前付き import は常に使える</span> — 名前付き export は静的解析による推測で、計算したキーなどで足したプロパティは拾われない。default import なら <code>module.exports</code> 全体を受け取れる。</li>
         </ul>
       </div>
 
       <div class="glossary">
         <div class="box-title">📖 用語ミニ辞典</div>
         <dl>
-          <dt>prepared statement</dt><dd>解析済みの SQL に名前を付けてサーバーに置き、名前とパラメータだけで実行する仕組み。接続ごとに存在する。</dd>
-          <dt>セッション</dt><dd>1 本の DB 接続の生存期間と、その間に積み上がる状態（変数・準備済みの文・ロック）。</dd>
-          <dt>transaction pooling</dt><dd>PgBouncer がサーバー接続をトランザクションの間だけ貸し出し、終わるとプールへ戻すモード。</dd>
-          <dt>max_prepared_statements</dt><dd>PgBouncer がプロトコルレベルの prepared statement を追跡・書き換えする機能の設定。0 で無効、1.24.0 から既定 200。</dd>
-          <dt>advisory lock</dt><dd>アプリが任意の番号で取る PostgreSQL の協調用ロック。セッションレベルのものは接続にひも付く。</dd>
+          <dt>CommonJS</dt><dd>Node が独自に採用したモジュール方式。ファイルを関数で包み、<code>require()</code> で同期的に読み込む。</dd>
+          <dt>ES Modules</dt><dd>言語仕様に定められたモジュール方式。<code>import</code>/<code>export</code> 構文を持ち、実行前に依存関係を結び付ける。</dd>
+          <dt>"type" フィールド</dt><dd>最寄りの <code>package.json</code> で <code>.js</code> を ESM（<code>module</code>）と CJS（<code>commonjs</code>）のどちらで読むかを決める設定。</dd>
+          <dt>require(esm)</dt><dd>top-level <code>await</code> を含まない ESM を <code>require()</code> で同期的に読む機能。Node 22.12 / 20.19 からフラグ不要。</dd>
+          <dt>top-level await</dt><dd>関数の外、モジュールの最上位に書いた <code>await</code>。これがあるとモジュールの評価が非同期になる。</dd>
         </dl>
       </div>
 
       <div class="further-reading">
         <div class="box-title">🔗 もっと深く</div>
         <ul>
-          <li><a href="https://www.pgbouncer.org/features.html">PgBouncer: Features</a> — プールモードごとに使える SQL 機能の対応表。導入前に一度目を通す価値がある。</li>
-          <li><a href="https://www.pgbouncer.org/config.html#max_prepared_statements">PgBouncer: max_prepared_statements</a> — 名前の書き換えの仕組みと、SQL レベルのコマンドが対象外である理由。</li>
-          <li><a href="https://www.postgresql.org/docs/current/sql-prepare.html">PostgreSQL: PREPARE</a> — prepared statement がセッションに閉じることと、generic plan / custom plan の切り替え規則。</li>
-          <li><a href="https://devcenter.heroku.com/articles/postgres-connection-pooling">Heroku Dev Center: Postgres Connection Pooling</a> — transaction モードのプーラーを前提にした Rails の <code>database.yml</code> 設定例と制限事項。</li>
+          <li><a href="https://nodejs.org/api/packages.html#determining-module-system">Node.js: Determining module system</a> — 拡張子・<code>"type"</code>・構文検出の判定規則と、<code>"exports"</code> の条件付き export の一次ソース。</li>
+          <li><a href="https://nodejs.org/api/modules.html#loading-ecmascript-modules-using-require">Node.js: Loading ECMAScript modules using require()</a> — <code>require(esm)</code> が使える条件、戻り値の形、バージョンごとの変更履歴。</li>
+          <li><a href="https://joyeecheung.github.io/blog/2024/03/18/require-esm-in-node-js/">Joyee Cheung: require(esm) in Node.js</a> — 「ESM は非同期だから require できない」が誤解だった経緯を実装者自身が説明している。</li>
+          <li><a href="https://hacks.mozilla.org/2018/03/es-modules-a-cartoon-deep-dive/">Mozilla Hacks: ES modules: A cartoon deep-dive</a> — 解析・結び付け・評価の 3 段階を図で追える。ESM が名前を実行前に確定させる理由が分かる。</li>
         </ul>
       </div>
     </article>
@@ -150,6 +167,11 @@ docker rm -f pg</pre>
     <!-- recent:start -->
     <section class="section recent-articles">
       <div class="section-title">最近の記事</div>
+      <div class="card">
+        <h3><a href="archive/2026-11-17.html">PgBouncer を挟んだだけなのに、なぜ「prepared statement &quot;a1&quot; does not exist」で落ちるのか？</a></h3>
+        <div class="summary">PgBouncer の transaction pooling では prepared statement・SET・advisory lock が接続の付け替えで壊れる。その仕組みと、1.21 以降の対応範囲、Rails・pgx の設定での合わせ方。</div>
+        <div class="meta"><span class="tag tag-db">DB</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-17</span></div>
+      </div>
       <div class="card">
         <h3><a href="archive/2026-11-16.html">AWS の鍵は渡していないのに、なぜ署名付き URL だけで非公開の S3 ファイルを落とせるのか？</a></h3>
         <div class="summary">署名付き URL に入っているのは鍵ではなく条件と HMAC 署名で、S3 は同じ計算をやり直して照合する。作成者の権限で動き、一時認証情報なら早く切れ、1 本だけの取り消しはできない仕組みを解説する。</div>
@@ -164,11 +186,6 @@ docker rm -f pg</pre>
         <h3><a href="archive/2026-11-14.html">useEffect に書いた API 呼び出しが、なぜ開発中だけ 2 回飛ぶのか？</a></h3>
         <div class="summary">開発中だけ useEffect の処理が 2 回走るのは、StrictMode がマウント直後にアンマウントと再マウントを行う検査のため。cleanup の書き忘れを炙り出す狙いと、ref で握りつぶさない正しい直し方を解説する。</div>
         <div class="meta"><span class="tag tag-frontend">Frontend</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-14</span></div>
-      </div>
-      <div class="card">
-        <h3><a href="archive/2026-11-13.html">ユーザーはもう画面を閉じたのに、なぜサーバーの重い処理は最後まで走り続けるのか？</a></h3>
-        <div class="summary">Go の r.Context() は切断でキャンセルされるが、それは Done チャネルを閉じる協調的な合図にすぎない。ctx を QueryContext や NewRequestWithContext へ渡し続けること、WithTimeout と defer cancel、PostgreSQL の client_connection_check_interval まで揃えて初めて重い処理が止まる仕組みを解説。</div>
-        <div class="meta"><span class="tag tag-lang">Lang</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-13</span></div>
       </div>
       <div class="recent-more"><a href="archive/">アーカイブですべて見る →</a></div>
     </section>
