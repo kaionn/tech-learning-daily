@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-11-18T12:01:37+09:00</updated>
+  <updated>2026-11-19T11:42:48+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>CPU limit は 2 なのに、なぜ Go のアプリは 8 コアぶん走ろうとして止められるのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-11-19.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-11-19.html</id>
+    <updated>2026-11-19T11:42:48+09:00</updated>
+    <summary>CPU limit は 100ms 周期の CPU 時間枠で、Go 1.24 までは GOMAXPROCS がノードのコア数になり枠を早々に使い切って止められる。1.25 は limit を読んで既定値を合わせる。</summary>
+  </entry>
   <entry>
     <title>import と書いただけなのに、なぜ Node は「Cannot use import statement outside a module」で落ちるのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-11-18.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-11-06.html</id>
     <updated>2026-11-06T10:42:57+09:00</updated>
     <summary>コンテナは自分専用の localhost を持ち、-p の転送はコンテナの eth0 宛てに届く。127.0.0.1 で待つアプリは受け取れないので 0.0.0.0 にバインドし、公開範囲は -p のホスト側アドレスで絞る。</summary>
-  </entry>
-  <entry>
-    <title>アプリは一度も落ちていないのに、なぜ ALB はたまに 502 を返すのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-11-05.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-11-05.html</id>
-    <updated>2026-11-05T10:37:27+09:00</updated>
-    <summary>ALB とアプリは keep-alive 接続の無通信タイマーを別々に持つ。アプリ側が短いと、閉じた瞬間に ALB が次のリクエストを送ってすれ違い、アプリに届かない 502 になる。受ける側のタイマーを ALB より長くする。</summary>
   </entry>
 </feed>

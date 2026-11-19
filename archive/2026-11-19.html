@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tech Learning Daily — CPU limit は 2 なのに、なぜ Go のアプリは 8 コアぶん走ろうとして止められるのか？</title>
+  <meta name="description" content="Go 1.24 までの GOMAXPROCS はノードの論理 CPU 数で決まり、CPU limit の小さいコンテナでは 100ms 周期の枠を一瞬で使い切って止められる。1.25 の新しい既定値と設定の勘所を解説する。">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Tech Learning Daily">
+  <meta property="og:title" content="Tech Learning Daily — CPU limit は 2 なのに、なぜ Go のアプリは 8 コアぶん走ろうとして止められるのか？">
+  <meta property="og:description" content="Go 1.24 までの GOMAXPROCS はノードの論理 CPU 数で決まり、CPU limit の小さいコンテナでは 100ms 周期の枠を一瞬で使い切って止められる。1.25 の新しい既定値と設定の勘所を解説する。">
+  <meta property="og:url" content="https://tech-learn.kaion-lab.com/archive/2026-11-19.html">
+  <meta property="og:image" content="https://tech-learn.kaion-lab.com/og.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="stylesheet" href="../style.css">
+  <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="../feed.xml">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Tech Learning Daily</h1>
+      <div class="date">2026-11-19 (Thu) — 第 125 号</div>
+      <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
+    </header>
+
+    <article class="article">
+      <div class="meta-bar">
+        <span class="tag tag-lang">Lang</span>
+        <span class="difficulty">🌿 基礎</span>
+        <span class="read-time">⏱ 約 7 分</span>
+      </div>
+      <h2 class="article-title">CPU limit は 2 なのに、なぜ Go のアプリは 8 コアぶん走ろうとして止められるのか？</h2>
+      <p class="lead">Go の API サーバーを Kubernetes に載せ、<code>resources.limits.cpu: "2"</code> を付けた。CPU 使用率のグラフは平均 1 コアにも届いていないのに、p99 レイテンシだけがときどき 100ms 近く跳ねる。平均では余っている CPU に、アプリはなぜ待たされているのだろうか。</p>
+
+      <div class="tldr">
+        <div class="box-title">🎯 3 行まとめ</div>
+        <ul>
+          <li>CPU limit は「100ms ごとに使える CPU 時間の枠」で、枠を使い切るとコンテナ全体が次の周期まで止められる（スロットリング）。</li>
+          <li>Go 1.24 までは <code>GOMAXPROCS</code> がノードの論理 CPU 数になるため、limit 2 のコンテナでも 8 本並列で走り、枠を周期の早い段階で食べ尽くす。</li>
+          <li>Go 1.25 以降（go.mod が <code>go 1.25.0</code> 以上）は cgroup の CPU limit を読んで既定値を合わせる。古い版では環境変数か automaxprocs で揃える。</li>
+        </ul>
+      </div>
+
+      <section class="body-section">
+        <h3>GOMAXPROCS は「同時に Go コードを動かすスレッド数の上限」</h3>
+        <p><code>GOMAXPROCS</code> は、Go のコードを同時に実行できる OS スレッドの数の上限である。goroutine が何万個あっても、同時に CPU 上で走れるのはこの数までで、ランタイムのスケジューラがその枠に goroutine を順番に載せていく。値が 8 なら、最大 8 本のスレッドが同時に Go のコードを実行する。</p>
+        <p>Go 1.5 から 1.24 まで、この値の既定は「マシンの論理 CPU 数」だった。論理 CPU とは OS から見えるコアの数で、ハイパースレッディングがあれば物理コアの 2 倍になる。ここで落とし穴になるのは、コンテナの中から見える論理 CPU 数がコンテナに許された量ではなく、ノード（ホストマシン）全体の数だという点である。64 コアのノードに limit 2 の Pod を置けば、Go は 64 本並列で走れるつもりで起動する。</p>
+        <p>「Go が使いたがるだけで、OS が 2 コアに抑えてくれるなら問題ないのでは」と思える。しかし CPU limit は「同時に 2 コアまで」という仕組みではない。ここが今日の問いの答えにつながる。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>CPU limit の正体は「100ms あたりの持ち時間」</h3>
+        <p>Kubernetes の CPU limit は、Linux の cgroup の CPU 帯域制限（CFS bandwidth control）に変換される。cgroup とはプロセスのグループごとに資源を制限する Linux の仕組みで、cgroup v2 では <code>cpu.max</code> というファイルに「周期あたりに使える CPU 時間（クォータ）」と「周期の長さ」が書かれる。カーネルのドキュメントでは周期の既定は 100ms である。</p>
+        <pre class="code"># limit 2 の Pod の中で
+$ cat /sys/fs/cgroup/cpu.max
+200000 100000
+# 100000µs（100ms）ごとに 200000µs まで使える</pre>
+        <p>「2 コア」は、100ms の周期ごとに合計 200ms ぶんの CPU 時間を配る、という意味になる。何本のスレッドで使うかは問われない。2 本で 100ms ずつ使えば周期の最後まで走り続けられるが、8 本が同時に走れば 200ms は 25ms で尽きる。尽きた時点でカーネルはグループ内の全スレッドを止め（スロットリング）、次の周期でクォータが補充されるまで再開させない。</p>
+        <pre class="diagram">limit=2 → 100ms ごとに CPU 200ms の枠
+
+GOMAXPROCS=2（limit と一致）
+ 0ms                         100ms
+ ├─────────────────────────────┤
+ │██████████ 2本で走り続ける ██│
+ └─────────────────────────────┘
+
+GOMAXPROCS=8（ノードのコア数）
+ 0ms   25ms                  100ms
+ ├──────┼──────────────────────┤
+ │██████│ 全員停止（75ms）     │
+ └──────┴──────────────────────┘
+  8本×25ms=200ms で枠切れ ▶ 次周期へ</pre>
+        <p>平均 CPU 使用率が低くても遅くなる理由はここにある。使用率のグラフは数秒〜数十秒の平均で、周期の頭に集中して使い切り、残り 75ms 止まっている様子は平均に埋もれる。運悪くこの停止区間に入ったリクエストは、処理そのものとは無関係に数十 ms 待たされ、p99 だけが跳ねる。</p>
+      </section>
+
+      <div class="analogy">
+        <div class="box-title">🍱 たとえるなら</div>
+        <p>1 時間に 2 時間ぶんまで使えるレンタルスタジオの共用券だ。2 人で入れば 1 時間まるごと使えるが、8 人で一斉に入ると 15 分で 2 時間ぶんを使い切り、残り 45 分は全員が廊下で待たされる。入る人数（GOMAXPROCS）を券の時間（limit）に合わせない限り、合計の利用時間は同じでも「待たされる時間帯」が生まれる。</p>
+      </div>
+
+      <section class="body-section">
+        <h3>Go 1.25 から既定値が limit を読むようになった</h3>
+        <p>Go 1.25 で、Linux 上の <code>GOMAXPROCS</code> の既定値は cgroup の CPU 帯域制限を考慮するようになった。<code>cpu.max</code> のクォータ ÷ 周期を「平均 CPU スループット上限」として計算し、それが論理 CPU 数より小さければそちらを既定値にする。端数は切り上げで、limit 1.5 なら 2 になる。</p>
+        <p>ただし、ランタイムのドキュメントには「論理 CPU 数や CPU アフィニティが 2 未満でない限り、2 未満には設定しない」とある。limit を 0.5 にしても <code>GOMAXPROCS</code> は 1 ではなく 2 になる。小さすぎる limit で並列度が 1 に落ちる事態を避けるための下限で、limit 1 未満の Pod では依然としてスロットリングが起こりうる。</p>
+        <p>もう一つの変更は定期的な更新で、limit が実行中に変わると <code>GOMAXPROCS</code> も追従する。更新は最大で毎秒 1 回、アイドル時はそれより少ない。一方で CPU request は参照しない。request は混雑時の配分比率として効く「最低保証」で、上限ではないためである。request だけで limit を付けない Pod では、従来どおり論理 CPU 数が既定値になる。</p>
+        <p>見落としやすいのが適用条件で、公式ブログによれば新しい既定値は <code>go.mod</code> の <code>go</code> 行が 1.25.0 以上のときに有効になる。ツールチェーンを 1.25 に上げても、<code>go.mod</code> が <code>go 1.23</code> のままなら挙動は変わらない。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>どの設定で揃えるか</h3>
+        <p>最初に確認するのは <code>go.mod</code> の <code>go</code> 行と、Deployment に limit が付いているかの 2 点である。両方が当てはまれば追加設定は要らない。1.24 以前のまま運用するなら、環境変数で limit と同じ値を渡すのが最も単純で、Kubernetes の Downward API を使えば limit から自動で埋められる。</p>
+        <pre class="code">env:
+- name: GOMAXPROCS
+  valueFrom:
+    resourceFieldRef:
+      resource: limits.cpu
+      divisor: "1"</pre>
+        <p>limit を付け忘れると、Downward API はノードの割り当て可能な最大値を渡す。その場合はノードのコア数を渡すのと変わらないので、limit とセットで使う。また環境変数で値を固定すると、1.25 の自動更新は無効になる点には注意したい。limit を後から変えても、Pod が作り直されるまで値は古いままになる。コードで解決したい場合は <code>go.uber.org/automaxprocs</code> を blank import する方法が以前から広く使われてきた。</p>
+        <p>逆に旧挙動へ戻す手段もあり、<code>GODEBUG=containermaxprocs=0</code> で limit の参照を、<code>GODEBUG=updatemaxprocs=0</code> で定期更新を個別に止められる。アップグレード後にスループットが落ちたときの切り分けに使える。</p>
+      </section>
+
+      <div class="practical">
+        <div class="box-title">💼 実務でどう出会うか</div>
+        <p>「CPU 使用率は低いのに p99 だけ悪い」「GC のタイミングでレイテンシが跳ねる」という相談の裏に潜んでいることが多い。GC は並列に動くため、並列度が高いほど短時間に CPU 時間を消費しやすく、枠切れの引き金になる。確認は Pod 内の <code>/sys/fs/cgroup/cpu.stat</code> の <code>nr_throttled</code>（止められた回数）と <code>throttled_usec</code>（止められた累計時間）が増え続けていないかを見るのが早い。cAdvisor 経由で Prometheus に集めていれば <code>container_cpu_cfs_throttled_periods_total</code> で同じことが追える。</p>
+      </div>
+
+      <div class="hands-on">
+        <div class="box-title">⌨️ 手を動かす（5 分）</div>
+        <p>Docker の <code>--cpus=2</code> で CPU 帯域制限をかけ、Go 1.24 と 1.25 のイメージで <code>GOMAXPROCS</code> の既定値を比べる。Docker Desktop の Mac でも、コンテナは Linux VM 上で動くので cgroup の制限が効く。</p>
+        <pre class="code">for v in 1.24 1.25; do
+  docker run --rm --cpus=2 golang:$v sh -c 'cat /sys/fs/cgroup/cpu.max; mkdir /p &amp;&amp; cd /p &amp;&amp; go mod init p &gt;/dev/null 2&gt;&amp;1 &amp;&amp; printf "package main\nimport (\"fmt\";\"runtime\")\nfunc main(){fmt.Println(\"NumCPU:\",runtime.NumCPU(),\"GOMAXPROCS:\",runtime.GOMAXPROCS(0))}\n" &gt; main.go &amp;&amp; go run .'
+done</pre>
+        <p>両方とも <code>cpu.max</code> は <code>200000 100000</code> と表示されるはずだ。1.24 では <code>GOMAXPROCS</code> が <code>NumCPU</code>（Docker Desktop の VM に割り当てたコア数）と同じになり、1.25 では 2 になる。<code>--cpus=0.5</code> に変えると 1.25 でも 2 のまま、<code>-e GOMAXPROCS=1</code> を足すと 1 になることも確かめられる。</p>
+      </div>
+
+      <div class="misconceptions">
+        <div class="box-title">🙅 よくある誤解</div>
+        <ul>
+          <li><span class="wrong">CPU limit 2 なら、OS が同時実行を 2 コアに絞ってくれる</span> — limit は周期あたりの CPU 時間の合計で、同時に走るスレッド数は制限しない。多く並列に走るほど周期の早い段階で枠を使い切り、残りの時間はまとめて止められる。</li>
+          <li><span class="wrong">コンテナの中の <code>nproc</code> や <code>runtime.NumCPU()</code> は limit を反映している</span> — 返るのはノード（または CPU アフィニティ）の論理 CPU 数で、帯域制限とは無関係である。Go 1.25 が別途 <code>cpu.max</code> を読みに行くのはこのためだ。</li>
+          <li><span class="wrong">Go を 1.25 に上げれば自動で直る</span> — 新しい既定値は <code>go.mod</code> の <code>go</code> 行が 1.25.0 以上のときに有効になる。また <code>GOMAXPROCS</code> 環境変数を設定済みなら、そちらが優先され自動更新も止まる。</li>
+        </ul>
+      </div>
+
+      <div class="glossary">
+        <div class="box-title">📖 用語ミニ辞典</div>
+        <dl>
+          <dt>GOMAXPROCS</dt><dd>Go のコードを同時に実行できる OS スレッド数の上限。1.24 までの既定は論理 CPU 数。</dd>
+          <dt>cgroup</dt><dd>プロセスのグループ単位で CPU・メモリなどを制限する Linux の仕組み。コンテナの資源制限の土台。</dd>
+          <dt>CFS bandwidth control</dt><dd>周期ごとに使える CPU 時間（クォータ）を cgroup に割り当てる仕組み。v2 では <code>cpu.max</code> で設定する。</dd>
+          <dt>スロットリング</dt><dd>クォータを使い切った cgroup のスレッドを、次の周期まで実行させずに止めること。</dd>
+          <dt>論理 CPU</dt><dd>OS から見えるコアの数。コンテナ内でもノード全体の数が見える。</dd>
+        </dl>
+      </div>
+
+      <div class="further-reading">
+        <div class="box-title">🔗 もっと深く</div>
+        <ul>
+          <li><a href="https://go.dev/blog/container-aware-gomaxprocs">Container-aware GOMAXPROCS (The Go Blog)</a> — 変更の動機、スロットリングの説明、request を見ない理由を Go チーム自身が書いている。</li>
+          <li><a href="https://go.dev/doc/go1.25#container-aware-gomaxprocs">Go 1.25 Release Notes: Container-aware GOMAXPROCS</a> — 2 つの変更点と GODEBUG での無効化方法の一次情報。</li>
+          <li><a href="https://pkg.go.dev/runtime#hdr-Default_GOMAXPROCS">runtime パッケージ: Default GOMAXPROCS</a> — 切り上げ・下限 2・更新頻度など既定値の計算規則が正確に書かれている。</li>
+          <li><a href="https://docs.kernel.org/scheduler/sched-bwc.html">CFS Bandwidth Control (Linux kernel docs)</a> — クォータと周期、スロットリング統計の意味をカーネル側から確認できる。</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- recent:start -->
+    <section class="section recent-articles">
+      <div class="section-title">最近の記事</div>
+      <div class="card">
+        <h3><a href="archive/2026-11-17.html">PgBouncer を挟んだだけなのに、なぜ「prepared statement &quot;a1&quot; does not exist」で落ちるのか？</a></h3>
+        <div class="summary">PgBouncer の transaction pooling では prepared statement・SET・advisory lock が接続の付け替えで壊れる。その仕組みと、1.21 以降の対応範囲、Rails・pgx の設定での合わせ方。</div>
+        <div class="meta"><span class="tag tag-db">DB</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-17</span></div>
+      </div>
+      <div class="card">
+        <h3><a href="archive/2026-11-16.html">AWS の鍵は渡していないのに、なぜ署名付き URL だけで非公開の S3 ファイルを落とせるのか？</a></h3>
+        <div class="summary">署名付き URL に入っているのは鍵ではなく条件と HMAC 署名で、S3 は同じ計算をやり直して照合する。作成者の権限で動き、一時認証情報なら早く切れ、1 本だけの取り消しはできない仕組みを解説する。</div>
+        <div class="meta"><span class="tag tag-security">Security</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-16</span></div>
+      </div>
+      <div class="card">
+        <h3><a href="archive/2026-11-15.html">z-index: 9999 にしたのに、なぜモーダルはヘッダーの下に潜るのか？</a></h3>
+        <div class="summary">z-index は同じスタッキングコンテキストの兄弟同士でしか比べられず、祖先に transform や z-index 付きの板があると 9999 でも外の 10 に負ける仕組みと、isolation・Portal・dialog での直し方。</div>
+        <div class="meta"><span class="tag tag-frontend">Frontend</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-15</span></div>
+      </div>
+      <div class="card">
+        <h3><a href="archive/2026-11-14.html">useEffect に書いた API 呼び出しが、なぜ開発中だけ 2 回飛ぶのか？</a></h3>
+        <div class="summary">開発中だけ useEffect の処理が 2 回走るのは、StrictMode がマウント直後にアンマウントと再マウントを行う検査のため。cleanup の書き忘れを炙り出す狙いと、ref で握りつぶさない正しい直し方を解説する。</div>
+        <div class="meta"><span class="tag tag-frontend">Frontend</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-14</span></div>
+      </div>
+      <div class="recent-more"><a href="./">アーカイブですべて見る →</a></div>
+    </section>
+    <!-- recent:end -->
+
+    <footer>
+      <p>Generated by Claude Code (GitHub Actions)</p>
+      <a href="./" class="archive-link">過去の記事</a>
+    </footer>
+  </div>
+</body>
+</html>
