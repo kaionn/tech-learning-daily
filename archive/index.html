@@ -37,7 +37,7 @@
       <div class="chip-row" id="cat-chips">
         <span class="row-label">カテゴリ</span>
         <button class="chip on" data-cat="">すべて</button>
-        <button class="chip" data-cat="container">Container <span class="chip-count">19</span></button>
+        <button class="chip" data-cat="container">Container <span class="chip-count">20</span></button>
         <button class="chip" data-cat="network">Network <span class="chip-count">18</span></button>
         <button class="chip" data-cat="lang">Lang <span class="chip-count">17</span></button>
         <button class="chip" data-cat="db">DB <span class="chip-count">15</span></button>
@@ -63,6 +63,13 @@
 
     <section class="section month" data-month="2026-11">
       <div class="section-title">2026 年 11 月 <span class="count"></span></div>
+      <div class="card" data-cat="container" data-diff="基礎"
+           data-search="db が数秒詰まっただけなのに、なぜ全部の pod が一斉に再起動するのか？ liveness probe は失敗でコンテナを再起動し、readiness probe は宛先から外すだけ。db を見る liveness が db の詰まりで全 pod を同時に再起動させる仕組みと、probe 設定値の読み方・startupprobe の使い方。" data-terms="liveness probe / readiness probe / startup probe / kubelet / CrashLoopBackOff / 連鎖障害（cascading failure）">
+        <h3><a href="2026-11-20.html">DB が数秒詰まっただけなのに、なぜ全部の Pod が一斉に再起動するのか？</a></h3>
+        <div class="summary">liveness probe は失敗でコンテナを再起動し、readiness probe は宛先から外すだけ。DB を見る liveness が DB の詰まりで全 Pod を同時に再起動させる仕組みと、probe 設定値の読み方・startupProbe の使い方。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-container">Container</span><span>🌿 基礎</span><span>⏱ 約 8 分</span><span>2026-11-20</span></div>
+      </div>
       <div class="card" data-cat="lang" data-diff="基礎"
            data-search="cpu limit は 2 なのに、なぜ go のアプリは 8 コアぶん走ろうとして止められるのか？ kubernetes の cpu limit は 100ms ごとの cpu 時間枠で、go 1.24 までの gomaxprocs はノードのコア数になるため枠を早々に使い切って止められる。go 1.25 の新しい既定値と、環境変数・godebug での揃え方。" data-terms="GOMAXPROCS / cgroup / CFS bandwidth control / スロットリング / 論理 CPU">
         <h3><a href="2026-11-19.html">CPU limit は 2 なのに、なぜ Go のアプリは 8 コアぶん走ろうとして止められるのか？</a></h3>

@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-11-19T11:42:48+09:00</updated>
+  <updated>2026-11-20T11:28:38+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>DB が数秒詰まっただけなのに、なぜ全部の Pod が一斉に再起動するのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-11-20.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-11-20.html</id>
+    <updated>2026-11-20T11:28:38+09:00</updated>
+    <summary>liveness probe は失敗でコンテナを再起動し、readiness probe は宛先から外すだけ。DB を見る liveness が DB の詰まりで全 Pod を同時に再起動させる仕組みと、probe 設定値の読み方・startupProbe の使い方。</summary>
+  </entry>
   <entry>
     <title>CPU limit は 2 なのに、なぜ Go のアプリは 8 コアぶん走ろうとして止められるのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-11-19.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-11-07.html</id>
     <updated>2026-11-07T10:02:31+09:00</updated>
     <summary>Go の slice は配列へのポインタ・長さ・容量の 3 つ組で、append は容量に空きがあれば共有中の配列に上書きする。共有を断つには s[a:b:b] や slices.Clip で容量を絞るか Clone する。</summary>
-  </entry>
-  <entry>
-    <title>-p 3000:3000 と書いたのに、なぜコンテナのアプリに繋がらないのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-11-06.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-11-06.html</id>
-    <updated>2026-11-06T10:42:57+09:00</updated>
-    <summary>コンテナは自分専用の localhost を持ち、-p の転送はコンテナの eth0 宛てに届く。127.0.0.1 で待つアプリは受け取れないので 0.0.0.0 にバインドし、公開範囲は -p のホスト側アドレスで絞る。</summary>
   </entry>
 </feed>

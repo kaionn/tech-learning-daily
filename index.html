@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tech Learning Daily — CPU limit は 2 なのに、なぜ Go のアプリは 8 コアぶん走ろうとして止められるのか？</title>
-  <meta name="description" content="Go 1.24 までの GOMAXPROCS はノードの論理 CPU 数で決まり、CPU limit の小さいコンテナでは 100ms 周期の枠を一瞬で使い切って止められる。1.25 の新しい既定値と設定の勘所を解説する。">
+  <title>Tech Learning Daily — DB が数秒詰まっただけなのに、なぜ全部の Pod が一斉に再起動するのか？</title>
+  <meta name="description" content="liveness probe は失敗するとコンテナを再起動し、readiness probe は通信を外すだけ。DB を確認する /healthz を liveness に使うと、DB の詰まりで全 Pod が再起動する理由と設定の勘所を解説する。">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Tech Learning Daily">
-  <meta property="og:title" content="Tech Learning Daily — CPU limit は 2 なのに、なぜ Go のアプリは 8 コアぶん走ろうとして止められるのか？">
-  <meta property="og:description" content="Go 1.24 までの GOMAXPROCS はノードの論理 CPU 数で決まり、CPU limit の小さいコンテナでは 100ms 周期の枠を一瞬で使い切って止められる。1.25 の新しい既定値と設定の勘所を解説する。">
+  <meta property="og:title" content="Tech Learning Daily — DB が数秒詰まっただけなのに、なぜ全部の Pod が一斉に再起動するのか？">
+  <meta property="og:description" content="liveness probe は失敗するとコンテナを再起動し、readiness probe は通信を外すだけ。DB を確認する /healthz を liveness に使うと、DB の詰まりで全 Pod が再起動する理由と設定の勘所を解説する。">
   <meta property="og:url" content="https://tech-learn.kaion-lab.com/">
   <meta property="og:image" content="https://tech-learn.kaion-lab.com/og.png">
   <meta name="twitter:card" content="summary_large_image">
@@ -22,127 +22,163 @@
   <div class="container">
     <header>
       <h1>Tech Learning Daily</h1>
-      <div class="date">2026-11-19 (Thu) — 第 125 号</div>
+      <div class="date">2026-11-20 (Fri) — 第 126 号</div>
       <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
     </header>
 
     <article class="article">
       <div class="meta-bar">
-        <span class="tag tag-lang">Lang</span>
+        <span class="tag tag-container">Container</span>
         <span class="difficulty">🌿 基礎</span>
-        <span class="read-time">⏱ 約 7 分</span>
+        <span class="read-time">⏱ 約 8 分</span>
       </div>
-      <h2 class="article-title">CPU limit は 2 なのに、なぜ Go のアプリは 8 コアぶん走ろうとして止められるのか？</h2>
-      <p class="lead">Go の API サーバーを Kubernetes に載せ、<code>resources.limits.cpu: "2"</code> を付けた。CPU 使用率のグラフは平均 1 コアにも届いていないのに、p99 レイテンシだけがときどき 100ms 近く跳ねる。平均では余っている CPU に、アプリはなぜ待たされているのだろうか。</p>
+      <h2 class="article-title">DB が数秒詰まっただけなのに、なぜ全部の Pod が一斉に再起動するのか？</h2>
+      <p class="lead">「ちゃんと動いているか確かめたいから」と、<code>/healthz</code> の中で DB に <code>SELECT 1</code> を投げるようにした。ある日、DB が重いクエリで数十秒詰まった。DB が戻ったあとも API はしばらく復旧せず、<code>kubectl get pods</code> を見ると全 Pod の <code>RESTARTS</code> が揃って増えていた。壊れていたのは DB なのに、なぜアプリの Pod が全部再起動されたのだろうか。</p>
 
       <div class="tldr">
         <div class="box-title">🎯 3 行まとめ</div>
         <ul>
-          <li>CPU limit は「100ms ごとに使える CPU 時間の枠」で、枠を使い切るとコンテナ全体が次の周期まで止められる（スロットリング）。</li>
-          <li>Go 1.24 までは <code>GOMAXPROCS</code> がノードの論理 CPU 数になるため、limit 2 のコンテナでも 8 本並列で走り、枠を周期の早い段階で食べ尽くす。</li>
-          <li>Go 1.25 以降（go.mod が <code>go 1.25.0</code> 以上）は cgroup の CPU limit を読んで既定値を合わせる。古い版では環境変数か automaxprocs で揃える。</li>
+          <li>Kubernetes の probe は 3 種類あり、失敗したときの「罰」が違う。liveness と startup は失敗でコンテナを再起動し、readiness は Service の宛先から外すだけ。</li>
+          <li>liveness probe に DB などの外部依存を含めると、依存先の不調で全 Pod が同時に再起動され、障害が広がる。liveness は「このプロセスが自力で回復できない状態か」だけを確かめる。</li>
+          <li>既定値は <code>periodSeconds: 10</code>・<code>timeoutSeconds: 1</code>・<code>failureThreshold: 3</code>。起動の遅いアプリは liveness を緩めるのではなく startupProbe で守る。</li>
         </ul>
       </div>
 
       <section class="body-section">
-        <h3>GOMAXPROCS は「同時に Go コードを動かすスレッド数の上限」</h3>
-        <p><code>GOMAXPROCS</code> は、Go のコードを同時に実行できる OS スレッドの数の上限である。goroutine が何万個あっても、同時に CPU 上で走れるのはこの数までで、ランタイムのスケジューラがその枠に goroutine を順番に載せていく。値が 8 なら、最大 8 本のスレッドが同時に Go のコードを実行する。</p>
-        <p>Go 1.5 から 1.24 まで、この値の既定は「マシンの論理 CPU 数」だった。論理 CPU とは OS から見えるコアの数で、ハイパースレッディングがあれば物理コアの 2 倍になる。ここで落とし穴になるのは、コンテナの中から見える論理 CPU 数がコンテナに許された量ではなく、ノード（ホストマシン）全体の数だという点である。64 コアのノードに limit 2 の Pod を置けば、Go は 64 本並列で走れるつもりで起動する。</p>
-        <p>「Go が使いたがるだけで、OS が 2 コアに抑えてくれるなら問題ないのでは」と思える。しかし CPU limit は「同時に 2 コアまで」という仕組みではない。ここが今日の問いの答えにつながる。</p>
+        <h3>probe は kubelet が定期的に行う「健康診断」</h3>
+        <p>probe とは、各ノードで Pod を管理するエージェントである kubelet が、コンテナに対して定期的に行う診断である。HTTP リクエスト（<code>httpGet</code>）、TCP 接続（<code>tcpSocket</code>）、gRPC のヘルスチェック、コンテナ内でのコマンド実行（<code>exec</code>）のいずれかで確かめる。<code>httpGet</code> ではステータスコードが 200 以上 400 未満なら成功、それ以外は失敗と判定される。</p>
+        <p>結果は成功・失敗・不明の 3 つで、kubelet は失敗にだけ反応する。probe を定義していない場合、kubelet は常に成功とみなす。つまり probe を何も書かなければ「プロセスが生きている限り健康」という扱いになり、プロセスが落ちたときだけ <code>restartPolicy</code> に従って再起動される。</p>
+        <p>ここで押さえておきたいのは、probe は 1 回の失敗では何もしないという点である。<code>failureThreshold</code>（既定 3）回連続で失敗して初めて「失敗」と判定される。既定の <code>periodSeconds: 10</code> と組み合わせると、約 30 秒間ずっと失敗し続けたら反応する計算になる。</p>
       </section>
 
       <section class="body-section">
-        <h3>CPU limit の正体は「100ms あたりの持ち時間」</h3>
-        <p>Kubernetes の CPU limit は、Linux の cgroup の CPU 帯域制限（CFS bandwidth control）に変換される。cgroup とはプロセスのグループごとに資源を制限する Linux の仕組みで、cgroup v2 では <code>cpu.max</code> というファイルに「周期あたりに使える CPU 時間（クォータ）」と「周期の長さ」が書かれる。カーネルのドキュメントでは周期の既定は 100ms である。</p>
-        <pre class="code"># limit 2 の Pod の中で
-$ cat /sys/fs/cgroup/cpu.max
-200000 100000
-# 100000µs（100ms）ごとに 200000µs まで使える</pre>
-        <p>「2 コア」は、100ms の周期ごとに合計 200ms ぶんの CPU 時間を配る、という意味になる。何本のスレッドで使うかは問われない。2 本で 100ms ずつ使えば周期の最後まで走り続けられるが、8 本が同時に走れば 200ms は 25ms で尽きる。尽きた時点でカーネルはグループ内の全スレッドを止め（スロットリング）、次の周期でクォータが補充されるまで再開させない。</p>
-        <pre class="diagram">limit=2 → 100ms ごとに CPU 200ms の枠
-
-GOMAXPROCS=2（limit と一致）
- 0ms                         100ms
- ├─────────────────────────────┤
- │██████████ 2本で走り続ける ██│
- └─────────────────────────────┘
-
-GOMAXPROCS=8（ノードのコア数）
- 0ms   25ms                  100ms
- ├──────┼──────────────────────┤
- │██████│ 全員停止（75ms）     │
- └──────┴──────────────────────┘
-  8本×25ms=200ms で枠切れ ▶ 次周期へ</pre>
-        <p>平均 CPU 使用率が低くても遅くなる理由はここにある。使用率のグラフは数秒〜数十秒の平均で、周期の頭に集中して使い切り、残り 75ms 止まっている様子は平均に埋もれる。運悪くこの停止区間に入ったリクエストは、処理そのものとは無関係に数十 ms 待たされ、p99 だけが跳ねる。</p>
+        <h3>3 種類の probe は「失敗したときの罰」が違う</h3>
+        <p>3 種類の probe は書き方がほぼ同じだが、失敗時に kubelet が取る行動がまったく違う。この違いが今日の問いの答えになる。</p>
+        <pre class="diagram">       kubelet が probe を実行
+                │
+   ┌────────────┼────────────┐
+   ▼            ▼            ▼
+startup     liveness     readiness
+（起動時だけ） （ずっと）    （ずっと）
+   │            │            │
+ 失敗が続く   失敗が続く   失敗が続く
+   ▼            ▼            ▼
+┌────────┐ ┌────────┐ ┌────────────┐
+│コンテナ│ │コンテナ│ │Service の  │
+│を再起動│ │を再起動│ │宛先から外す│
+└────────┘ └────────┘ └────────────┘
+                       プロセスは
+                       そのまま動く</pre>
+        <p>readiness probe は「いまリクエストを受けられるか」を表す。失敗すると、EndpointSlice コントローラが Service の宛先一覧（EndpointSlice）からその Pod の IP を外すので、新しいリクエストが届かなくなる。プロセスは殺されないため、状況が戻って probe が成功すれば自動で宛先に復帰する。readiness probe は起動時だけでなく、コンテナが動いている間ずっと実行される。</p>
+        <p>liveness probe は「このプロセスは生きているが、もう自力では立ち直れない状態か」を表す。公式ドキュメントが挙げる典型例はデッドロックで、プロセスは存在するのに処理が一歩も進まない状態である。失敗すると kubelet はコンテナを kill し、<code>restartPolicy</code> に従って再起動する。startup probe は起動完了の判定専用で、成功するまで liveness と readiness を実行させない。失敗した場合は liveness と同じく再起動になる。</p>
       </section>
 
       <div class="analogy">
         <div class="box-title">🍱 たとえるなら</div>
-        <p>1 時間に 2 時間ぶんまで使えるレンタルスタジオの共用券だ。2 人で入れば 1 時間まるごと使えるが、8 人で一斉に入ると 15 分で 2 時間ぶんを使い切り、残り 45 分は全員が廊下で待たされる。入る人数（GOMAXPROCS）を券の時間（limit）に合わせない限り、合計の利用時間は同じでも「待たされる時間帯」が生まれる。</p>
+        <p>readiness は飲食店の「準備中」の札、liveness は店長を呼んで店員を交代させる判断である。仕入れ業者（DB）の配送が遅れて料理が出せないとき、正しい対応は札を「準備中」にして客を他店舗へ回すこと（readiness）だ。ここで店員を全員交代させても（liveness）、配送は早まらない。新しい店員が仕込みからやり直すぶん、配送が戻ったあとの再開もかえって遅れる。</p>
       </div>
 
       <section class="body-section">
-        <h3>Go 1.25 から既定値が limit を読むようになった</h3>
-        <p>Go 1.25 で、Linux 上の <code>GOMAXPROCS</code> の既定値は cgroup の CPU 帯域制限を考慮するようになった。<code>cpu.max</code> のクォータ ÷ 周期を「平均 CPU スループット上限」として計算し、それが論理 CPU 数より小さければそちらを既定値にする。端数は切り上げで、limit 1.5 なら 2 になる。</p>
-        <p>ただし、ランタイムのドキュメントには「論理 CPU 数や CPU アフィニティが 2 未満でない限り、2 未満には設定しない」とある。limit を 0.5 にしても <code>GOMAXPROCS</code> は 1 ではなく 2 になる。小さすぎる limit で並列度が 1 に落ちる事態を避けるための下限で、limit 1 未満の Pod では依然としてスロットリングが起こりうる。</p>
-        <p>もう一つの変更は定期的な更新で、limit が実行中に変わると <code>GOMAXPROCS</code> も追従する。更新は最大で毎秒 1 回、アイドル時はそれより少ない。一方で CPU request は参照しない。request は混雑時の配分比率として効く「最低保証」で、上限ではないためである。request だけで limit を付けない Pod では、従来どおり論理 CPU 数が既定値になる。</p>
-        <p>見落としやすいのが適用条件で、公式ブログによれば新しい既定値は <code>go.mod</code> の <code>go</code> 行が 1.25.0 以上のときに有効になる。ツールチェーンを 1.25 に上げても、<code>go.mod</code> が <code>go 1.23</code> のままなら挙動は変わらない。</p>
+        <h3>DB を見る liveness が全 Pod を道連れにする仕組み</h3>
+        <p>「DB に繋がらないアプリは不健康なのだから、再起動されて当然」と思える。しかし DB が詰まっている状況で再起動しても、DB は速くならない。しかも DB は全 Pod が共有しているので、全 Pod の liveness probe がほぼ同じタイミングで失敗する。結果として全レプリカが同時に再起動され、DB の不調だけだった障害が「アプリが全滅した」障害に広がる。</p>
+        <p>再起動はさらに復旧を遅らせる。再起動直後のアプリは接続プールの確立やキャッシュの温め直しから始めるため、DB が戻った瞬間に全 Pod が一斉に接続を張りに行き、DB に負荷の山を作る。加えて、繰り返し落ちたコンテナには再起動の待ち時間（バックオフ）が 10 秒、20 秒、40 秒…と倍々で入り、上限は 300 秒である。これが <code>CrashLoopBackOff</code> 状態で、DB が戻っても Pod がすぐには上がってこない理由になる。</p>
+        <p>負荷が原因の場合も同じ構造になる。<code>timeoutSeconds</code> の既定は 1 秒なので、高負荷で <code>/healthz</code> の応答が 1 秒を超えると probe は失敗する。忙しい Pod から順に再起動されると、残りの Pod に負荷が寄ってさらに遅くなり、次の Pod も再起動される。公式ドキュメントも、誤った liveness probe は高負荷時の再起動と残りの Pod への負荷集中という連鎖障害（cascading failure）を招くと注意している。</p>
+        <p>対策は、エンドポイントを役割で分けることである。liveness 用はプロセス内部だけで完結する軽い応答にし、外部依存は見ない。DB や下流サービスの状態を反映したいなら readiness 用のエンドポイントに入れる。そうすれば DB が詰まったときは全 Pod が宛先から外れ、そのあいだのリクエストはエラーになる。それでもプロセスと接続プールは生き残るので、DB が戻れば次の probe の成功で宛先に復帰し、仕込み直しは要らない。</p>
+        <pre class="code">livenessProbe:
+  httpGet:
+    path: /livez     # プロセス内部だけを見る
+    port: 8080
+readinessProbe:
+  httpGet:
+    path: /readyz    # DB 等の依存もここで見る
+    port: 8080</pre>
       </section>
 
       <section class="body-section">
-        <h3>どの設定で揃えるか</h3>
-        <p>最初に確認するのは <code>go.mod</code> の <code>go</code> 行と、Deployment に limit が付いているかの 2 点である。両方が当てはまれば追加設定は要らない。1.24 以前のまま運用するなら、環境変数で limit と同じ値を渡すのが最も単純で、Kubernetes の Downward API を使えば limit から自動で埋められる。</p>
-        <pre class="code">env:
-- name: GOMAXPROCS
-  valueFrom:
-    resourceFieldRef:
-      resource: limits.cpu
-      divisor: "1"</pre>
-        <p>limit を付け忘れると、Downward API はノードの割り当て可能な最大値を渡す。その場合はノードのコア数を渡すのと変わらないので、limit とセットで使う。また環境変数で値を固定すると、1.25 の自動更新は無効になる点には注意したい。limit を後から変えても、Pod が作り直されるまで値は古いままになる。コードで解決したい場合は <code>go.uber.org/automaxprocs</code> を blank import する方法が以前から広く使われてきた。</p>
-        <p>逆に旧挙動へ戻す手段もあり、<code>GODEBUG=containermaxprocs=0</code> で limit の参照を、<code>GODEBUG=updatemaxprocs=0</code> で定期更新を個別に止められる。アップグレード後にスループットが落ちたときの切り分けに使える。</p>
+        <h3>設定値は「何秒で反応するか」で読む</h3>
+        <p>probe の各フィールドは、組み合わせて「何秒失敗が続いたら反応するか」として読むと挙動が掴みやすい。読者が最初に触るべきものから順に並べる。</p>
+        <p><code>periodSeconds</code>（既定 10、最小 1）は実行間隔で、短くするほど異常に早く反応するが、exec probe ではそのたびにプロセスが fork されるため、Pod 密度の高いノードでは CPU 負荷になる。<code>failureThreshold</code>（既定 3）は連続失敗の許容回数で、上げるほど一時的な遅延に強くなる代わりに、本当に固まったときの検出が遅れる。公式ドキュメントは、liveness と readiness に同じ軽いエンドポイントを使い、liveness 側だけ <code>failureThreshold</code> を高くするパターンを紹介している。こうすると、まず宛先から外れ、それでも戻らないときだけ再起動される。</p>
+        <p><code>timeoutSeconds</code>（既定 1、最小 1）は 1 回の応答待ちの上限である。GC の停止や高負荷で 1 秒を超えうるアプリなら、ここを少し伸ばすほうが誤検知を減らせる。<code>successThreshold</code>（既定 1）は失敗後に何回連続成功したら戻すかで、liveness と startup では 1 以外を指定できない。<code>initialDelaySeconds</code>（既定 0）は起動後に probe を始めるまでの待ち時間である。</p>
+        <p>起動に時間がかかるアプリで liveness の <code>initialDelaySeconds</code> を大きくするのは筋が悪い。その秒数のあいだ liveness はまったく働かず、しかも起動時間がばらついて値を超えれば、結局起動途中で kill されるからだ。公式ドキュメントは、起動時間が <code>initialDelaySeconds + failureThreshold × periodSeconds</code>（既定なら 0 + 3 × 10 = 30 秒）を超えうるなら、liveness と同じエンドポイントを見る startupProbe を足し、その <code>failureThreshold</code> を十分高くするよう勧めている。</p>
+        <pre class="code">startupProbe:
+  httpGet:
+    path: /livez
+    port: 8080
+  failureThreshold: 30   # 30 × 10 秒 = 最大 300 秒待つ
+  periodSeconds: 10</pre>
       </section>
 
       <div class="practical">
         <div class="box-title">💼 実務でどう出会うか</div>
-        <p>「CPU 使用率は低いのに p99 だけ悪い」「GC のタイミングでレイテンシが跳ねる」という相談の裏に潜んでいることが多い。GC は並列に動くため、並列度が高いほど短時間に CPU 時間を消費しやすく、枠切れの引き金になる。確認は Pod 内の <code>/sys/fs/cgroup/cpu.stat</code> の <code>nr_throttled</code>（止められた回数）と <code>throttled_usec</code>（止められた累計時間）が増え続けていないかを見るのが早い。cAdvisor 経由で Prometheus に集めていれば <code>container_cpu_cfs_throttled_periods_total</code> で同じことが追える。</p>
+        <p>典型的なのは、フレームワークのヘルスチェック機能（DB・Redis・外部 API を全部まとめて確認する <code>/health</code>）をそのまま liveness に設定しているケースである。障害時に <code>kubectl describe pod</code> の Events に <code>Liveness probe failed</code> と <code>Killing</code> が並び、全 Pod の <code>RESTARTS</code> が同時に増えていたら、このパターンを疑う。また、プロセスがエラーで自分から落ちるタイプのアプリなら、公式ドキュメントのとおり liveness probe 自体が不要なこともある。落ちれば <code>restartPolicy</code> で再起動されるからだ。</p>
       </div>
 
       <div class="hands-on">
         <div class="box-title">⌨️ 手を動かす（5 分）</div>
-        <p>Docker の <code>--cpus=2</code> で CPU 帯域制限をかけ、Go 1.24 と 1.25 のイメージで <code>GOMAXPROCS</code> の既定値を比べる。Docker Desktop の Mac でも、コンテナは Linux VM 上で動くので cgroup の制限が効く。</p>
-        <pre class="code">for v in 1.24 1.25; do
-  docker run --rm --cpus=2 golang:$v sh -c 'cat /sys/fs/cgroup/cpu.max; mkdir /p &amp;&amp; cd /p &amp;&amp; go mod init p &gt;/dev/null 2&gt;&amp;1 &amp;&amp; printf "package main\nimport (\"fmt\";\"runtime\")\nfunc main(){fmt.Println(\"NumCPU:\",runtime.NumCPU(),\"GOMAXPROCS:\",runtime.GOMAXPROCS(0))}\n" &gt; main.go &amp;&amp; go run .'
-done</pre>
-        <p>両方とも <code>cpu.max</code> は <code>200000 100000</code> と表示されるはずだ。1.24 では <code>GOMAXPROCS</code> が <code>NumCPU</code>（Docker Desktop の VM に割り当てたコア数）と同じになり、1.25 では 2 になる。<code>--cpus=0.5</code> に変えると 1.25 でも 2 のまま、<code>-e GOMAXPROCS=1</code> を足すと 1 になることも確かめられる。</p>
+        <p>kind で作ったローカルクラスタに、ファイルの有無で成否が決まる exec probe を持つ Pod を立て、readiness と liveness の失敗時の違いを観察する。</p>
+        <pre class="code">kind create cluster --name probe-lab
+
+cat &lt;&lt;'YAML' | kubectl apply -f -
+apiVersion: v1
+kind: Pod
+metadata:
+  name: probe-demo
+spec:
+  terminationGracePeriodSeconds: 1
+  containers:
+  - name: app
+    image: busybox:1.36
+    command: ["sh", "-c", "touch /tmp/ready /tmp/alive; sleep 3600"]
+    readinessProbe:
+      exec: { command: ["cat", "/tmp/ready"] }
+      periodSeconds: 2
+    livenessProbe:
+      exec: { command: ["cat", "/tmp/alive"] }
+      periodSeconds: 2
+YAML
+
+kubectl wait --for=condition=Ready pod/probe-demo --timeout=60s
+
+# 1) readiness を失敗させる
+kubectl exec probe-demo -- rm /tmp/ready
+sleep 10; kubectl get pod probe-demo
+
+# 2) liveness を失敗させる
+kubectl exec probe-demo -- rm /tmp/alive
+sleep 15; kubectl get pod probe-demo
+kubectl describe pod probe-demo | tail -n 8
+
+kind delete cluster --name probe-lab</pre>
+        <p>1) の後は <code>READY</code> が <code>0/1</code> になるが、<code>RESTARTS</code> は 0 のまま増えない。プロセスは動き続け、宛先から外れただけである。2) の後は <code>RESTARTS</code> が 1 に増え、Events に <code>Liveness probe failed</code> と、コンテナを kill して再起動した記録が出る。再起動したコンテナでは起動コマンドが両方のファイルを作り直すので、<code>READY</code> も <code>1/1</code> に戻る。<code>terminationGracePeriodSeconds: 1</code> は kill 時の猶予（Pod の既定は 30 秒）を縮めて、再起動を待たずに観察するための指定である。</p>
       </div>
 
       <div class="misconceptions">
         <div class="box-title">🙅 よくある誤解</div>
         <ul>
-          <li><span class="wrong">CPU limit 2 なら、OS が同時実行を 2 コアに絞ってくれる</span> — limit は周期あたりの CPU 時間の合計で、同時に走るスレッド数は制限しない。多く並列に走るほど周期の早い段階で枠を使い切り、残りの時間はまとめて止められる。</li>
-          <li><span class="wrong">コンテナの中の <code>nproc</code> や <code>runtime.NumCPU()</code> は limit を反映している</span> — 返るのはノード（または CPU アフィニティ）の論理 CPU 数で、帯域制限とは無関係である。Go 1.25 が別途 <code>cpu.max</code> を読みに行くのはこのためだ。</li>
-          <li><span class="wrong">Go を 1.25 に上げれば自動で直る</span> — 新しい既定値は <code>go.mod</code> の <code>go</code> 行が 1.25.0 以上のときに有効になる。また <code>GOMAXPROCS</code> 環境変数を設定済みなら、そちらが優先され自動更新も止まる。</li>
+          <li><span class="wrong">liveness と readiness は同じヘルスチェックを 2 回書くもの</span> — 失敗時の行動が「再起動」と「宛先から外す」で違う。外部依存のように再起動しても直らない理由で失敗しうる確認は、readiness だけに入れる。</li>
+          <li><span class="wrong">readiness probe は起動完了の確認なので、一度成功すれば以後は実行されない</span> — readiness はコンテナが動いている間ずっと実行され、途中で失敗すれば Pod はいつでも宛先から外れる。起動時だけ実行されるのは startup probe である。</li>
+          <li><span class="wrong">httpGet probe は <code>{"status":"ng"}</code> のような本文も読んで判定してくれる</span> — 判定に使われるのはステータスコードだけで、本文は見ない（kubelet は本文を 10KiB 以降読まない）。異常を伝えたいなら 200〜399 以外のステータスコードを返す必要がある。</li>
         </ul>
       </div>
 
       <div class="glossary">
         <div class="box-title">📖 用語ミニ辞典</div>
         <dl>
-          <dt>GOMAXPROCS</dt><dd>Go のコードを同時に実行できる OS スレッド数の上限。1.24 までの既定は論理 CPU 数。</dd>
-          <dt>cgroup</dt><dd>プロセスのグループ単位で CPU・メモリなどを制限する Linux の仕組み。コンテナの資源制限の土台。</dd>
-          <dt>CFS bandwidth control</dt><dd>周期ごとに使える CPU 時間（クォータ）を cgroup に割り当てる仕組み。v2 では <code>cpu.max</code> で設定する。</dd>
-          <dt>スロットリング</dt><dd>クォータを使い切った cgroup のスレッドを、次の周期まで実行させずに止めること。</dd>
-          <dt>論理 CPU</dt><dd>OS から見えるコアの数。コンテナ内でもノード全体の数が見える。</dd>
+          <dt>liveness probe</dt><dd>プロセスが自力で回復できない状態かを確かめる診断。連続失敗でコンテナを再起動する。</dd>
+          <dt>readiness probe</dt><dd>リクエストを受けられるかを確かめる診断。失敗すると Service の宛先から外れるが、プロセスは動き続ける。</dd>
+          <dt>startup probe</dt><dd>起動完了の判定専用の診断。成功するまで liveness / readiness を止め、失敗が続くと再起動する。</dd>
+          <dt>kubelet</dt><dd>各ノードで動き、Pod のコンテナの起動・監視・probe の実行を担うエージェント。</dd>
+          <dt>CrashLoopBackOff</dt><dd>再起動を繰り返すコンテナに、倍々に伸びる待ち時間（上限 300 秒）が入っている状態。</dd>
+          <dt>連鎖障害（cascading failure）</dt><dd>一部の不調が再起動や負荷集中を通じて、ほかの正常な部分まで巻き込んで広がる障害。</dd>
         </dl>
       </div>
 
       <div class="further-reading">
         <div class="box-title">🔗 もっと深く</div>
         <ul>
-          <li><a href="https://go.dev/blog/container-aware-gomaxprocs">Container-aware GOMAXPROCS (The Go Blog)</a> — 変更の動機、スロットリングの説明、request を見ない理由を Go チーム自身が書いている。</li>
-          <li><a href="https://go.dev/doc/go1.25#container-aware-gomaxprocs">Go 1.25 Release Notes: Container-aware GOMAXPROCS</a> — 2 つの変更点と GODEBUG での無効化方法の一次情報。</li>
-          <li><a href="https://pkg.go.dev/runtime#hdr-Default_GOMAXPROCS">runtime パッケージ: Default GOMAXPROCS</a> — 切り上げ・下限 2・更新頻度など既定値の計算規則が正確に書かれている。</li>
-          <li><a href="https://docs.kernel.org/scheduler/sched-bwc.html">CFS Bandwidth Control (Linux kernel docs)</a> — クォータと周期、スロットリング統計の意味をカーネル側から確認できる。</li>
+          <li><a href="https://kubernetes.io/docs/concepts/configuration/liveness-readiness-startup-probes/">Liveness, Readiness, and Startup Probes（Kubernetes Docs）</a> — 3 種類の役割、各フィールドの既定値、liveness の連鎖障害への注意が一か所にまとまっている。</li>
+          <li><a href="https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/">Configure Liveness, Readiness and Startup Probes（Kubernetes Docs）</a> — exec / HTTP / TCP / gRPC の各 probe を実際に動かして失敗時の Events を確かめられる手順書。</li>
+          <li><a href="https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#container-restarts">Pod Lifecycle: Container restarts（Kubernetes Docs）</a> — liveness 失敗後の再起動に入るバックオフ（10 秒から倍々、上限 300 秒、10 分で解除）の一次情報。</li>
         </ul>
       </div>
     </article>
@@ -150,6 +186,11 @@ done</pre>
     <!-- recent:start -->
     <section class="section recent-articles">
       <div class="section-title">最近の記事</div>
+      <div class="card">
+        <h3><a href="archive/2026-11-19.html">CPU limit は 2 なのに、なぜ Go のアプリは 8 コアぶん走ろうとして止められるのか？</a></h3>
+        <div class="summary">Kubernetes の CPU limit は 100ms ごとの CPU 時間枠で、Go 1.24 までの GOMAXPROCS はノードのコア数になるため枠を早々に使い切って止められる。Go 1.25 の新しい既定値と、環境変数・GODEBUG での揃え方。</div>
+        <div class="meta"><span class="tag tag-lang">Lang</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-19</span></div>
+      </div>
       <div class="card">
         <h3><a href="archive/2026-11-18.html">import と書いただけなのに、なぜ Node は「Cannot use import statement outside a module」で落ちるのか？</a></h3>
         <div class="summary">Node が .js を CommonJS と ES Modules のどちらで読むかは拡張子と package.json の type で決まる。冒頭のエラーの正体と、require(esm) が top-level await で止まる理由を解説する。</div>
@@ -164,11 +205,6 @@ done</pre>
         <h3><a href="archive/2026-11-16.html">AWS の鍵は渡していないのに、なぜ署名付き URL だけで非公開の S3 ファイルを落とせるのか？</a></h3>
         <div class="summary">署名付き URL に入っているのは鍵ではなく条件と HMAC 署名で、S3 は同じ計算をやり直して照合する。作成者の権限で動き、一時認証情報なら早く切れ、1 本だけの取り消しはできない仕組みを解説する。</div>
         <div class="meta"><span class="tag tag-security">Security</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-16</span></div>
-      </div>
-      <div class="card">
-        <h3><a href="archive/2026-11-15.html">z-index: 9999 にしたのに、なぜモーダルはヘッダーの下に潜るのか？</a></h3>
-        <div class="summary">z-index は同じスタッキングコンテキストの兄弟同士でしか比べられず、祖先に transform や z-index 付きの板があると 9999 でも外の 10 に負ける仕組みと、isolation・Portal・dialog での直し方。</div>
-        <div class="meta"><span class="tag tag-frontend">Frontend</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-15</span></div>
       </div>
       <div class="recent-more"><a href="archive/">アーカイブですべて見る →</a></div>
     </section>
