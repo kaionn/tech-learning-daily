@@ -40,7 +40,7 @@
         <button class="chip" data-cat="container">Container <span class="chip-count">20</span></button>
         <button class="chip" data-cat="network">Network <span class="chip-count">18</span></button>
         <button class="chip" data-cat="lang">Lang <span class="chip-count">17</span></button>
-        <button class="chip" data-cat="db">DB <span class="chip-count">15</span></button>
+        <button class="chip" data-cat="db">DB <span class="chip-count">16</span></button>
         <button class="chip" data-cat="security">Security <span class="chip-count">10</span></button>
         <button class="chip" data-cat="arch">Arch <span class="chip-count">9</span></button>
         <button class="chip" data-cat="ai">AI <span class="chip-count">8</span></button>
@@ -63,6 +63,13 @@
 
     <section class="section month" data-month="2026-11">
       <div class="section-title">2026 年 11 月 <span class="count"></span></div>
+      <div class="card" data-cat="db" data-diff="基礎"
+           data-search="件数を 1 つ返すだけなのに、なぜ postgres の count(*) はテーブルが育つほど遅くなるのか？ postgres は行数をどこにも保存していない。mvcc で見える行数がトランザクションごとに違うため count(*) は全行を読んで可視性を確かめる仕組みと、index only scan・visibility map の条件、推定値やページング見直しによる代替策。" data-terms="MVCC / heap / tuple / visibility map / Index Only Scan / Heap Fetches / reltuples">
+        <h3><a href="2026-11-21.html">件数を 1 つ返すだけなのに、なぜ Postgres の COUNT(*) はテーブルが育つほど遅くなるのか？</a></h3>
+        <div class="summary">Postgres は行数をどこにも保存していない。MVCC で見える行数がトランザクションごとに違うため COUNT(*) は全行を読んで可視性を確かめる仕組みと、Index Only Scan・visibility map の条件、推定値やページング見直しによる代替策。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-db">DB</span><span>🌿 基礎</span><span>⏱ 約 8 分</span><span>2026-11-21</span></div>
+      </div>
       <div class="card" data-cat="container" data-diff="基礎"
            data-search="db が数秒詰まっただけなのに、なぜ全部の pod が一斉に再起動するのか？ liveness probe は失敗でコンテナを再起動し、readiness probe は宛先から外すだけ。db を見る liveness が db の詰まりで全 pod を同時に再起動させる仕組みと、probe 設定値の読み方・startupprobe の使い方。" data-terms="liveness probe / readiness probe / startup probe / kubelet / CrashLoopBackOff / 連鎖障害（cascading failure）">
         <h3><a href="2026-11-20.html">DB が数秒詰まっただけなのに、なぜ全部の Pod が一斉に再起動するのか？</a></h3>

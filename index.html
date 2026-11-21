@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tech Learning Daily — DB が数秒詰まっただけなのに、なぜ全部の Pod が一斉に再起動するのか？</title>
-  <meta name="description" content="liveness probe は失敗するとコンテナを再起動し、readiness probe は通信を外すだけ。DB を確認する /healthz を liveness に使うと、DB の詰まりで全 Pod が再起動する理由と設定の勘所を解説する。">
+  <title>Tech Learning Daily — 件数を 1 つ返すだけなのに、なぜ Postgres の COUNT(*) はテーブルが育つほど遅くなるのか？</title>
+  <meta name="description" content="Postgres は行数をどこにも持っていない。MVCC では見える行数がトランザクションごとに違うため、COUNT(*) は全行を読んで可視性を確かめる。索引だけで数える条件と、正確さを手放す代替策を解説する。">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Tech Learning Daily">
-  <meta property="og:title" content="Tech Learning Daily — DB が数秒詰まっただけなのに、なぜ全部の Pod が一斉に再起動するのか？">
-  <meta property="og:description" content="liveness probe は失敗するとコンテナを再起動し、readiness probe は通信を外すだけ。DB を確認する /healthz を liveness に使うと、DB の詰まりで全 Pod が再起動する理由と設定の勘所を解説する。">
+  <meta property="og:title" content="Tech Learning Daily — 件数を 1 つ返すだけなのに、なぜ Postgres の COUNT(*) はテーブルが育つほど遅くなるのか？">
+  <meta property="og:description" content="Postgres は行数をどこにも持っていない。MVCC では見える行数がトランザクションごとに違うため、COUNT(*) は全行を読んで可視性を確かめる。索引だけで数える条件と、正確さを手放す代替策を解説する。">
   <meta property="og:url" content="https://tech-learn.kaion-lab.com/">
   <meta property="og:image" content="https://tech-learn.kaion-lab.com/og.png">
   <meta name="twitter:card" content="summary_large_image">
@@ -22,170 +22,151 @@
   <div class="container">
     <header>
       <h1>Tech Learning Daily</h1>
-      <div class="date">2026-11-20 (Fri) — 第 126 号</div>
+      <div class="date">2026-11-21 (Sat) — 第 127 号</div>
       <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
     </header>
 
     <article class="article">
       <div class="meta-bar">
-        <span class="tag tag-container">Container</span>
+        <span class="tag tag-db">DB</span>
         <span class="difficulty">🌿 基礎</span>
         <span class="read-time">⏱ 約 8 分</span>
       </div>
-      <h2 class="article-title">DB が数秒詰まっただけなのに、なぜ全部の Pod が一斉に再起動するのか？</h2>
-      <p class="lead">「ちゃんと動いているか確かめたいから」と、<code>/healthz</code> の中で DB に <code>SELECT 1</code> を投げるようにした。ある日、DB が重いクエリで数十秒詰まった。DB が戻ったあとも API はしばらく復旧せず、<code>kubectl get pods</code> を見ると全 Pod の <code>RESTARTS</code> が揃って増えていた。壊れていたのは DB なのに、なぜアプリの Pod が全部再起動されたのだろうか。</p>
+      <h2 class="article-title">件数を 1 つ返すだけなのに、なぜ Postgres の COUNT(*) はテーブルが育つほど遅くなるのか？</h2>
+      <p class="lead">管理画面の一覧に「全 1,234,567 件」と出すために、<code>SELECT count(*) FROM orders</code> を足した。リリース当初は一瞬だったのに、データが育つにつれてこのクエリだけがスロークエリログの常連になった。返す値はたった 1 つの整数なのに、DB はなぜそれをすぐに答えられないのだろうか。</p>
 
       <div class="tldr">
         <div class="box-title">🎯 3 行まとめ</div>
         <ul>
-          <li>Kubernetes の probe は 3 種類あり、失敗したときの「罰」が違う。liveness と startup は失敗でコンテナを再起動し、readiness は Service の宛先から外すだけ。</li>
-          <li>liveness probe に DB などの外部依存を含めると、依存先の不調で全 Pod が同時に再起動され、障害が広がる。liveness は「このプロセスが自力で回復できない状態か」だけを確かめる。</li>
-          <li>既定値は <code>periodSeconds: 10</code>・<code>timeoutSeconds: 1</code>・<code>failureThreshold: 3</code>。起動の遅いアプリは liveness を緩めるのではなく startupProbe で守る。</li>
+          <li>Postgres はテーブルの正確な行数をどこにも保存していない。MVCC では同じ瞬間でもトランザクションごとに「見える行」が違うので、保存すべき 1 つの正解が存在しないからである。</li>
+          <li>そのため <code>COUNT(*)</code> は行を 1 つずつ読み、自分から見える行かを確かめて数える。所要時間は行数に比例し、索引だけで数える Index Only Scan も「読むページが減る」だけで、全件をなめる点は変わらない。</li>
+          <li>正確な件数が要らない画面では、<code>pg_class.reltuples</code> の推定値、<code>EXPLAIN</code> の見積もり、「次のページがあるか」だけを調べる方式に切り替える。</li>
         </ul>
       </div>
 
       <section class="body-section">
-        <h3>probe は kubelet が定期的に行う「健康診断」</h3>
-        <p>probe とは、各ノードで Pod を管理するエージェントである kubelet が、コンテナに対して定期的に行う診断である。HTTP リクエスト（<code>httpGet</code>）、TCP 接続（<code>tcpSocket</code>）、gRPC のヘルスチェック、コンテナ内でのコマンド実行（<code>exec</code>）のいずれかで確かめる。<code>httpGet</code> ではステータスコードが 200 以上 400 未満なら成功、それ以外は失敗と判定される。</p>
-        <p>結果は成功・失敗・不明の 3 つで、kubelet は失敗にだけ反応する。probe を定義していない場合、kubelet は常に成功とみなす。つまり probe を何も書かなければ「プロセスが生きている限り健康」という扱いになり、プロセスが落ちたときだけ <code>restartPolicy</code> に従って再起動される。</p>
-        <p>ここで押さえておきたいのは、probe は 1 回の失敗では何もしないという点である。<code>failureThreshold</code>（既定 3）回連続で失敗して初めて「失敗」と判定される。既定の <code>periodSeconds: 10</code> と組み合わせると、約 30 秒間ずっと失敗し続けたら反応する計算になる。</p>
+        <h3>「件数くらいどこかに持っているはず」という予想</h3>
+        <p>テーブルに行を足すたびにカウンタを 1 増やしておけば、<code>COUNT(*)</code> はその値を返すだけで済むように思える。実際、MySQL の古いストレージエンジンである MyISAM は正確な行数を保存しており、<code>WHERE</code> の無い単一テーブルの <code>COUNT(*)</code> はすぐに返る。</p>
+        <p>しかし Postgres も、MySQL の標準エンジンである InnoDB も、行数を保存していない。MySQL の公式マニュアルは理由を「並行するトランザクションが同じ瞬間に異なる行数を『見る』可能性があるため」と説明している。この「見る」という言葉の意味は、MVCC という仕組みから来ている。</p>
+        <p>MVCC（Multi-Version Concurrency Control）とは、行を書き換えるときに古い版を残したまま新しい版を追加し、各トランザクションには「自分が開始した時点で確定していた版」だけを見せる仕組みである。読み手と書き手がお互いを待たずに済むのが利点で、代わりに「テーブルの今の行数」が見る人によって変わる。</p>
+        <pre class="diagram">時刻 ──────────────────────────▶
+
+Tx A: BEGIN ─── count(*) → 100
+        │
+Tx B:   │ BEGIN ─ INSERT 1件 ─ COMMIT
+        │                        │
+Tx A:   └──────── count(*) → 100 │
+                                 ▼
+Tx C:                 BEGIN ─ count(*) → 101
+
+同じ瞬間でも A には 100 件、C には 101 件
+→「テーブルの行数」は 1 つに決まらない</pre>
+        <p>図の A は REPEATABLE READ のように開始時点のスナップショットを見続けるトランザクションである。B のコミット後も A にとって正しい答えは 100、C にとっては 101 だ。カウンタを 1 つだけ持っても両方には答えられないし、トランザクションごとにカウンタを持つのは行を数えるのと変わらない。</p>
       </section>
 
       <section class="body-section">
-        <h3>3 種類の probe は「失敗したときの罰」が違う</h3>
-        <p>3 種類の probe は書き方がほぼ同じだが、失敗時に kubelet が取る行動がまったく違う。この違いが今日の問いの答えになる。</p>
-        <pre class="diagram">       kubelet が probe を実行
-                │
-   ┌────────────┼────────────┐
-   ▼            ▼            ▼
-startup     liveness     readiness
-（起動時だけ） （ずっと）    （ずっと）
-   │            │            │
- 失敗が続く   失敗が続く   失敗が続く
-   ▼            ▼            ▼
-┌────────┐ ┌────────┐ ┌────────────┐
-│コンテナ│ │コンテナ│ │Service の  │
-│を再起動│ │を再起動│ │宛先から外す│
-└────────┘ └────────┘ └────────────┘
-                       プロセスは
-                       そのまま動く</pre>
-        <p>readiness probe は「いまリクエストを受けられるか」を表す。失敗すると、EndpointSlice コントローラが Service の宛先一覧（EndpointSlice）からその Pod の IP を外すので、新しいリクエストが届かなくなる。プロセスは殺されないため、状況が戻って probe が成功すれば自動で宛先に復帰する。readiness probe は起動時だけでなく、コンテナが動いている間ずっと実行される。</p>
-        <p>liveness probe は「このプロセスは生きているが、もう自力では立ち直れない状態か」を表す。公式ドキュメントが挙げる典型例はデッドロックで、プロセスは存在するのに処理が一歩も進まない状態である。失敗すると kubelet はコンテナを kill し、<code>restartPolicy</code> に従って再起動する。startup probe は起動完了の判定専用で、成功するまで liveness と readiness を実行させない。失敗した場合は liveness と同じく再起動になる。</p>
+        <h3>Postgres は 1 行ずつ「見えるか」を確かめて数える</h3>
+        <p>正解がトランザクションごとに違う以上、Postgres は問い合わせのたびに数えるしかない。どの走査方法を使うかは、実行計画を組み立てるプランナーが統計をもとに選ぶ。Postgres の行データを格納する本体のファイルを heap と呼び、heap の中の行の 1 版を tuple と呼ぶ。各 tuple には「どのトランザクションが作ったか」「どのトランザクションが消したか」の情報が付いていて、<code>COUNT(*)</code> はこれを自分のスナップショットと照らし合わせて、見える tuple だけを数える。</p>
+        <p>手元の Docker で 100 万行のテーブルを作り <code>EXPLAIN (ANALYZE, BUFFERS)</code> を取ると、計画は次の形になった。<code>Seq Scan</code> は heap の全ページを先頭から順に読む走査で、<code>Buffers</code> は読んだ 8KB ページの数である。</p>
+        <pre class="code">Aggregate
+  -&gt;  Seq Scan on items
+        (actual rows=1000000)
+        Buffers: shared hit=9346</pre>
+        <p>件数を返すために、100 万行が入った 9,346 ページをすべて読んでいる。行が 10 倍になれば読むページもほぼ 10 倍になるので、テーブルが育つほど遅くなるのはこの設計の素直な帰結である。さらに、<code>UPDATE</code> や <code>DELETE</code> で生まれた古い版（dead tuple）も VACUUM で回収されるまでは heap に残るため、更新の多いテーブルでは「見えない行」を読み飛ばす分まで時間がかかる。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>索引だけで数える Index Only Scan と visibility map</h3>
+        <p>「主キーの索引は heap よりずっと小さいのだから、索引の項目を数えればよい」と考えるのは自然だ。ところが Postgres の索引には可視性の情報が入っていない。索引の項目を見つけても、その行が自分から見えるかは heap の tuple を見ないと分からないのである。</p>
+        <p>この往復を省くのが visibility map である。visibility map は heap の 1 ページにつき 2 ビットを持つ小さな地図で、そのうち all-visible ビットは「このページの行はすべて、今後のどのトランザクションからも見える」ことを表す。ビットが立っているページの行なら、Index Only Scan（索引だけを読んで答える走査）は heap を見ずに数えられる。立っていなければ heap を見に行く。この heap 参照が <code>EXPLAIN</code> の <code>Heap Fetches</code> に表れる。</p>
+        <p>ビットの扱いは非対称だ。公式ドキュメントによれば、ビットを立てるのは VACUUM だけで、ページ上の行を変更する操作はどれもビットを下ろす。同じ 100 万行のテーブルで試すと、VACUUM 直後の Index Only Scan は <code>Heap Fetches: 0</code>・読んだページ 2,736 だった。そこで 10 件に 1 件を <code>UPDATE</code> すると、更新行が全ページに散らばっていたためほぼ全ページのビットが下り、<code>Heap Fetches</code> は 110 万回、読んだページは延べ約 21 万になった。</p>
+        <p>そして VACUUM 直後の理想的な状態でも、Index Only Scan は索引の 100 万項目を 1 つずつ数えている。読むページが減って I/O が軽くなるだけで、行数に比例する仕事であることは変わらない。実際この実験ではデータがすべてメモリに載っていたため、所要時間は Seq Scan とほぼ同じで、プランナーは何も指定しなければ Seq Scan を選んだ。Index Only Scan は「速くなる場合がある」最適化であり、件数取得を一瞬にする仕組みではない。</p>
       </section>
 
       <div class="analogy">
         <div class="box-title">🍱 たとえるなら</div>
-        <p>readiness は飲食店の「準備中」の札、liveness は店長を呼んで店員を交代させる判断である。仕入れ業者（DB）の配送が遅れて料理が出せないとき、正しい対応は札を「準備中」にして客を他店舗へ回すこと（readiness）だ。ここで店員を全員交代させても（liveness）、配送は早まらない。新しい店員が仕込みからやり直すぶん、配送が戻ったあとの再開もかえって遅れる。</p>
+        <p>貸し出しの多い図書館で「いま棚にある本は何冊か」を数えるようなものだ。蔵書目録（索引）を見れば登録冊数はすぐ分かるが、貸出中や廃棄予定の本が混ざっているので、本当の冊数は棚（heap）を見ないと分からない。visibility map は棚ごとに貼る「点検済み、全冊在架」の札にあたる。札は点検係（VACUUM）しか貼れず、誰かが 1 冊借りた瞬間に剥がれる。札のある棚は目録だけで数えてよいが、それでも 1 冊ずつ数える手間は残る。</p>
       </div>
 
       <section class="body-section">
-        <h3>DB を見る liveness が全 Pod を道連れにする仕組み</h3>
-        <p>「DB に繋がらないアプリは不健康なのだから、再起動されて当然」と思える。しかし DB が詰まっている状況で再起動しても、DB は速くならない。しかも DB は全 Pod が共有しているので、全 Pod の liveness probe がほぼ同じタイミングで失敗する。結果として全レプリカが同時に再起動され、DB の不調だけだった障害が「アプリが全滅した」障害に広がる。</p>
-        <p>再起動はさらに復旧を遅らせる。再起動直後のアプリは接続プールの確立やキャッシュの温め直しから始めるため、DB が戻った瞬間に全 Pod が一斉に接続を張りに行き、DB に負荷の山を作る。加えて、繰り返し落ちたコンテナには再起動の待ち時間（バックオフ）が 10 秒、20 秒、40 秒…と倍々で入り、上限は 300 秒である。これが <code>CrashLoopBackOff</code> 状態で、DB が戻っても Pod がすぐには上がってこない理由になる。</p>
-        <p>負荷が原因の場合も同じ構造になる。<code>timeoutSeconds</code> の既定は 1 秒なので、高負荷で <code>/healthz</code> の応答が 1 秒を超えると probe は失敗する。忙しい Pod から順に再起動されると、残りの Pod に負荷が寄ってさらに遅くなり、次の Pod も再起動される。公式ドキュメントも、誤った liveness probe は高負荷時の再起動と残りの Pod への負荷集中という連鎖障害（cascading failure）を招くと注意している。</p>
-        <p>対策は、エンドポイントを役割で分けることである。liveness 用はプロセス内部だけで完結する軽い応答にし、外部依存は見ない。DB や下流サービスの状態を反映したいなら readiness 用のエンドポイントに入れる。そうすれば DB が詰まったときは全 Pod が宛先から外れ、そのあいだのリクエストはエラーになる。それでもプロセスと接続プールは生き残るので、DB が戻れば次の probe の成功で宛先に復帰し、仕込み直しは要らない。</p>
-        <pre class="code">livenessProbe:
-  httpGet:
-    path: /livez     # プロセス内部だけを見る
-    port: 8080
-readinessProbe:
-  httpGet:
-    path: /readyz    # DB 等の依存もここで見る
-    port: 8080</pre>
-      </section>
-
-      <section class="body-section">
-        <h3>設定値は「何秒で反応するか」で読む</h3>
-        <p>probe の各フィールドは、組み合わせて「何秒失敗が続いたら反応するか」として読むと挙動が掴みやすい。読者が最初に触るべきものから順に並べる。</p>
-        <p><code>periodSeconds</code>（既定 10、最小 1）は実行間隔で、短くするほど異常に早く反応するが、exec probe ではそのたびにプロセスが fork されるため、Pod 密度の高いノードでは CPU 負荷になる。<code>failureThreshold</code>（既定 3）は連続失敗の許容回数で、上げるほど一時的な遅延に強くなる代わりに、本当に固まったときの検出が遅れる。公式ドキュメントは、liveness と readiness に同じ軽いエンドポイントを使い、liveness 側だけ <code>failureThreshold</code> を高くするパターンを紹介している。こうすると、まず宛先から外れ、それでも戻らないときだけ再起動される。</p>
-        <p><code>timeoutSeconds</code>（既定 1、最小 1）は 1 回の応答待ちの上限である。GC の停止や高負荷で 1 秒を超えうるアプリなら、ここを少し伸ばすほうが誤検知を減らせる。<code>successThreshold</code>（既定 1）は失敗後に何回連続成功したら戻すかで、liveness と startup では 1 以外を指定できない。<code>initialDelaySeconds</code>（既定 0）は起動後に probe を始めるまでの待ち時間である。</p>
-        <p>起動に時間がかかるアプリで liveness の <code>initialDelaySeconds</code> を大きくするのは筋が悪い。その秒数のあいだ liveness はまったく働かず、しかも起動時間がばらついて値を超えれば、結局起動途中で kill されるからだ。公式ドキュメントは、起動時間が <code>initialDelaySeconds + failureThreshold × periodSeconds</code>（既定なら 0 + 3 × 10 = 30 秒）を超えうるなら、liveness と同じエンドポイントを見る startupProbe を足し、その <code>failureThreshold</code> を十分高くするよう勧めている。</p>
-        <pre class="code">startupProbe:
-  httpGet:
-    path: /livez
-    port: 8080
-  failureThreshold: 30   # 30 × 10 秒 = 最大 300 秒待つ
-  periodSeconds: 10</pre>
+        <h3>正確さを手放すという設計判断</h3>
+        <p>速くする方法の多くは、正確さか即時性のどちらかを手放すことになる。最初に検討すべきは「その画面に正確な件数が本当に要るか」である。「約 120 万件」で十分なら、プランナー用の統計である <code>pg_class.reltuples</code> を読むのが最も軽い。値は VACUUM、ANALYZE、<code>CREATE INDEX</code> などで更新され、autovacuum が動いていれば大きくはずれにくい。ただし統計の更新後に大量の行が増減すると、次の更新までずれたままになる。</p>
+        <pre class="code">SELECT reltuples::bigint AS estimate
+FROM pg_class
+WHERE oid = 'public.orders'::regclass;</pre>
+        <p><code>WHERE</code> 付きの件数を見積もりたいときは、<code>EXPLAIN</code> の出力にある見積もり行数（<code>rows=</code>）を使う方法が Postgres の公式 Wiki で紹介されている。こちらも統計からの推定なので、条件が複雑になるほど誤差は大きくなりうる。</p>
+        <p>ページングのためだけに件数を取っているなら、件数そのものをやめる手もある。「次のページがあるか」は 1 ページ分より 1 件多く取得すれば分かり、取得件数は表示件数 + 1 で止まる。正確な件数がどうしても必要なら、挿入・削除のたびに更新する集計テーブルを持つ方法がある。ただし MySQL のマニュアルも注意するとおり、全トランザクションが同じカウンタ行を更新するため、書き込みが多いとその行のロック待ちが新たなボトルネックになる。</p>
       </section>
 
       <div class="practical">
         <div class="box-title">💼 実務でどう出会うか</div>
-        <p>典型的なのは、フレームワークのヘルスチェック機能（DB・Redis・外部 API を全部まとめて確認する <code>/health</code>）をそのまま liveness に設定しているケースである。障害時に <code>kubectl describe pod</code> の Events に <code>Liveness probe failed</code> と <code>Killing</code> が並び、全 Pod の <code>RESTARTS</code> が同時に増えていたら、このパターンを疑う。また、プロセスがエラーで自分から落ちるタイプのアプリなら、公式ドキュメントのとおり liveness probe 自体が不要なこともある。落ちれば <code>restartPolicy</code> で再起動されるからだ。</p>
+        <p>最も多いのは、ページネーション用 gem やライブラリが一覧表示のたびに裏で <code>COUNT(*)</code> を発行しているケースである。一覧本体のクエリは <code>LIMIT 20</code> で速いのに、総件数のクエリだけが遅く、ページ全体の応答時間を支配する。スロークエリログで <code>SELECT COUNT(*) FROM ...</code> が上位に来たら、まず「その件数は画面で正確に要るか」を企画側と確認し、不要なら推定値表示か「次へ」だけのページングに切り替える。必要な場合でも、<code>EXPLAIN (ANALYZE, BUFFERS)</code> で <code>Heap Fetches</code> が大きければ、そのテーブルは VACUUM が追いついていない兆候として autovacuum の状況を確認する。</p>
       </div>
 
       <div class="hands-on">
         <div class="box-title">⌨️ 手を動かす（5 分）</div>
-        <p>kind で作ったローカルクラスタに、ファイルの有無で成否が決まる exec probe を持つ Pod を立て、readiness と liveness の失敗時の違いを観察する。</p>
-        <pre class="code">kind create cluster --name probe-lab
-
-cat &lt;&lt;'YAML' | kubectl apply -f -
-apiVersion: v1
-kind: Pod
-metadata:
-  name: probe-demo
-spec:
-  terminationGracePeriodSeconds: 1
-  containers:
-  - name: app
-    image: busybox:1.36
-    command: ["sh", "-c", "touch /tmp/ready /tmp/alive; sleep 3600"]
-    readinessProbe:
-      exec: { command: ["cat", "/tmp/ready"] }
-      periodSeconds: 2
-    livenessProbe:
-      exec: { command: ["cat", "/tmp/alive"] }
-      periodSeconds: 2
-YAML
-
-kubectl wait --for=condition=Ready pod/probe-demo --timeout=60s
-
-# 1) readiness を失敗させる
-kubectl exec probe-demo -- rm /tmp/ready
-sleep 10; kubectl get pod probe-demo
-
-# 2) liveness を失敗させる
-kubectl exec probe-demo -- rm /tmp/alive
-sleep 15; kubectl get pod probe-demo
-kubectl describe pod probe-demo | tail -n 8
-
-kind delete cluster --name probe-lab</pre>
-        <p>1) の後は <code>READY</code> が <code>0/1</code> になるが、<code>RESTARTS</code> は 0 のまま増えない。プロセスは動き続け、宛先から外れただけである。2) の後は <code>RESTARTS</code> が 1 に増え、Events に <code>Liveness probe failed</code> と、コンテナを kill して再起動した記録が出る。再起動したコンテナでは起動コマンドが両方のファイルを作り直すので、<code>READY</code> も <code>1/1</code> に戻る。<code>terminationGracePeriodSeconds: 1</code> は kill 時の猶予（Pod の既定は 30 秒）を縮めて、再起動を待たずに観察するための指定である。</p>
+        <p>100 万行のテーブルで、VACUUM 直後と UPDATE 直後の Index Only Scan を比べ、visibility map のビットが下りると <code>Heap Fetches</code> が跳ね上がることを確かめる。比較のため Seq Scan と Bitmap Scan を禁止し、並列実行も切っている。</p>
+        <pre class="code">docker run -d --name pgcount -e POSTGRES_PASSWORD=pass postgres:17
+sleep 8
+docker exec -i pgcount psql -U postgres &lt;&lt;'SQL'
+CREATE TABLE items (id bigserial PRIMARY KEY, body text);
+INSERT INTO items (body)
+  SELECT md5(i::text) FROM generate_series(1, 1000000) AS i;
+SET max_parallel_workers_per_gather = 0;
+SET enable_seqscan = off;
+SET enable_bitmapscan = off;
+VACUUM items;
+EXPLAIN (ANALYZE, BUFFERS) SELECT count(*) FROM items;
+UPDATE items SET body = 'x' WHERE id % 10 = 0;
+EXPLAIN (ANALYZE, BUFFERS) SELECT count(*) FROM items;
+VACUUM items;
+EXPLAIN (ANALYZE, BUFFERS) SELECT count(*) FROM items;
+SQL
+docker rm -f pgcount</pre>
+        <p>1 回目は <code>Heap Fetches: 0</code> で、読んだページ（<code>Buffers: shared hit</code>）は索引の約 2,700 だけになるはずだ。<code>UPDATE</code> 直後の 2 回目は <code>Heap Fetches</code> が 100 万を超え、読んだページも桁違いに増える。更新したのは 1 割の行でも、それが全ページに散らばっているので、全ページの all-visible ビットが下りたからである。それでも 2 回目の件数は 100 万のまま変わらない。VACUUM をかけた 3 回目は <code>Heap Fetches: 0</code> に戻る。3 回とも <code>rows=1000000</code> を 1 件ずつ数えていることも実行計画から読み取れる。</p>
       </div>
 
       <div class="misconceptions">
         <div class="box-title">🙅 よくある誤解</div>
         <ul>
-          <li><span class="wrong">liveness と readiness は同じヘルスチェックを 2 回書くもの</span> — 失敗時の行動が「再起動」と「宛先から外す」で違う。外部依存のように再起動しても直らない理由で失敗しうる確認は、readiness だけに入れる。</li>
-          <li><span class="wrong">readiness probe は起動完了の確認なので、一度成功すれば以後は実行されない</span> — readiness はコンテナが動いている間ずっと実行され、途中で失敗すれば Pod はいつでも宛先から外れる。起動時だけ実行されるのは startup probe である。</li>
-          <li><span class="wrong">httpGet probe は <code>{"status":"ng"}</code> のような本文も読んで判定してくれる</span> — 判定に使われるのはステータスコードだけで、本文は見ない（kubelet は本文を 10KiB 以降読まない）。異常を伝えたいなら 200〜399 以外のステータスコードを返す必要がある。</li>
+          <li><span class="wrong"><code>COUNT(1)</code> や <code>COUNT(id)</code> にすれば速くなる</span> — 遅さの原因は行を 1 つずつ見て可視性を確かめることにあり、引数の書き方を変えてもこの仕事は無くならない。MySQL のマニュアルも InnoDB では <code>COUNT(*)</code> と <code>COUNT(1)</code> を同じに扱うと明記している。なお <code>COUNT(列)</code> は NULL を数えないため、結果の意味が変わる場合がある。</li>
+          <li><span class="wrong">索引を貼れば <code>COUNT(*)</code> は一瞬になる</span> — 索引は読むページ数を減らすだけで、件数に比例する仕事は残る。visibility map のビットが下りていれば heap も見に行くので、更新の多いテーブルでは索引の効果がほとんど出ない。</li>
+          <li><span class="wrong"><code>reltuples</code> は「少し古い正確な件数」である</span> — <code>reltuples</code> はプランナー用の推定値である。統計を更新した直後でも、実際の件数と一致する保証はない。</li>
         </ul>
       </div>
 
       <div class="glossary">
         <div class="box-title">📖 用語ミニ辞典</div>
         <dl>
-          <dt>liveness probe</dt><dd>プロセスが自力で回復できない状態かを確かめる診断。連続失敗でコンテナを再起動する。</dd>
-          <dt>readiness probe</dt><dd>リクエストを受けられるかを確かめる診断。失敗すると Service の宛先から外れるが、プロセスは動き続ける。</dd>
-          <dt>startup probe</dt><dd>起動完了の判定専用の診断。成功するまで liveness / readiness を止め、失敗が続くと再起動する。</dd>
-          <dt>kubelet</dt><dd>各ノードで動き、Pod のコンテナの起動・監視・probe の実行を担うエージェント。</dd>
-          <dt>CrashLoopBackOff</dt><dd>再起動を繰り返すコンテナに、倍々に伸びる待ち時間（上限 300 秒）が入っている状態。</dd>
-          <dt>連鎖障害（cascading failure）</dt><dd>一部の不調が再起動や負荷集中を通じて、ほかの正常な部分まで巻き込んで広がる障害。</dd>
+          <dt>MVCC</dt><dd>行の古い版を残したまま新しい版を足し、各トランザクションに自分のスナップショット時点の版だけを見せる同時実行制御。</dd>
+          <dt>heap / tuple</dt><dd>heap は Postgres の行データ本体を収めたファイル、tuple はその中の行の 1 版。</dd>
+          <dt>visibility map</dt><dd>heap の 1 ページごとに「全行が誰からでも見える（all-visible）」「全行が凍結済み」を記録する小さな地図。ビットを立てるのは VACUUM だけ。</dd>
+          <dt>Index Only Scan</dt><dd>索引だけを読んで結果を返す走査。visibility map のビットが立っていないページの行は heap も参照する。</dd>
+          <dt>Heap Fetches</dt><dd>Index Only Scan が可視性確認のために heap を参照した回数。<code>EXPLAIN ANALYZE</code> に表示される。</dd>
+          <dt>reltuples</dt><dd><code>pg_class</code> にあるテーブルの推定行数。VACUUM・ANALYZE・一部の DDL で更新されるプランナー用の統計。</dd>
         </dl>
       </div>
 
       <div class="further-reading">
         <div class="box-title">🔗 もっと深く</div>
         <ul>
-          <li><a href="https://kubernetes.io/docs/concepts/configuration/liveness-readiness-startup-probes/">Liveness, Readiness, and Startup Probes（Kubernetes Docs）</a> — 3 種類の役割、各フィールドの既定値、liveness の連鎖障害への注意が一か所にまとまっている。</li>
-          <li><a href="https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/">Configure Liveness, Readiness and Startup Probes（Kubernetes Docs）</a> — exec / HTTP / TCP / gRPC の各 probe を実際に動かして失敗時の Events を確かめられる手順書。</li>
-          <li><a href="https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#container-restarts">Pod Lifecycle: Container restarts（Kubernetes Docs）</a> — liveness 失敗後の再起動に入るバックオフ（10 秒から倍々、上限 300 秒、10 分で解除）の一次情報。</li>
+          <li><a href="https://wiki.postgresql.org/wiki/Slow_Counting">PostgreSQL Wiki: Slow Counting</a> — <code>COUNT(*)</code> が遅い理由を Postgres コミュニティ自身が短くまとめたページ。</li>
+          <li><a href="https://www.postgresql.org/docs/current/indexes-index-only-scans.html">PostgreSQL Docs: Index-Only Scans and Covering Indexes</a> — visibility map のビットが立っているときだけ heap 参照を省けるという条件の一次資料。</li>
+          <li><a href="https://wiki.postgresql.org/wiki/Count_estimate">PostgreSQL Wiki: Count estimate</a> — <code>reltuples</code> と <code>EXPLAIN</code> を使った件数推定のクエリ集。</li>
+          <li><a href="https://dev.mysql.com/doc/refman/8.4/en/aggregate-functions.html">MySQL 8.4 Reference Manual: Aggregate Function Descriptions</a> — <code>COUNT()</code> の項で InnoDB が行数を保存しない理由と MyISAM との違いが読める。</li>
         </ul>
       </div>
+
     </article>
 
     <!-- recent:start -->
     <section class="section recent-articles">
       <div class="section-title">最近の記事</div>
+      <div class="card">
+        <h3><a href="archive/2026-11-20.html">DB が数秒詰まっただけなのに、なぜ全部の Pod が一斉に再起動するのか？</a></h3>
+        <div class="summary">liveness probe は失敗でコンテナを再起動し、readiness probe は宛先から外すだけ。DB を見る liveness が DB の詰まりで全 Pod を同時に再起動させる仕組みと、probe 設定値の読み方・startupProbe の使い方。</div>
+        <div class="meta"><span class="tag tag-container">Container</span><span>🌿 基礎</span><span>⏱ 約 8 分</span><span>2026-11-20</span></div>
+      </div>
       <div class="card">
         <h3><a href="archive/2026-11-19.html">CPU limit は 2 なのに、なぜ Go のアプリは 8 コアぶん走ろうとして止められるのか？</a></h3>
         <div class="summary">Kubernetes の CPU limit は 100ms ごとの CPU 時間枠で、Go 1.24 までの GOMAXPROCS はノードのコア数になるため枠を早々に使い切って止められる。Go 1.25 の新しい既定値と、環境変数・GODEBUG での揃え方。</div>
@@ -200,11 +181,6 @@ kind delete cluster --name probe-lab</pre>
         <h3><a href="archive/2026-11-17.html">PgBouncer を挟んだだけなのに、なぜ「prepared statement &quot;a1&quot; does not exist」で落ちるのか？</a></h3>
         <div class="summary">PgBouncer の transaction pooling では prepared statement・SET・advisory lock が接続の付け替えで壊れる。その仕組みと、1.21 以降の対応範囲、Rails・pgx の設定での合わせ方。</div>
         <div class="meta"><span class="tag tag-db">DB</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-17</span></div>
-      </div>
-      <div class="card">
-        <h3><a href="archive/2026-11-16.html">AWS の鍵は渡していないのに、なぜ署名付き URL だけで非公開の S3 ファイルを落とせるのか？</a></h3>
-        <div class="summary">署名付き URL に入っているのは鍵ではなく条件と HMAC 署名で、S3 は同じ計算をやり直して照合する。作成者の権限で動き、一時認証情報なら早く切れ、1 本だけの取り消しはできない仕組みを解説する。</div>
-        <div class="meta"><span class="tag tag-security">Security</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-16</span></div>
       </div>
       <div class="recent-more"><a href="archive/">アーカイブですべて見る →</a></div>
     </section>

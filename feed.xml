@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-11-20T11:28:38+09:00</updated>
+  <updated>2026-11-21T11:37:32+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>件数を 1 つ返すだけなのに、なぜ Postgres の COUNT(*) はテーブルが育つほど遅くなるのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-11-21.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-11-21.html</id>
+    <updated>2026-11-21T11:37:32+09:00</updated>
+    <summary>Postgres は行数を保存していない。MVCC では見える行数がトランザクションごとに違うため COUNT(*) は全行の可視性を確かめて数える。Index Only Scan と visibility map の条件、推定値などの代替策。</summary>
+  </entry>
   <entry>
     <title>DB が数秒詰まっただけなのに、なぜ全部の Pod が一斉に再起動するのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-11-20.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-11-08.html</id>
     <updated>2026-11-08T09:51:19+09:00</updated>
     <summary>サーバーは自分の証明書と一緒に中間証明書を送る必要がある。送り忘れてもブラウザはキャッシュや AIA で補うが、OpenSSL ベースの curl は補わずに失敗する。nginx では fullchain.pem を指定して直す。</summary>
-  </entry>
-  <entry>
-    <title>b に append しただけなのに、なぜ別の変数 c の中身まで変わるのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-11-07.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-11-07.html</id>
-    <updated>2026-11-07T10:02:31+09:00</updated>
-    <summary>Go の slice は配列へのポインタ・長さ・容量の 3 つ組で、append は容量に空きがあれば共有中の配列に上書きする。共有を断つには s[a:b:b] や slices.Clip で容量を絞るか Clone する。</summary>
   </entry>
 </feed>

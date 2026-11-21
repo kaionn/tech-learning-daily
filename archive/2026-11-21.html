@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tech Learning Daily — 件数を 1 つ返すだけなのに、なぜ Postgres の COUNT(*) はテーブルが育つほど遅くなるのか？</title>
+  <meta name="description" content="Postgres は行数をどこにも持っていない。MVCC では見える行数がトランザクションごとに違うため、COUNT(*) は全行を読んで可視性を確かめる。索引だけで数える条件と、正確さを手放す代替策を解説する。">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Tech Learning Daily">
+  <meta property="og:title" content="Tech Learning Daily — 件数を 1 つ返すだけなのに、なぜ Postgres の COUNT(*) はテーブルが育つほど遅くなるのか？">
+  <meta property="og:description" content="Postgres は行数をどこにも持っていない。MVCC では見える行数がトランザクションごとに違うため、COUNT(*) は全行を読んで可視性を確かめる。索引だけで数える条件と、正確さを手放す代替策を解説する。">
+  <meta property="og:url" content="https://tech-learn.kaion-lab.com/archive/2026-11-21.html">
+  <meta property="og:image" content="https://tech-learn.kaion-lab.com/og.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="stylesheet" href="../style.css">
+  <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="../feed.xml">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Tech Learning Daily</h1>
+      <div class="date">2026-11-21 (Sat) — 第 127 号</div>
+      <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
+    </header>
+
+    <article class="article">
+      <div class="meta-bar">
+        <span class="tag tag-db">DB</span>
+        <span class="difficulty">🌿 基礎</span>
+        <span class="read-time">⏱ 約 8 分</span>
+      </div>
+      <h2 class="article-title">件数を 1 つ返すだけなのに、なぜ Postgres の COUNT(*) はテーブルが育つほど遅くなるのか？</h2>
+      <p class="lead">管理画面の一覧に「全 1,234,567 件」と出すために、<code>SELECT count(*) FROM orders</code> を足した。リリース当初は一瞬だったのに、データが育つにつれてこのクエリだけがスロークエリログの常連になった。返す値はたった 1 つの整数なのに、DB はなぜそれをすぐに答えられないのだろうか。</p>
+
+      <div class="tldr">
+        <div class="box-title">🎯 3 行まとめ</div>
+        <ul>
+          <li>Postgres はテーブルの正確な行数をどこにも保存していない。MVCC では同じ瞬間でもトランザクションごとに「見える行」が違うので、保存すべき 1 つの正解が存在しないからである。</li>
+          <li>そのため <code>COUNT(*)</code> は行を 1 つずつ読み、自分から見える行かを確かめて数える。所要時間は行数に比例し、索引だけで数える Index Only Scan も「読むページが減る」だけで、全件をなめる点は変わらない。</li>
+          <li>正確な件数が要らない画面では、<code>pg_class.reltuples</code> の推定値、<code>EXPLAIN</code> の見積もり、「次のページがあるか」だけを調べる方式に切り替える。</li>
+        </ul>
+      </div>
+
+      <section class="body-section">
+        <h3>「件数くらいどこかに持っているはず」という予想</h3>
+        <p>テーブルに行を足すたびにカウンタを 1 増やしておけば、<code>COUNT(*)</code> はその値を返すだけで済むように思える。実際、MySQL の古いストレージエンジンである MyISAM は正確な行数を保存しており、<code>WHERE</code> の無い単一テーブルの <code>COUNT(*)</code> はすぐに返る。</p>
+        <p>しかし Postgres も、MySQL の標準エンジンである InnoDB も、行数を保存していない。MySQL の公式マニュアルは理由を「並行するトランザクションが同じ瞬間に異なる行数を『見る』可能性があるため」と説明している。この「見る」という言葉の意味は、MVCC という仕組みから来ている。</p>
+        <p>MVCC（Multi-Version Concurrency Control）とは、行を書き換えるときに古い版を残したまま新しい版を追加し、各トランザクションには「自分が開始した時点で確定していた版」だけを見せる仕組みである。読み手と書き手がお互いを待たずに済むのが利点で、代わりに「テーブルの今の行数」が見る人によって変わる。</p>
+        <pre class="diagram">時刻 ──────────────────────────▶
+
+Tx A: BEGIN ─── count(*) → 100
+        │
+Tx B:   │ BEGIN ─ INSERT 1件 ─ COMMIT
+        │                        │
+Tx A:   └──────── count(*) → 100 │
+                                 ▼
+Tx C:                 BEGIN ─ count(*) → 101
+
+同じ瞬間でも A には 100 件、C には 101 件
+→「テーブルの行数」は 1 つに決まらない</pre>
+        <p>図の A は REPEATABLE READ のように開始時点のスナップショットを見続けるトランザクションである。B のコミット後も A にとって正しい答えは 100、C にとっては 101 だ。カウンタを 1 つだけ持っても両方には答えられないし、トランザクションごとにカウンタを持つのは行を数えるのと変わらない。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>Postgres は 1 行ずつ「見えるか」を確かめて数える</h3>
+        <p>正解がトランザクションごとに違う以上、Postgres は問い合わせのたびに数えるしかない。どの走査方法を使うかは、実行計画を組み立てるプランナーが統計をもとに選ぶ。Postgres の行データを格納する本体のファイルを heap と呼び、heap の中の行の 1 版を tuple と呼ぶ。各 tuple には「どのトランザクションが作ったか」「どのトランザクションが消したか」の情報が付いていて、<code>COUNT(*)</code> はこれを自分のスナップショットと照らし合わせて、見える tuple だけを数える。</p>
+        <p>手元の Docker で 100 万行のテーブルを作り <code>EXPLAIN (ANALYZE, BUFFERS)</code> を取ると、計画は次の形になった。<code>Seq Scan</code> は heap の全ページを先頭から順に読む走査で、<code>Buffers</code> は読んだ 8KB ページの数である。</p>
+        <pre class="code">Aggregate
+  -&gt;  Seq Scan on items
+        (actual rows=1000000)
+        Buffers: shared hit=9346</pre>
+        <p>件数を返すために、100 万行が入った 9,346 ページをすべて読んでいる。行が 10 倍になれば読むページもほぼ 10 倍になるので、テーブルが育つほど遅くなるのはこの設計の素直な帰結である。さらに、<code>UPDATE</code> や <code>DELETE</code> で生まれた古い版（dead tuple）も VACUUM で回収されるまでは heap に残るため、更新の多いテーブルでは「見えない行」を読み飛ばす分まで時間がかかる。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>索引だけで数える Index Only Scan と visibility map</h3>
+        <p>「主キーの索引は heap よりずっと小さいのだから、索引の項目を数えればよい」と考えるのは自然だ。ところが Postgres の索引には可視性の情報が入っていない。索引の項目を見つけても、その行が自分から見えるかは heap の tuple を見ないと分からないのである。</p>
+        <p>この往復を省くのが visibility map である。visibility map は heap の 1 ページにつき 2 ビットを持つ小さな地図で、そのうち all-visible ビットは「このページの行はすべて、今後のどのトランザクションからも見える」ことを表す。ビットが立っているページの行なら、Index Only Scan（索引だけを読んで答える走査）は heap を見ずに数えられる。立っていなければ heap を見に行く。この heap 参照が <code>EXPLAIN</code> の <code>Heap Fetches</code> に表れる。</p>
+        <p>ビットの扱いは非対称だ。公式ドキュメントによれば、ビットを立てるのは VACUUM だけで、ページ上の行を変更する操作はどれもビットを下ろす。同じ 100 万行のテーブルで試すと、VACUUM 直後の Index Only Scan は <code>Heap Fetches: 0</code>・読んだページ 2,736 だった。そこで 10 件に 1 件を <code>UPDATE</code> すると、更新行が全ページに散らばっていたためほぼ全ページのビットが下り、<code>Heap Fetches</code> は 110 万回、読んだページは延べ約 21 万になった。</p>
+        <p>そして VACUUM 直後の理想的な状態でも、Index Only Scan は索引の 100 万項目を 1 つずつ数えている。読むページが減って I/O が軽くなるだけで、行数に比例する仕事であることは変わらない。実際この実験ではデータがすべてメモリに載っていたため、所要時間は Seq Scan とほぼ同じで、プランナーは何も指定しなければ Seq Scan を選んだ。Index Only Scan は「速くなる場合がある」最適化であり、件数取得を一瞬にする仕組みではない。</p>
+      </section>
+
+      <div class="analogy">
+        <div class="box-title">🍱 たとえるなら</div>
+        <p>貸し出しの多い図書館で「いま棚にある本は何冊か」を数えるようなものだ。蔵書目録（索引）を見れば登録冊数はすぐ分かるが、貸出中や廃棄予定の本が混ざっているので、本当の冊数は棚（heap）を見ないと分からない。visibility map は棚ごとに貼る「点検済み、全冊在架」の札にあたる。札は点検係（VACUUM）しか貼れず、誰かが 1 冊借りた瞬間に剥がれる。札のある棚は目録だけで数えてよいが、それでも 1 冊ずつ数える手間は残る。</p>
+      </div>
+
+      <section class="body-section">
+        <h3>正確さを手放すという設計判断</h3>
+        <p>速くする方法の多くは、正確さか即時性のどちらかを手放すことになる。最初に検討すべきは「その画面に正確な件数が本当に要るか」である。「約 120 万件」で十分なら、プランナー用の統計である <code>pg_class.reltuples</code> を読むのが最も軽い。値は VACUUM、ANALYZE、<code>CREATE INDEX</code> などで更新され、autovacuum が動いていれば大きくはずれにくい。ただし統計の更新後に大量の行が増減すると、次の更新までずれたままになる。</p>
+        <pre class="code">SELECT reltuples::bigint AS estimate
+FROM pg_class
+WHERE oid = 'public.orders'::regclass;</pre>
+        <p><code>WHERE</code> 付きの件数を見積もりたいときは、<code>EXPLAIN</code> の出力にある見積もり行数（<code>rows=</code>）を使う方法が Postgres の公式 Wiki で紹介されている。こちらも統計からの推定なので、条件が複雑になるほど誤差は大きくなりうる。</p>
+        <p>ページングのためだけに件数を取っているなら、件数そのものをやめる手もある。「次のページがあるか」は 1 ページ分より 1 件多く取得すれば分かり、取得件数は表示件数 + 1 で止まる。正確な件数がどうしても必要なら、挿入・削除のたびに更新する集計テーブルを持つ方法がある。ただし MySQL のマニュアルも注意するとおり、全トランザクションが同じカウンタ行を更新するため、書き込みが多いとその行のロック待ちが新たなボトルネックになる。</p>
+      </section>
+
+      <div class="practical">
+        <div class="box-title">💼 実務でどう出会うか</div>
+        <p>最も多いのは、ページネーション用 gem やライブラリが一覧表示のたびに裏で <code>COUNT(*)</code> を発行しているケースである。一覧本体のクエリは <code>LIMIT 20</code> で速いのに、総件数のクエリだけが遅く、ページ全体の応答時間を支配する。スロークエリログで <code>SELECT COUNT(*) FROM ...</code> が上位に来たら、まず「その件数は画面で正確に要るか」を企画側と確認し、不要なら推定値表示か「次へ」だけのページングに切り替える。必要な場合でも、<code>EXPLAIN (ANALYZE, BUFFERS)</code> で <code>Heap Fetches</code> が大きければ、そのテーブルは VACUUM が追いついていない兆候として autovacuum の状況を確認する。</p>
+      </div>
+
+      <div class="hands-on">
+        <div class="box-title">⌨️ 手を動かす（5 分）</div>
+        <p>100 万行のテーブルで、VACUUM 直後と UPDATE 直後の Index Only Scan を比べ、visibility map のビットが下りると <code>Heap Fetches</code> が跳ね上がることを確かめる。比較のため Seq Scan と Bitmap Scan を禁止し、並列実行も切っている。</p>
+        <pre class="code">docker run -d --name pgcount -e POSTGRES_PASSWORD=pass postgres:17
+sleep 8
+docker exec -i pgcount psql -U postgres &lt;&lt;'SQL'
+CREATE TABLE items (id bigserial PRIMARY KEY, body text);
+INSERT INTO items (body)
+  SELECT md5(i::text) FROM generate_series(1, 1000000) AS i;
+SET max_parallel_workers_per_gather = 0;
+SET enable_seqscan = off;
+SET enable_bitmapscan = off;
+VACUUM items;
+EXPLAIN (ANALYZE, BUFFERS) SELECT count(*) FROM items;
+UPDATE items SET body = 'x' WHERE id % 10 = 0;
+EXPLAIN (ANALYZE, BUFFERS) SELECT count(*) FROM items;
+VACUUM items;
+EXPLAIN (ANALYZE, BUFFERS) SELECT count(*) FROM items;
+SQL
+docker rm -f pgcount</pre>
+        <p>1 回目は <code>Heap Fetches: 0</code> で、読んだページ（<code>Buffers: shared hit</code>）は索引の約 2,700 だけになるはずだ。<code>UPDATE</code> 直後の 2 回目は <code>Heap Fetches</code> が 100 万を超え、読んだページも桁違いに増える。更新したのは 1 割の行でも、それが全ページに散らばっているので、全ページの all-visible ビットが下りたからである。それでも 2 回目の件数は 100 万のまま変わらない。VACUUM をかけた 3 回目は <code>Heap Fetches: 0</code> に戻る。3 回とも <code>rows=1000000</code> を 1 件ずつ数えていることも実行計画から読み取れる。</p>
+      </div>
+
+      <div class="misconceptions">
+        <div class="box-title">🙅 よくある誤解</div>
+        <ul>
+          <li><span class="wrong"><code>COUNT(1)</code> や <code>COUNT(id)</code> にすれば速くなる</span> — 遅さの原因は行を 1 つずつ見て可視性を確かめることにあり、引数の書き方を変えてもこの仕事は無くならない。MySQL のマニュアルも InnoDB では <code>COUNT(*)</code> と <code>COUNT(1)</code> を同じに扱うと明記している。なお <code>COUNT(列)</code> は NULL を数えないため、結果の意味が変わる場合がある。</li>
+          <li><span class="wrong">索引を貼れば <code>COUNT(*)</code> は一瞬になる</span> — 索引は読むページ数を減らすだけで、件数に比例する仕事は残る。visibility map のビットが下りていれば heap も見に行くので、更新の多いテーブルでは索引の効果がほとんど出ない。</li>
+          <li><span class="wrong"><code>reltuples</code> は「少し古い正確な件数」である</span> — <code>reltuples</code> はプランナー用の推定値である。統計を更新した直後でも、実際の件数と一致する保証はない。</li>
+        </ul>
+      </div>
+
+      <div class="glossary">
+        <div class="box-title">📖 用語ミニ辞典</div>
+        <dl>
+          <dt>MVCC</dt><dd>行の古い版を残したまま新しい版を足し、各トランザクションに自分のスナップショット時点の版だけを見せる同時実行制御。</dd>
+          <dt>heap / tuple</dt><dd>heap は Postgres の行データ本体を収めたファイル、tuple はその中の行の 1 版。</dd>
+          <dt>visibility map</dt><dd>heap の 1 ページごとに「全行が誰からでも見える（all-visible）」「全行が凍結済み」を記録する小さな地図。ビットを立てるのは VACUUM だけ。</dd>
+          <dt>Index Only Scan</dt><dd>索引だけを読んで結果を返す走査。visibility map のビットが立っていないページの行は heap も参照する。</dd>
+          <dt>Heap Fetches</dt><dd>Index Only Scan が可視性確認のために heap を参照した回数。<code>EXPLAIN ANALYZE</code> に表示される。</dd>
+          <dt>reltuples</dt><dd><code>pg_class</code> にあるテーブルの推定行数。VACUUM・ANALYZE・一部の DDL で更新されるプランナー用の統計。</dd>
+        </dl>
+      </div>
+
+      <div class="further-reading">
+        <div class="box-title">🔗 もっと深く</div>
+        <ul>
+          <li><a href="https://wiki.postgresql.org/wiki/Slow_Counting">PostgreSQL Wiki: Slow Counting</a> — <code>COUNT(*)</code> が遅い理由を Postgres コミュニティ自身が短くまとめたページ。</li>
+          <li><a href="https://www.postgresql.org/docs/current/indexes-index-only-scans.html">PostgreSQL Docs: Index-Only Scans and Covering Indexes</a> — visibility map のビットが立っているときだけ heap 参照を省けるという条件の一次資料。</li>
+          <li><a href="https://wiki.postgresql.org/wiki/Count_estimate">PostgreSQL Wiki: Count estimate</a> — <code>reltuples</code> と <code>EXPLAIN</code> を使った件数推定のクエリ集。</li>
+          <li><a href="https://dev.mysql.com/doc/refman/8.4/en/aggregate-functions.html">MySQL 8.4 Reference Manual: Aggregate Function Descriptions</a> — <code>COUNT()</code> の項で InnoDB が行数を保存しない理由と MyISAM との違いが読める。</li>
+        </ul>
+      </div>
+
+    </article>
+
+    <!-- recent:start -->
+    <!-- recent:end -->
+
+    <footer>
+      <p>Generated by Claude Code (GitHub Actions)</p>
+      <a href="./" class="archive-link">過去の記事</a>
+    </footer>
+  </div>
+</body>
+</html>
