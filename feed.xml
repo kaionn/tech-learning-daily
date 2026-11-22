@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-11-21T11:37:32+09:00</updated>
+  <updated>2026-11-22T10:29:52+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>保存した直後にジョブへ ID を渡しただけなのに、なぜジョブは「レコードが見つからない」で落ちるのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-11-22.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-11-22.html</id>
+    <updated>2026-11-22T10:29:52+09:00</updated>
+    <summary>トランザクション中の行は他の接続から見えず、COMMIT 前に積んだジョブは 0 行を引いて落ちる。after_commit や enqueue_after_transaction_commit で塞げる穴と、それでも残る取りこぼしを outbox で埋める仕組み。</summary>
+  </entry>
   <entry>
     <title>件数を 1 つ返すだけなのに、なぜ Postgres の COUNT(*) はテーブルが育つほど遅くなるのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-11-21.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-11-09.html</id>
     <updated>2026-11-09T10:05:03+09:00</updated>
     <summary>print は出力をプロセス内バッファに溜めてから write する。端末なら行単位、パイプやファイルならブロック単位で溜めるため、docker logs ではまとめて遅れて届く。PYTHONUNBUFFERED や $stdout.sync で溜めない設定にする。</summary>
-  </entry>
-  <entry>
-    <title>ブラウザでは鍵マークが付くのに、なぜ curl だけ証明書エラーになるのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-11-08.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-11-08.html</id>
-    <updated>2026-11-08T09:51:19+09:00</updated>
-    <summary>サーバーは自分の証明書と一緒に中間証明書を送る必要がある。送り忘れてもブラウザはキャッシュや AIA で補うが、OpenSSL ベースの curl は補わずに失敗する。nginx では fullchain.pem を指定して直す。</summary>
   </entry>
 </feed>

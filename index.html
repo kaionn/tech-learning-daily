@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tech Learning Daily — 件数を 1 つ返すだけなのに、なぜ Postgres の COUNT(*) はテーブルが育つほど遅くなるのか？</title>
-  <meta name="description" content="Postgres は行数をどこにも持っていない。MVCC では見える行数がトランザクションごとに違うため、COUNT(*) は全行を読んで可視性を確かめる。索引だけで数える条件と、正確さを手放す代替策を解説する。">
+  <title>Tech Learning Daily — 保存した直後にジョブへ ID を渡しただけなのに、なぜジョブは「レコードが見つからない」で落ちるのか？</title>
+  <meta name="description" content="トランザクション中の行は他の接続から見えない。COMMIT 前にキューへ積んだジョブは先に走って 0 行を引く。COMMIT 後の enqueue で塞げる穴と、それでも残る取りこぼしを outbox で埋める仕組みを解説する。">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Tech Learning Daily">
-  <meta property="og:title" content="Tech Learning Daily — 件数を 1 つ返すだけなのに、なぜ Postgres の COUNT(*) はテーブルが育つほど遅くなるのか？">
-  <meta property="og:description" content="Postgres は行数をどこにも持っていない。MVCC では見える行数がトランザクションごとに違うため、COUNT(*) は全行を読んで可視性を確かめる。索引だけで数える条件と、正確さを手放す代替策を解説する。">
+  <meta property="og:title" content="Tech Learning Daily — 保存した直後にジョブへ ID を渡しただけなのに、なぜジョブは「レコードが見つからない」で落ちるのか？">
+  <meta property="og:description" content="トランザクション中の行は他の接続から見えない。COMMIT 前にキューへ積んだジョブは先に走って 0 行を引く。COMMIT 後の enqueue で塞げる穴と、それでも残る取りこぼしを outbox で埋める仕組みを解説する。">
   <meta property="og:url" content="https://tech-learn.kaion-lab.com/">
   <meta property="og:image" content="https://tech-learn.kaion-lab.com/og.png">
   <meta name="twitter:card" content="summary_large_image">
@@ -22,146 +22,149 @@
   <div class="container">
     <header>
       <h1>Tech Learning Daily</h1>
-      <div class="date">2026-11-21 (Sat) — 第 127 号</div>
+      <div class="date">2026-11-22 (Sun) — 第 128 号</div>
       <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
     </header>
 
     <article class="article">
       <div class="meta-bar">
-        <span class="tag tag-db">DB</span>
+        <span class="tag tag-arch">Arch</span>
         <span class="difficulty">🌿 基礎</span>
-        <span class="read-time">⏱ 約 8 分</span>
+        <span class="read-time">⏱ 約 7 分</span>
       </div>
-      <h2 class="article-title">件数を 1 つ返すだけなのに、なぜ Postgres の COUNT(*) はテーブルが育つほど遅くなるのか？</h2>
-      <p class="lead">管理画面の一覧に「全 1,234,567 件」と出すために、<code>SELECT count(*) FROM orders</code> を足した。リリース当初は一瞬だったのに、データが育つにつれてこのクエリだけがスロークエリログの常連になった。返す値はたった 1 つの整数なのに、DB はなぜそれをすぐに答えられないのだろうか。</p>
+      <h2 class="article-title">保存した直後にジョブへ ID を渡しただけなのに、なぜジョブは「レコードが見つからない」で落ちるのか？</h2>
+      <p class="lead">注文を保存したら確認メールをジョブで送る。モデルの <code>after_create</code> に <code>OrderMailerJob.perform_later(id)</code> と書くだけの、何度も書いてきたコードだ。ところが本番のエラー通知には、ときどき <code>ActiveRecord::RecordNotFound: Couldn't find Order with 'id'=42</code> が届く。保存は成功していて、DB を見れば id=42 の行はちゃんとある。ジョブはなぜ、存在する行を「無い」と言ったのだろうか。</p>
 
       <div class="tldr">
         <div class="box-title">🎯 3 行まとめ</div>
         <ul>
-          <li>Postgres はテーブルの正確な行数をどこにも保存していない。MVCC では同じ瞬間でもトランザクションごとに「見える行」が違うので、保存すべき 1 つの正解が存在しないからである。</li>
-          <li>そのため <code>COUNT(*)</code> は行を 1 つずつ読み、自分から見える行かを確かめて数える。所要時間は行数に比例し、索引だけで数える Index Only Scan も「読むページが減る」だけで、全件をなめる点は変わらない。</li>
-          <li>正確な件数が要らない画面では、<code>pg_class.reltuples</code> の推定値、<code>EXPLAIN</code> の見積もり、「次のページがあるか」だけを調べる方式に切り替える。</li>
+          <li>トランザクションの中で INSERT した行は、COMMIT するまで他の DB 接続からは見えない。ジョブのワーカーは別の接続で読むので、COMMIT 前に走ると 0 行を引く。</li>
+          <li>キュー（Redis など）は DB の外にあるため、<code>perform_later</code> はトランザクションの成否と無関係にその場でジョブを積む。直し方は「COMMIT の後に積む」で、Rails・Sidekiq ともにその仕組みを持っている。</li>
+          <li>それでも COMMIT と enqueue の間でプロセスが落ちればジョブは消える。取りこぼしも許せないなら、メッセージを同じ DB の outbox テーブルに書いて後から送る（代わりに重複配送への備えが要る）。</li>
         </ul>
       </div>
 
       <section class="body-section">
-        <h3>「件数くらいどこかに持っているはず」という予想</h3>
-        <p>テーブルに行を足すたびにカウンタを 1 増やしておけば、<code>COUNT(*)</code> はその値を返すだけで済むように思える。実際、MySQL の古いストレージエンジンである MyISAM は正確な行数を保存しており、<code>WHERE</code> の無い単一テーブルの <code>COUNT(*)</code> はすぐに返る。</p>
-        <p>しかし Postgres も、MySQL の標準エンジンである InnoDB も、行数を保存していない。MySQL の公式マニュアルは理由を「並行するトランザクションが同じ瞬間に異なる行数を『見る』可能性があるため」と説明している。この「見る」という言葉の意味は、MVCC という仕組みから来ている。</p>
-        <p>MVCC（Multi-Version Concurrency Control）とは、行を書き換えるときに古い版を残したまま新しい版を追加し、各トランザクションには「自分が開始した時点で確定していた版」だけを見せる仕組みである。読み手と書き手がお互いを待たずに済むのが利点で、代わりに「テーブルの今の行数」が見る人によって変わる。</p>
-        <pre class="diagram">時刻 ──────────────────────────▶
-
-Tx A: BEGIN ─── count(*) → 100
-        │
-Tx B:   │ BEGIN ─ INSERT 1件 ─ COMMIT
-        │                        │
-Tx A:   └──────── count(*) → 100 │
-                                 ▼
-Tx C:                 BEGIN ─ count(*) → 101
-
-同じ瞬間でも A には 100 件、C には 101 件
-→「テーブルの行数」は 1 つに決まらない</pre>
-        <p>図の A は REPEATABLE READ のように開始時点のスナップショットを見続けるトランザクションである。B のコミット後も A にとって正しい答えは 100、C にとっては 101 だ。カウンタを 1 つだけ持っても両方には答えられないし、トランザクションごとにカウンタを持つのは行を数えるのと変わらない。</p>
+        <h3>前提: COMMIT 前の行は、他の接続からは存在しない</h3>
+        <p>まず DB 側の約束を確認する。<strong>トランザクション</strong>とは、複数の読み書きを「全部反映されるか、全部無かったことになるか」の一単位にまとめる仕組みだ。途中の状態を他人に見せると、後でロールバックされる幻のデータを他人が使ってしまう。そこで DB は、COMMIT されていない変更を他のトランザクションに見せない。</p>
+        <p>他人の変更をどこまで見せるかの段階を<strong>分離レベル（isolation level）</strong>と呼ぶ。PostgreSQL の既定は Read Committed で、名前の通り「COMMIT 済みのデータだけを見る」。PostgreSQL では最も緩い Read Uncommitted を指定しても Read Committed と同じに扱われるので、他人の未確定の行を読む（ダーティリード）ことはそもそも起きない。</p>
+        <p>Rails の <code>Order.create!</code> は、単体で呼べば保存と同時に COMMIT まで済ませる。問題になるのは、<code>ActiveRecord::Base.transaction do ... end</code> の中や、モデルの <code>after_save</code> / <code>after_create</code> コールバックの中でジョブを積んだときだ。これらのコールバックは保存処理と同じトランザクションの中で動くので、そこで積んだ時点では行はまだ COMMIT されていない。</p>
       </section>
 
       <section class="body-section">
-        <h3>Postgres は 1 行ずつ「見えるか」を確かめて数える</h3>
-        <p>正解がトランザクションごとに違う以上、Postgres は問い合わせのたびに数えるしかない。どの走査方法を使うかは、実行計画を組み立てるプランナーが統計をもとに選ぶ。Postgres の行データを格納する本体のファイルを heap と呼び、heap の中の行の 1 版を tuple と呼ぶ。各 tuple には「どのトランザクションが作ったか」「どのトランザクションが消したか」の情報が付いていて、<code>COUNT(*)</code> はこれを自分のスナップショットと照らし合わせて、見える tuple だけを数える。</p>
-        <p>手元の Docker で 100 万行のテーブルを作り <code>EXPLAIN (ANALYZE, BUFFERS)</code> を取ると、計画は次の形になった。<code>Seq Scan</code> は heap の全ページを先頭から順に読む走査で、<code>Buffers</code> は読んだ 8KB ページの数である。</p>
-        <pre class="code">Aggregate
-  -&gt;  Seq Scan on items
-        (actual rows=1000000)
-        Buffers: shared hit=9346</pre>
-        <p>件数を返すために、100 万行が入った 9,346 ページをすべて読んでいる。行が 10 倍になれば読むページもほぼ 10 倍になるので、テーブルが育つほど遅くなるのはこの設計の素直な帰結である。さらに、<code>UPDATE</code> や <code>DELETE</code> で生まれた古い版（dead tuple）も VACUUM で回収されるまでは heap に残るため、更新の多いテーブルでは「見えない行」を読み飛ばす分まで時間がかかる。</p>
-      </section>
-
-      <section class="body-section">
-        <h3>索引だけで数える Index Only Scan と visibility map</h3>
-        <p>「主キーの索引は heap よりずっと小さいのだから、索引の項目を数えればよい」と考えるのは自然だ。ところが Postgres の索引には可視性の情報が入っていない。索引の項目を見つけても、その行が自分から見えるかは heap の tuple を見ないと分からないのである。</p>
-        <p>この往復を省くのが visibility map である。visibility map は heap の 1 ページにつき 2 ビットを持つ小さな地図で、そのうち all-visible ビットは「このページの行はすべて、今後のどのトランザクションからも見える」ことを表す。ビットが立っているページの行なら、Index Only Scan（索引だけを読んで答える走査）は heap を見ずに数えられる。立っていなければ heap を見に行く。この heap 参照が <code>EXPLAIN</code> の <code>Heap Fetches</code> に表れる。</p>
-        <p>ビットの扱いは非対称だ。公式ドキュメントによれば、ビットを立てるのは VACUUM だけで、ページ上の行を変更する操作はどれもビットを下ろす。同じ 100 万行のテーブルで試すと、VACUUM 直後の Index Only Scan は <code>Heap Fetches: 0</code>・読んだページ 2,736 だった。そこで 10 件に 1 件を <code>UPDATE</code> すると、更新行が全ページに散らばっていたためほぼ全ページのビットが下り、<code>Heap Fetches</code> は 110 万回、読んだページは延べ約 21 万になった。</p>
-        <p>そして VACUUM 直後の理想的な状態でも、Index Only Scan は索引の 100 万項目を 1 つずつ数えている。読むページが減って I/O が軽くなるだけで、行数に比例する仕事であることは変わらない。実際この実験ではデータがすべてメモリに載っていたため、所要時間は Seq Scan とほぼ同じで、プランナーは何も指定しなければ Seq Scan を選んだ。Index Only Scan は「速くなる場合がある」最適化であり、件数取得を一瞬にする仕組みではない。</p>
+        <h3>ジョブはトランザクションより先にゴールする</h3>
+        <p>次にキュー側を見る。Sidekiq なら <code>perform_later</code> は Redis にジョブ（クラス名と引数の id）を書き込んで即座に返る。Redis は DB とは別のシステムなので、DB のトランザクションが後で COMMIT されるかロールバックされるかを知る手段がない。積んだ瞬間に、ジョブはワーカーから取り出せる状態になる。</p>
+        <pre class="diagram"> Web プロセス       Redis      ワーカー
+ ───────────       ─────      ────────
+ BEGIN
+ INSERT orders
+  → id=42(未確定)
+ perform_later(42)
+   ──────────▶ [42] ─────▶ 取り出す
+                            find(42)
+                              │
+ メール送信など               ▼
+ 残りの処理      他の接続には未確定行が
+   …            見えない → 0 行
+                RecordNotFound で失敗
+ COMMIT
+  → ここで初めて id=42 が見える</pre>
+        <p>ワーカーは待機中ならすぐにジョブを拾い、自分の DB 接続で <code>Order.find(42)</code> を実行する。このとき Web プロセス側のトランザクションが、残りの処理や外部 API 呼び出しのせいでまだ COMMIT していなければ、ワーカーの接続から id=42 は見えず <code>RecordNotFound</code> になる。人間が後で DB を覗くと行があるのは、その時点では COMMIT が終わっているからだ。</p>
+        <p>手元で再現しにくい理由もここにある。これは「COMMIT」と「ワーカーの読み取り」のどちらが先に着くかの競争（<strong>レースコンディション</strong>）で、ワーカーが暇で待ち構えている本番ほど負けやすく、トランザクションが長いほど負ける確率は上がる。逆方向の事故もある。トランザクションがロールバックされても積んだジョブは消えないので、「作られなかった注文」の処理が走る。引数に id ではなくメールアドレスなどの中身を渡していれば、存在しない注文の確認メールが実際に届いてしまう。</p>
       </section>
 
       <div class="analogy">
         <div class="box-title">🍱 たとえるなら</div>
-        <p>貸し出しの多い図書館で「いま棚にある本は何冊か」を数えるようなものだ。蔵書目録（索引）を見れば登録冊数はすぐ分かるが、貸出中や廃棄予定の本が混ざっているので、本当の冊数は棚（heap）を見ないと分からない。visibility map は棚ごとに貼る「点検済み、全冊在架」の札にあたる。札は点検係（VACUUM）しか貼れず、誰かが 1 冊借りた瞬間に剥がれる。札のある棚は目録だけで数えてよいが、それでも 1 冊ずつ数える手間は残る。</p>
+        <p>賃貸契約書にまだ判を押していないのに、引越し業者へ「荷物を新居に運んで」と電話してしまうようなものだ。業者は仕事が早いので先に新居に着くが、契約が成立していない部屋の鍵は開かない。少し待てば契約が済んで鍵は開くのに、業者は「部屋が無い」と言って帰ってしまう。契約が流れたら、そもそも運ぶ先が無い。正しい順番は「判を押してから業者に電話する」である。</p>
       </div>
 
       <section class="body-section">
-        <h3>正確さを手放すという設計判断</h3>
-        <p>速くする方法の多くは、正確さか即時性のどちらかを手放すことになる。最初に検討すべきは「その画面に正確な件数が本当に要るか」である。「約 120 万件」で十分なら、プランナー用の統計である <code>pg_class.reltuples</code> を読むのが最も軽い。値は VACUUM、ANALYZE、<code>CREATE INDEX</code> などで更新され、autovacuum が動いていれば大きくはずれにくい。ただし統計の更新後に大量の行が増減すると、次の更新までずれたままになる。</p>
-        <pre class="code">SELECT reltuples::bigint AS estimate
-FROM pg_class
-WHERE oid = 'public.orders'::regclass;</pre>
-        <p><code>WHERE</code> 付きの件数を見積もりたいときは、<code>EXPLAIN</code> の出力にある見積もり行数（<code>rows=</code>）を使う方法が Postgres の公式 Wiki で紹介されている。こちらも統計からの推定なので、条件が複雑になるほど誤差は大きくなりうる。</p>
-        <p>ページングのためだけに件数を取っているなら、件数そのものをやめる手もある。「次のページがあるか」は 1 ページ分より 1 件多く取得すれば分かり、取得件数は表示件数 + 1 で止まる。正確な件数がどうしても必要なら、挿入・削除のたびに更新する集計テーブルを持つ方法がある。ただし MySQL のマニュアルも注意するとおり、全トランザクションが同じカウンタ行を更新するため、書き込みが多いとその行のロック待ちが新たなボトルネックになる。</p>
+        <h3>直し方 1: COMMIT の後に積む</h3>
+        <p>素直な解決は、ジョブを積むタイミングを COMMIT の後へずらすことだ。モデルのコールバックなら <code>after_create</code> ではなく <code>after_create_commit</code>（<code>after_commit on: :create</code> と同じ）を使う。これは COMMIT が成功した後にだけ呼ばれ、ロールバック時には呼ばれない。</p>
+        <pre class="code">class Order &lt; ApplicationRecord
+  # NG: 同じトランザクションの中で積まれる
+  # after_create { OrderMailerJob.perform_later(id) }
+
+  # OK: COMMIT 成功後にだけ積まれる
+  after_create_commit { OrderMailerJob.perform_later(id) }
+end</pre>
+        <p>呼び出し側を全部書き換えずに済ませる仕組みもある。Rails 7.2 で Active Job に <code>enqueue_after_transaction_commit</code> が入り、有効にするとトランザクション中の <code>perform_later</code> は COMMIT まで保留され、ロールバックされればジョブは捨てられる。この設定の既定値と全体設定の扱いはその後のバージョンで何度か変わっているので、自分の Rails のバージョンのガイドで確認したい。Rails ガイドは、迷ったら <code>ApplicationJob</code> で明示的に有効にするのが最も安全だとしている。Sidekiq の API を直接使っているなら、イニシャライザに <code>Sidekiq.transactional_push!</code> を書くと同じ効果になる（Rails 7.2 未満では <code>after_commit_everywhere</code> gem が要る）。</p>
+        <pre class="code"># app/jobs/application_job.rb
+class ApplicationJob &lt; ActiveJob::Base
+  self.enqueue_after_transaction_commit = true
+end
+
+# config/initializers/sidekiq.rb（Sidekiq API 直利用の場合）
+Sidekiq.transactional_push!</pre>
+      </section>
+
+      <section class="body-section">
+        <h3>それでも残る穴: COMMIT と enqueue の隙間</h3>
+        <p>これで解決したように見える。しかし順番を入れ替えただけで、「DB への書き込み」と「キューへの書き込み」という別々のシステムへの 2 回の書き込みである点は変わっていない。これを<strong>二重書き込み（dual write）</strong>問題と呼ぶ。COMMIT が成功した直後に Pod が kill されたり Redis への接続が瞬断したりすると、注文はあるのにメールのジョブはどこにも無い状態が残る。「ジョブが先走る」失敗が、「ジョブが消える」失敗に変わっただけなのだ。</p>
+        <p>確認メール程度なら、この低確率の取りこぼしは許容して監視で拾う判断も十分ありうる。許せない処理（決済後の在庫引当や他サービスへのイベント通知など）では、<strong>Transactional Outbox</strong> パターンを使う。メッセージをキューに直接積むのではなく、業務データと同じ DB の <code>outbox</code> テーブルに「送るべきメッセージ」として INSERT する。業務データと outbox の行は同じトランザクションに入るので、両方が残るか両方が消えるかのどちらかになる。別プロセス（リレー）が outbox を読んでキューへ送り、送ったものに印を付ける。</p>
+        <p>代償は重複だ。リレーがキューに送った直後、印を付ける前に落ちると、再起動後に同じメッセージをもう一度送る。そのため受け手は、同じメッセージを 2 回処理しても結果が変わらない<strong>冪等</strong>な作りにしておく必要がある（処理済みのメッセージ ID を記録して 2 回目を捨てる、など）。なお Solid Queue のようにジョブ自体を同じ DB のテーブルに書くバックエンドでは、enqueue が業務データと同じトランザクションに入るので outbox に近い性質が得られる。ただし Rails 8 は Solid Queue を既定で別 DB に置く構成にしており、その場合この性質は無い。</p>
       </section>
 
       <div class="practical">
         <div class="box-title">💼 実務でどう出会うか</div>
-        <p>最も多いのは、ページネーション用 gem やライブラリが一覧表示のたびに裏で <code>COUNT(*)</code> を発行しているケースである。一覧本体のクエリは <code>LIMIT 20</code> で速いのに、総件数のクエリだけが遅く、ページ全体の応答時間を支配する。スロークエリログで <code>SELECT COUNT(*) FROM ...</code> が上位に来たら、まず「その件数は画面で正確に要るか」を企画側と確認し、不要なら推定値表示か「次へ」だけのページングに切り替える。必要な場合でも、<code>EXPLAIN (ANALYZE, BUFFERS)</code> で <code>Heap Fetches</code> が大きければ、そのテーブルは VACUUM が追いついていない兆候として autovacuum の状況を確認する。</p>
+        <p>典型は「エラー通知に <code>RecordNotFound</code> が散発的に出るが、リトライで成功しているので放置されている」状態だ。リトライ時には COMMIT が済んでいるので表面上は動くが、メールがリトライ間隔のぶん遅れる、ロールバック時に幽霊ジョブが走る、といった症状を抱えている。コードレビューでは、<code>after_save</code> / <code>after_create</code> の中の <code>perform_later</code> と、<code>transaction do</code> ブロック内の <code>perform_later</code> を探すとよい。もう 1 つの定番は、トランザクション内から決済や Webhook 送信などの外部 API を呼ぶコードで、これもロールバックしても取り消せない二重書き込みである。</p>
       </div>
 
       <div class="hands-on">
         <div class="box-title">⌨️ 手を動かす（5 分）</div>
-        <p>100 万行のテーブルで、VACUUM 直後と UPDATE 直後の Index Only Scan を比べ、visibility map のビットが下りると <code>Heap Fetches</code> が跳ね上がることを確かめる。比較のため Seq Scan と Bitmap Scan を禁止し、並列実行も切っている。</p>
-        <pre class="code">docker run -d --name pgcount -e POSTGRES_PASSWORD=pass postgres:17
-sleep 8
-docker exec -i pgcount psql -U postgres &lt;&lt;'SQL'
-CREATE TABLE items (id bigserial PRIMARY KEY, body text);
-INSERT INTO items (body)
-  SELECT md5(i::text) FROM generate_series(1, 1000000) AS i;
-SET max_parallel_workers_per_gather = 0;
-SET enable_seqscan = off;
-SET enable_bitmapscan = off;
-VACUUM items;
-EXPLAIN (ANALYZE, BUFFERS) SELECT count(*) FROM items;
-UPDATE items SET body = 'x' WHERE id % 10 = 0;
-EXPLAIN (ANALYZE, BUFFERS) SELECT count(*) FROM items;
-VACUUM items;
-EXPLAIN (ANALYZE, BUFFERS) SELECT count(*) FROM items;
-SQL
-docker rm -f pgcount</pre>
-        <p>1 回目は <code>Heap Fetches: 0</code> で、読んだページ（<code>Buffers: shared hit</code>）は索引の約 2,700 だけになるはずだ。<code>UPDATE</code> 直後の 2 回目は <code>Heap Fetches</code> が 100 万を超え、読んだページも桁違いに増える。更新したのは 1 割の行でも、それが全ページに散らばっているので、全ページの all-visible ビットが下りたからである。それでも 2 回目の件数は 100 万のまま変わらない。VACUUM をかけた 3 回目は <code>Heap Fetches: 0</code> に戻る。3 回とも <code>rows=1000000</code> を 1 件ずつ数えていることも実行計画から読み取れる。</p>
+        <p>2 つの DB 接続を開き、片方のトランザクション中の行がもう片方から見えないことを確かめる。ジョブのワーカーが置かれている立場をそのまま再現する実験だ。まず PostgreSQL を起動してテーブルを作る。</p>
+        <pre class="code">docker run -d --name pg -e POSTGRES_PASSWORD=pw postgres:17
+sleep 5
+docker exec pg psql -U postgres -c "CREATE TABLE orders (id serial PRIMARY KEY, item text);"</pre>
+        <p>ターミナル A（Web プロセス役）でトランザクションを開き、COMMIT せずに止めておく。</p>
+        <pre class="code">docker exec -it pg psql -U postgres
+BEGIN;
+INSERT INTO orders (item) VALUES ('book') RETURNING id;</pre>
+        <p>ターミナル B（ワーカー役）で、その id を読む。</p>
+        <pre class="code">docker exec pg psql -U postgres -c "SELECT * FROM orders WHERE id = 1;"</pre>
+        <p>A では id=1 が返ったのに、B は <code>(0 rows)</code> になるはずだ。これがジョブの <code>find</code> が見ている景色である。A で <code>COMMIT;</code> を打ってから B を再実行すると行が見える。A で代わりに <code>ROLLBACK;</code> を打てば id=1 は永久に現れず、それを指すジョブだけが残る。終わったら <code>docker rm -f pg</code> で片付ける。</p>
       </div>
 
       <div class="misconceptions">
         <div class="box-title">🙅 よくある誤解</div>
         <ul>
-          <li><span class="wrong"><code>COUNT(1)</code> や <code>COUNT(id)</code> にすれば速くなる</span> — 遅さの原因は行を 1 つずつ見て可視性を確かめることにあり、引数の書き方を変えてもこの仕事は無くならない。MySQL のマニュアルも InnoDB では <code>COUNT(*)</code> と <code>COUNT(1)</code> を同じに扱うと明記している。なお <code>COUNT(列)</code> は NULL を数えないため、結果の意味が変わる場合がある。</li>
-          <li><span class="wrong">索引を貼れば <code>COUNT(*)</code> は一瞬になる</span> — 索引は読むページ数を減らすだけで、件数に比例する仕事は残る。visibility map のビットが下りていれば heap も見に行くので、更新の多いテーブルでは索引の効果がほとんど出ない。</li>
-          <li><span class="wrong"><code>reltuples</code> は「少し古い正確な件数」である</span> — <code>reltuples</code> はプランナー用の推定値である。統計を更新した直後でも、実際の件数と一致する保証はない。</li>
+          <li><span class="wrong">「<code>create!</code> が例外なく返ったのだから、行はもう誰からでも見える」</span> — 外側にトランザクションがある、またはコールバックの中にいる場合、成功は「自分のトランザクションの中で INSERT が通った」という意味でしかない。他の接続から見えるのは外側の COMMIT が終わってからだ。</li>
+          <li><span class="wrong">「リトライで最終的に成功するから問題ない」</span> — 先走りはリトライで隠れるが、ロールバックされた場合のジョブは消えずに走るし、引数にデータそのものを渡していれば存在しない注文の処理が実際に行われる。リトライは順序の問題を直していない。</li>
+          <li><span class="wrong">「<code>after_commit</code> にすればジョブは失われない」</span> — 先走りと幽霊ジョブは防げるが、COMMIT 後・enqueue 前にプロセスが落ちればジョブは失われる。取りこぼしまで防ぐには、outbox のように同じトランザクションに記録を残す必要がある。</li>
         </ul>
       </div>
 
       <div class="glossary">
         <div class="box-title">📖 用語ミニ辞典</div>
         <dl>
-          <dt>MVCC</dt><dd>行の古い版を残したまま新しい版を足し、各トランザクションに自分のスナップショット時点の版だけを見せる同時実行制御。</dd>
-          <dt>heap / tuple</dt><dd>heap は Postgres の行データ本体を収めたファイル、tuple はその中の行の 1 版。</dd>
-          <dt>visibility map</dt><dd>heap の 1 ページごとに「全行が誰からでも見える（all-visible）」「全行が凍結済み」を記録する小さな地図。ビットを立てるのは VACUUM だけ。</dd>
-          <dt>Index Only Scan</dt><dd>索引だけを読んで結果を返す走査。visibility map のビットが立っていないページの行は heap も参照する。</dd>
-          <dt>Heap Fetches</dt><dd>Index Only Scan が可視性確認のために heap を参照した回数。<code>EXPLAIN ANALYZE</code> に表示される。</dd>
-          <dt>reltuples</dt><dd><code>pg_class</code> にあるテーブルの推定行数。VACUUM・ANALYZE・一部の DDL で更新されるプランナー用の統計。</dd>
+          <dt>分離レベル（isolation level）</dt><dd>実行中の他トランザクションの変更をどこまで見せるかの段階。PostgreSQL の既定 Read Committed は COMMIT 済みのデータだけを見せる。</dd>
+          <dt>after_commit</dt><dd>トランザクションの COMMIT が成功した後にだけ呼ばれる Active Record のコールバック。ロールバック時は呼ばれない。</dd>
+          <dt>enqueue_after_transaction_commit</dt><dd>トランザクション中の perform_later を COMMIT まで保留し、ロールバック時は捨てる Active Job の設定。Rails 7.2 で導入。</dd>
+          <dt>二重書き込み（dual write）</dt><dd>DB とキューのような別々のシステムへ順に書くこと。片方だけ成功する中途半端な状態が起こりうる。</dd>
+          <dt>Transactional Outbox</dt><dd>送るべきメッセージを業務データと同じトランザクションで DB に書き、別プロセスが後から送るパターン。</dd>
+          <dt>冪等（idempotent）</dt><dd>同じ処理を何回実行しても 1 回実行したのと同じ結果になる性質。重複配送への備えになる。</dd>
         </dl>
       </div>
 
       <div class="further-reading">
         <div class="box-title">🔗 もっと深く</div>
         <ul>
-          <li><a href="https://wiki.postgresql.org/wiki/Slow_Counting">PostgreSQL Wiki: Slow Counting</a> — <code>COUNT(*)</code> が遅い理由を Postgres コミュニティ自身が短くまとめたページ。</li>
-          <li><a href="https://www.postgresql.org/docs/current/indexes-index-only-scans.html">PostgreSQL Docs: Index-Only Scans and Covering Indexes</a> — visibility map のビットが立っているときだけ heap 参照を省けるという条件の一次資料。</li>
-          <li><a href="https://wiki.postgresql.org/wiki/Count_estimate">PostgreSQL Wiki: Count estimate</a> — <code>reltuples</code> と <code>EXPLAIN</code> を使った件数推定のクエリ集。</li>
-          <li><a href="https://dev.mysql.com/doc/refman/8.4/en/aggregate-functions.html">MySQL 8.4 Reference Manual: Aggregate Function Descriptions</a> — <code>COUNT()</code> の項で InnoDB が行数を保存しない理由と MyISAM との違いが読める。</li>
+          <li><a href="https://edgeguides.rubyonrails.org/active_job_basics.html">Active Job Basics（Rails Guides）</a> — 「Transactions and Job Enqueuing」の節に、トランザクション内 enqueue の危険、enqueue_after_transaction_commit、同一 DB の Solid Queue の注意点がまとまっている。</li>
+          <li><a href="https://github.com/sidekiq/sidekiq/wiki/Advanced-Options">Sidekiq Wiki: Advanced Options</a> — transactional_push! の有効化方法と、push_bulk 非対応などの制約。</li>
+          <li><a href="https://microservices.io/patterns/data/transactional-outbox.html">Pattern: Transactional outbox（microservices.io）</a> — 二重書き込み問題の定式化と、リレーが重複送信しうるため受け手を冪等にせよという代償の説明。</li>
+          <li><a href="https://www.postgresql.org/docs/current/transaction-iso.html">PostgreSQL: Transaction Isolation</a> — Read Committed が既定であること、PostgreSQL ではダーティリードが起きないことの一次情報。</li>
         </ul>
       </div>
-
     </article>
 
     <!-- recent:start -->
     <section class="section recent-articles">
       <div class="section-title">最近の記事</div>
+      <div class="card">
+        <h3><a href="archive/2026-11-21.html">件数を 1 つ返すだけなのに、なぜ Postgres の COUNT(*) はテーブルが育つほど遅くなるのか？</a></h3>
+        <div class="summary">Postgres は行数をどこにも保存していない。MVCC で見える行数がトランザクションごとに違うため COUNT(*) は全行を読んで可視性を確かめる仕組みと、Index Only Scan・visibility map の条件、推定値やページング見直しによる代替策。</div>
+        <div class="meta"><span class="tag tag-db">DB</span><span>🌿 基礎</span><span>⏱ 約 8 分</span><span>2026-11-21</span></div>
+      </div>
       <div class="card">
         <h3><a href="archive/2026-11-20.html">DB が数秒詰まっただけなのに、なぜ全部の Pod が一斉に再起動するのか？</a></h3>
         <div class="summary">liveness probe は失敗でコンテナを再起動し、readiness probe は宛先から外すだけ。DB を見る liveness が DB の詰まりで全 Pod を同時に再起動させる仕組みと、probe 設定値の読み方・startupProbe の使い方。</div>
@@ -176,11 +179,6 @@ docker rm -f pgcount</pre>
         <h3><a href="archive/2026-11-18.html">import と書いただけなのに、なぜ Node は「Cannot use import statement outside a module」で落ちるのか？</a></h3>
         <div class="summary">Node が .js を CommonJS と ES Modules のどちらで読むかは拡張子と package.json の type で決まる。冒頭のエラーの正体と、require(esm) が top-level await で止まる理由を解説する。</div>
         <div class="meta"><span class="tag tag-lang">Lang</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-18</span></div>
-      </div>
-      <div class="card">
-        <h3><a href="archive/2026-11-17.html">PgBouncer を挟んだだけなのに、なぜ「prepared statement &quot;a1&quot; does not exist」で落ちるのか？</a></h3>
-        <div class="summary">PgBouncer の transaction pooling では prepared statement・SET・advisory lock が接続の付け替えで壊れる。その仕組みと、1.21 以降の対応範囲、Rails・pgx の設定での合わせ方。</div>
-        <div class="meta"><span class="tag tag-db">DB</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-17</span></div>
       </div>
       <div class="recent-more"><a href="archive/">アーカイブですべて見る →</a></div>
     </section>
