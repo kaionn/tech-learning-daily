@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tech Learning Daily — 保存した直後にジョブへ ID を渡しただけなのに、なぜジョブは「レコードが見つからない」で落ちるのか？</title>
-  <meta name="description" content="トランザクション中の行は他の接続から見えない。COMMIT 前にキューへ積んだジョブは先に走って 0 行を引く。COMMIT 後の enqueue で塞げる穴と、それでも残る取りこぼしを outbox で埋める仕組みを解説する。">
+  <title>Tech Learning Daily — サーバーは localhost で動いているのに、なぜ「ECONNREFUSED ::1」で繋がらないのか？</title>
+  <meta name="description" content="localhost は IPv4 の 127.0.0.1 と IPv6 の ::1 の 2 つに解決され、OS は ::1 を先に返す。サーバーが片方でしか待っていないと最初の接続が拒否される仕組みと、Happy Eyeballs による救済を解説する。">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Tech Learning Daily">
-  <meta property="og:title" content="Tech Learning Daily — 保存した直後にジョブへ ID を渡しただけなのに、なぜジョブは「レコードが見つからない」で落ちるのか？">
-  <meta property="og:description" content="トランザクション中の行は他の接続から見えない。COMMIT 前にキューへ積んだジョブは先に走って 0 行を引く。COMMIT 後の enqueue で塞げる穴と、それでも残る取りこぼしを outbox で埋める仕組みを解説する。">
+  <meta property="og:title" content="Tech Learning Daily — サーバーは localhost で動いているのに、なぜ「ECONNREFUSED ::1」で繋がらないのか？">
+  <meta property="og:description" content="localhost は IPv4 の 127.0.0.1 と IPv6 の ::1 の 2 つに解決され、OS は ::1 を先に返す。サーバーが片方でしか待っていないと最初の接続が拒否される仕組みと、Happy Eyeballs による救済を解説する。">
   <meta property="og:url" content="https://tech-learn.kaion-lab.com/">
   <meta property="og:image" content="https://tech-learn.kaion-lab.com/og.png">
   <meta name="twitter:card" content="summary_large_image">
@@ -22,137 +22,130 @@
   <div class="container">
     <header>
       <h1>Tech Learning Daily</h1>
-      <div class="date">2026-11-22 (Sun) — 第 128 号</div>
+      <div class="date">2026-11-23 (Mon) — 第 129 号</div>
       <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
     </header>
 
     <article class="article">
       <div class="meta-bar">
-        <span class="tag tag-arch">Arch</span>
+        <span class="tag tag-network">Network</span>
         <span class="difficulty">🌿 基礎</span>
         <span class="read-time">⏱ 約 7 分</span>
       </div>
-      <h2 class="article-title">保存した直後にジョブへ ID を渡しただけなのに、なぜジョブは「レコードが見つからない」で落ちるのか？</h2>
-      <p class="lead">注文を保存したら確認メールをジョブで送る。モデルの <code>after_create</code> に <code>OrderMailerJob.perform_later(id)</code> と書くだけの、何度も書いてきたコードだ。ところが本番のエラー通知には、ときどき <code>ActiveRecord::RecordNotFound: Couldn't find Order with 'id'=42</code> が届く。保存は成功していて、DB を見れば id=42 の行はちゃんとある。ジョブはなぜ、存在する行を「無い」と言ったのだろうか。</p>
+      <h2 class="article-title">サーバーは localhost で動いているのに、なぜ「ECONNREFUSED ::1」で繋がらないのか？</h2>
+      <p class="lead">ローカルで DB やモックサーバーを立ち上げ、別のターミナルから <code>localhost:3000</code> に繋いだら <code>connect ECONNREFUSED ::1:3000</code> で落ちた。サーバーは確かに動いているし、<code>127.0.0.1:3000</code> と書き直すとあっさり繋がる。同じ自分のマシンを指しているはずの 2 つの書き方が、なぜ違う結果になるのだろうか。</p>
 
       <div class="tldr">
         <div class="box-title">🎯 3 行まとめ</div>
         <ul>
-          <li>トランザクションの中で INSERT した行は、COMMIT するまで他の DB 接続からは見えない。ジョブのワーカーは別の接続で読むので、COMMIT 前に走ると 0 行を引く。</li>
-          <li>キュー（Redis など）は DB の外にあるため、<code>perform_later</code> はトランザクションの成否と無関係にその場でジョブを積む。直し方は「COMMIT の後に積む」で、Rails・Sidekiq ともにその仕組みを持っている。</li>
-          <li>それでも COMMIT と enqueue の間でプロセスが落ちればジョブは消える。取りこぼしも許せないなら、メッセージを同じ DB の outbox テーブルに書いて後から送る（代わりに重複配送への備えが要る）。</li>
+          <li><code>localhost</code> は 1 つの住所ではなく、IPv4 の <code>127.0.0.1</code> と IPv6 の <code>::1</code> の 2 つに解決される名前である。</li>
+          <li>OS の標準の並べ方（RFC 6724）では <code>::1</code> が先に来るため、サーバーが <code>127.0.0.1</code> でしか待っていないと最初の接続は拒否される。</li>
+          <li>Node は v17 で OS の並び順をそのまま使うよう変わり、v20 で両方を順に試す Happy Eyeballs が既定になった。根本対策は「待つ側と繋ぐ側の住所を揃える」ことである。</li>
         </ul>
       </div>
 
       <section class="body-section">
-        <h3>前提: COMMIT 前の行は、他の接続からは存在しない</h3>
-        <p>まず DB 側の約束を確認する。<strong>トランザクション</strong>とは、複数の読み書きを「全部反映されるか、全部無かったことになるか」の一単位にまとめる仕組みだ。途中の状態を他人に見せると、後でロールバックされる幻のデータを他人が使ってしまう。そこで DB は、COMMIT されていない変更を他のトランザクションに見せない。</p>
-        <p>他人の変更をどこまで見せるかの段階を<strong>分離レベル（isolation level）</strong>と呼ぶ。PostgreSQL の既定は Read Committed で、名前の通り「COMMIT 済みのデータだけを見る」。PostgreSQL では最も緩い Read Uncommitted を指定しても Read Committed と同じに扱われるので、他人の未確定の行を読む（ダーティリード）ことはそもそも起きない。</p>
-        <p>Rails の <code>Order.create!</code> は、単体で呼べば保存と同時に COMMIT まで済ませる。問題になるのは、<code>ActiveRecord::Base.transaction do ... end</code> の中や、モデルの <code>after_save</code> / <code>after_create</code> コールバックの中でジョブを積んだときだ。これらのコールバックは保存処理と同じトランザクションの中で動くので、そこで積んだ時点では行はまだ COMMIT されていない。</p>
+        <h3>localhost は「住所」ではなく「名前」である</h3>
+        <p><code>localhost</code> は IP アドレスではなくホスト名だ。ホスト名は接続の前に名前解決（名前から IP アドレスを引く処理）を経て IP アドレスに変換される。<code>localhost</code> の場合、問い合わせ先は DNS サーバーではなく、多くの OS で手元の <code>/etc/hosts</code> ファイルである。</p>
+        <p>macOS や多くの Linux ディストリビューションの <code>/etc/hosts</code> には、次のように <code>localhost</code> が 2 行書かれている。</p>
+        <pre class="code">127.0.0.1   localhost
+::1         localhost</pre>
+        <p><code>127.0.0.1</code> は IPv4 のループバックアドレス、<code>::1</code> は IPv6 のループバックアドレスだ。ループバックアドレスとは、ネットワークカードの外に出ず自分自身に戻ってくる宛先を指す。どちらも「自分のマシン」を指すが、IPv4 と IPv6 は別のプロトコルなので、OS から見ると別々の宛先である。<code>127.0.0.1:3000</code> で待っているサーバーに <code>[::1]:3000</code> から繋ごうとしても、そこには誰もいない。</p>
       </section>
 
       <section class="body-section">
-        <h3>ジョブはトランザクションより先にゴールする</h3>
-        <p>次にキュー側を見る。Sidekiq なら <code>perform_later</code> は Redis にジョブ（クラス名と引数の id）を書き込んで即座に返る。Redis は DB とは別のシステムなので、DB のトランザクションが後で COMMIT されるかロールバックされるかを知る手段がない。積んだ瞬間に、ジョブはワーカーから取り出せる状態になる。</p>
-        <pre class="diagram"> Web プロセス       Redis      ワーカー
- ───────────       ─────      ────────
- BEGIN
- INSERT orders
-  → id=42(未確定)
- perform_later(42)
-   ──────────▶ [42] ─────▶ 取り出す
-                            find(42)
-                              │
- メール送信など               ▼
- 残りの処理      他の接続には未確定行が
-   …            見えない → 0 行
-                RecordNotFound で失敗
- COMMIT
-  → ここで初めて id=42 が見える</pre>
-        <p>ワーカーは待機中ならすぐにジョブを拾い、自分の DB 接続で <code>Order.find(42)</code> を実行する。このとき Web プロセス側のトランザクションが、残りの処理や外部 API 呼び出しのせいでまだ COMMIT していなければ、ワーカーの接続から id=42 は見えず <code>RecordNotFound</code> になる。人間が後で DB を覗くと行があるのは、その時点では COMMIT が終わっているからだ。</p>
-        <p>手元で再現しにくい理由もここにある。これは「COMMIT」と「ワーカーの読み取り」のどちらが先に着くかの競争（<strong>レースコンディション</strong>）で、ワーカーが暇で待ち構えている本番ほど負けやすく、トランザクションが長いほど負ける確率は上がる。逆方向の事故もある。トランザクションがロールバックされても積んだジョブは消えないので、「作られなかった注文」の処理が走る。引数に id ではなくメールアドレスなどの中身を渡していれば、存在しない注文の確認メールが実際に届いてしまう。</p>
+        <h3>なぜ ::1 が先に選ばれるのか</h3>
+        <p>名前解決の結果が 2 つあるなら、どちらを先に試すかが問題になる。アプリは通常 <code>getaddrinfo()</code> という OS の関数で名前を解決し、OS は RFC 6724 が定める既定のポリシー表に従って結果を並べ替えて返す。この表で <code>::1/128</code> の優先度は 50 と最も高く、IPv4 アドレスを表す <code>::ffff:0:0/96</code> は 35 である。つまり OS の標準の並べ方では <code>::1</code> が先頭に来る。</p>
+        <p>「IPv4 のほうが昔からある標準なのだから、IPv4 が優先されるはずだ」と考えたくなる。しかし実際は逆で、IPv6 が使える環境では IPv6 を優先するのが今の OS の既定だ。IPv6 への移行を進めるために、両方が使えるなら新しいほうを先に試すよう設計されている。</p>
+        <pre class="diagram">クライアント: connect("localhost", 3000)
+        │
+        ▼
+ getaddrinfo("localhost")
+ ┌─────────────────────────┐
+ │ 1. ::1        (IPv6) 50 │
+ │ 2. 127.0.0.1  (IPv4) 35 │
+ └─────────────────────────┘
+        │ 先頭から試す
+        ▼
+ [::1]:3000 ──▶ 誰も待っていない
+        │       RST → ECONNREFUSED
+        ▼
+ 127.0.0.1:3000 ──▶ サーバー（待受中）
+ （2 番目を試すかはクライアント次第）</pre>
+        <p>ここで決定的なのは図の最後の行だ。先頭の <code>::1</code> が拒否されたとき、2 番目の <code>127.0.0.1</code> を試すかどうかはクライアントの実装に委ねられている。先頭だけ試して諦めるクライアントでは、サーバーが生きていても <code>ECONNREFUSED</code> になる。</p>
       </section>
 
       <div class="analogy">
         <div class="box-title">🍱 たとえるなら</div>
-        <p>賃貸契約書にまだ判を押していないのに、引越し業者へ「荷物を新居に運んで」と電話してしまうようなものだ。業者は仕事が早いので先に新居に着くが、契約が成立していない部屋の鍵は開かない。少し待てば契約が済んで鍵は開くのに、業者は「部屋が無い」と言って帰ってしまう。契約が流れたら、そもそも運ぶ先が無い。正しい順番は「判を押してから業者に電話する」である。</p>
+        <p>同じビルに「本館受付」と「新館受付」の 2 つの窓口があり、案内板には「新館を先にどうぞ」と書いてある。来客が新館に行くと、担当者は本館にしか座っていないので門前払いになる。気の利く来客は本館に回り直すが、門前払いされた時点で帰ってしまう来客もいる。<code>localhost</code> は「このビル」という名前で、<code>::1</code> と <code>127.0.0.1</code> が 2 つの窓口、案内板が RFC 6724 の並べ方である。</p>
       </div>
 
       <section class="body-section">
-        <h3>直し方 1: COMMIT の後に積む</h3>
-        <p>素直な解決は、ジョブを積むタイミングを COMMIT の後へずらすことだ。モデルのコールバックなら <code>after_create</code> ではなく <code>after_create_commit</code>（<code>after_commit on: :create</code> と同じ）を使う。これは COMMIT が成功した後にだけ呼ばれ、ロールバック時には呼ばれない。</p>
-        <pre class="code">class Order &lt; ApplicationRecord
-  # NG: 同じトランザクションの中で積まれる
-  # after_create { OrderMailerJob.perform_later(id) }
+        <h3>Node で突然この問題が増えた理由</h3>
+        <p>Node の <code>dns.lookup()</code> は v17.0.0 まで、OS が返した結果をわざわざ並べ替えて IPv4 を先頭にしていた。v17.0.0 でこの既定が <code>verbatim</code>（OS の並び順をそのまま使う）に変わった。この変更で、それまで <code>127.0.0.1</code> に繋がっていた <code>localhost</code> 宛ての接続が、同じコードのまま <code>::1</code> に向かうようになった。<code>127.0.0.1</code> でしか待っていない DB コンテナやモックサーバーに繋ぐ構成で、Node を上げただけで <code>ECONNREFUSED ::1</code> が出始めたのはこのためだ。</p>
+        <p>v20.0.0（v18.18.0 にも反映）では、<code>net.connect()</code> の <code>autoSelectFamily</code> オプションの既定値が <code>true</code> になった。これは Happy Eyeballs（RFC 8305）と呼ばれる方式で、名前解決で得た IPv6 と IPv4 のアドレスを交互に並べ、一定時間内に繋がらなければ次のアドレスを試す。すべて失敗したときだけ、全試行のエラーをまとめた <code>AggregateError</code> を返す。RFC 8305 は次の試行までの待ち時間の既定として 250 ミリ秒を推奨している。</p>
+        <p>挙動を戻したり固定したりする設定もある。Node の起動オプションで指定する場合は次のようになる。</p>
+        <pre class="code"># 名前解決の結果を IPv4 優先に並べ替える
+node --dns-result-order=ipv4first app.js
 
-  # OK: COMMIT 成功後にだけ積まれる
-  after_create_commit { OrderMailerJob.perform_later(id) }
-end</pre>
-        <p>呼び出し側を全部書き換えずに済ませる仕組みもある。Rails 7.2 で Active Job に <code>enqueue_after_transaction_commit</code> が入り、有効にするとトランザクション中の <code>perform_later</code> は COMMIT まで保留され、ロールバックされればジョブは捨てられる。この設定の既定値と全体設定の扱いはその後のバージョンで何度か変わっているので、自分の Rails のバージョンのガイドで確認したい。Rails ガイドは、迷ったら <code>ApplicationJob</code> で明示的に有効にするのが最も安全だとしている。Sidekiq の API を直接使っているなら、イニシャライザに <code>Sidekiq.transactional_push!</code> を書くと同じ効果になる（Rails 7.2 未満では <code>after_commit_everywhere</code> gem が要る）。</p>
-        <pre class="code"># app/jobs/application_job.rb
-class ApplicationJob &lt; ActiveJob::Base
-  self.enqueue_after_transaction_commit = true
-end
-
-# config/initializers/sidekiq.rb（Sidekiq API 直利用の場合）
-Sidekiq.transactional_push!</pre>
+# Happy Eyeballs を無効にする（先頭だけ試す）
+node --no-network-family-autoselection app.js</pre>
+        <p><code>--dns-result-order=ipv4first</code> を付けると v16 以前と同じく <code>127.0.0.1</code> が先頭になり、IPv4 でしか待たないサーバーにはすぐ繋がる。代わりに <code>::1</code> でしか待たないサーバーには繋がりにくくなるので、問題の向きが反転するだけである。コード中で <code>dns.setDefaultResultOrder('ipv4first')</code> を呼んでも同じ効果があり、こちらが起動オプションより優先される。</p>
       </section>
 
       <section class="body-section">
-        <h3>それでも残る穴: COMMIT と enqueue の隙間</h3>
-        <p>これで解決したように見える。しかし順番を入れ替えただけで、「DB への書き込み」と「キューへの書き込み」という別々のシステムへの 2 回の書き込みである点は変わっていない。これを<strong>二重書き込み（dual write）</strong>問題と呼ぶ。COMMIT が成功した直後に Pod が kill されたり Redis への接続が瞬断したりすると、注文はあるのにメールのジョブはどこにも無い状態が残る。「ジョブが先走る」失敗が、「ジョブが消える」失敗に変わっただけなのだ。</p>
-        <p>確認メール程度なら、この低確率の取りこぼしは許容して監視で拾う判断も十分ありうる。許せない処理（決済後の在庫引当や他サービスへのイベント通知など）では、<strong>Transactional Outbox</strong> パターンを使う。メッセージをキューに直接積むのではなく、業務データと同じ DB の <code>outbox</code> テーブルに「送るべきメッセージ」として INSERT する。業務データと outbox の行は同じトランザクションに入るので、両方が残るか両方が消えるかのどちらかになる。別プロセス（リレー）が outbox を読んでキューへ送り、送ったものに印を付ける。</p>
-        <p>代償は重複だ。リレーがキューに送った直後、印を付ける前に落ちると、再起動後に同じメッセージをもう一度送る。そのため受け手は、同じメッセージを 2 回処理しても結果が変わらない<strong>冪等</strong>な作りにしておく必要がある（処理済みのメッセージ ID を記録して 2 回目を捨てる、など）。なお Solid Queue のようにジョブ自体を同じ DB のテーブルに書くバックエンドでは、enqueue が業務データと同じトランザクションに入るので outbox に近い性質が得られる。ただし Rails 8 は Solid Queue を既定で別 DB に置く構成にしており、その場合この性質は無い。</p>
+        <h3>待つ側の住所も確認する</h3>
+        <p>問題は繋ぐ側だけでなく、待つ側（サーバーがどのアドレスで listen しているか）にもある。サーバーが待受アドレスを <code>127.0.0.1</code> と明示していれば IPv4 だけ、<code>::1</code> なら IPv6 だけを受け付ける。待受アドレスに <code>localhost</code> と書いた場合は、サーバー側でも名前解決が行われ、その結果の先頭アドレス 1 つだけで待つ実装が多い。Node 17 以降の開発サーバーが <code>::1</code> だけで待ち、<code>curl 127.0.0.1:5173</code> が拒否されるという逆向きの事故はこれで起きる。</p>
+        <p>Node の <code>server.listen()</code> はホストを省略すると、IPv6 が使えれば未指定アドレス <code>::</code> で待つ。多くの OS では <code>::</code> で待つと IPv4 の接続も同時に受け付けるため、<code>::1</code> と <code>127.0.0.1</code> のどちらから来ても繋がる。ただしこれは外部のマシンからの接続も受け付けることを意味するので、ローカル専用にしたいサーバーではホストを省略せず、繋ぐ側と同じアドレスを明示するほうが安全である。</p>
+        <p>どの対策を取るにしても、「サーバーが待つアドレス」と「クライアントが最初に試すアドレス」を一致させるのが根本解決だ。設定ファイルの接続先を <code>localhost</code> ではなく <code>127.0.0.1</code> と書くのが最も手軽で、名前解決の結果に左右されない。</p>
       </section>
 
       <div class="practical">
         <div class="box-title">💼 実務でどう出会うか</div>
-        <p>典型は「エラー通知に <code>RecordNotFound</code> が散発的に出るが、リトライで成功しているので放置されている」状態だ。リトライ時には COMMIT が済んでいるので表面上は動くが、メールがリトライ間隔のぶん遅れる、ロールバック時に幽霊ジョブが走る、といった症状を抱えている。コードレビューでは、<code>after_save</code> / <code>after_create</code> の中の <code>perform_later</code> と、<code>transaction do</code> ブロック内の <code>perform_later</code> を探すとよい。もう 1 つの定番は、トランザクション内から決済や Webhook 送信などの外部 API を呼ぶコードで、これもロールバックしても取り消せない二重書き込みである。</p>
+        <p>典型は、<code>docker run -p 127.0.0.1:5432:5432 postgres</code> のように IPv4 のループバックだけに公開したコンテナへ、Node のアプリやマイグレーションツールが <code>DATABASE_URL=postgres://...@localhost:5432</code> で繋ぐ場面だ。Node 17〜19 や、Happy Eyeballs を持たない古いクライアントでは <code>ECONNREFUSED ::1:5432</code> で落ちる。Node 20 以降では最終的に繋がるが、繋がる前に <code>::1</code> への試行を挟むことになる。エラーメッセージに <code>::1</code> が出たら「サーバーが落ちている」ではなく「住所の不一致」を疑い、接続先を <code>127.0.0.1</code> に書き換えるか、サーバーの待受アドレスを見直すとよい。</p>
       </div>
 
       <div class="hands-on">
         <div class="box-title">⌨️ 手を動かす（5 分）</div>
-        <p>2 つの DB 接続を開き、片方のトランザクション中の行がもう片方から見えないことを確かめる。ジョブのワーカーが置かれている立場をそのまま再現する実験だ。まず PostgreSQL を起動してテーブルを作る。</p>
-        <pre class="code">docker run -d --name pg -e POSTGRES_PASSWORD=pw postgres:17
-sleep 5
-docker exec pg psql -U postgres -c "CREATE TABLE orders (id serial PRIMARY KEY, item text);"</pre>
-        <p>ターミナル A（Web プロセス役）でトランザクションを開き、COMMIT せずに止めておく。</p>
-        <pre class="code">docker exec -it pg psql -U postgres
-BEGIN;
-INSERT INTO orders (item) VALUES ('book') RETURNING id;</pre>
-        <p>ターミナル B（ワーカー役）で、その id を読む。</p>
-        <pre class="code">docker exec pg psql -U postgres -c "SELECT * FROM orders WHERE id = 1;"</pre>
-        <p>A では id=1 が返ったのに、B は <code>(0 rows)</code> になるはずだ。これがジョブの <code>find</code> が見ている景色である。A で <code>COMMIT;</code> を打ってから B を再実行すると行が見える。A で代わりに <code>ROLLBACK;</code> を打てば id=1 は永久に現れず、それを指すジョブだけが残る。終わったら <code>docker rm -f pg</code> で片付ける。</p>
+        <p>IPv4 のループバックだけで待つサーバーを立て、<code>localhost</code> 宛ての接続が <code>::1</code> を先に試す様子を観察する。ターミナル 1 で次を実行する。</p>
+        <pre class="code">cat /etc/hosts | grep localhost
+python3 -m http.server 8000 --bind 127.0.0.1</pre>
+        <p>ターミナル 2 で次の 3 つを順に実行する。</p>
+        <pre class="code">curl -v http://localhost:8000/ -o /dev/null 2&gt;&amp;1 | grep -i -E 'trying|connected|failed'
+
+node -e "require('dns').lookup('localhost',{all:true},(e,a)=&gt;console.log(a))"
+
+node --no-network-family-autoselection -e "require('net').connect(8000,'localhost').on('connect',()=&gt;{console.log('connected');process.exit()}).on('error',e=&gt;console.log(e.message))"</pre>
+        <p>環境によるが、<code>curl</code> は <code>::1</code> への試行が失敗した後に <code>127.0.0.1</code> で繋がる行を表示し、<code>dns.lookup</code> は <code>::1</code> と <code>127.0.0.1</code> の 2 件を返すはずだ。3 つ目は Happy Eyeballs を切っているので先頭の <code>::1</code> だけを試し、<code>connect ECONNREFUSED ::1:8000</code> が出る。同じコマンドから <code>--no-network-family-autoselection</code> を外すと <code>connected</code> に変わることも確かめられる。</p>
       </div>
 
       <div class="misconceptions">
         <div class="box-title">🙅 よくある誤解</div>
         <ul>
-          <li><span class="wrong">「<code>create!</code> が例外なく返ったのだから、行はもう誰からでも見える」</span> — 外側にトランザクションがある、またはコールバックの中にいる場合、成功は「自分のトランザクションの中で INSERT が通った」という意味でしかない。他の接続から見えるのは外側の COMMIT が終わってからだ。</li>
-          <li><span class="wrong">「リトライで最終的に成功するから問題ない」</span> — 先走りはリトライで隠れるが、ロールバックされた場合のジョブは消えずに走るし、引数にデータそのものを渡していれば存在しない注文の処理が実際に行われる。リトライは順序の問題を直していない。</li>
-          <li><span class="wrong">「<code>after_commit</code> にすればジョブは失われない」</span> — 先走りと幽霊ジョブは防げるが、COMMIT 後・enqueue 前にプロセスが落ちればジョブは失われる。取りこぼしまで防ぐには、outbox のように同じトランザクションに記録を残す必要がある。</li>
+          <li><span class="wrong">localhost と 127.0.0.1 は同じものの別名だ</span> — <code>localhost</code> は名前で、多くの環境で <code>127.0.0.1</code> と <code>::1</code> の 2 つに解決される。<code>127.0.0.1</code> は IPv4 の 1 アドレスにすぎない。</li>
+          <li><span class="wrong">ECONNREFUSED が出たらサーバーは落ちている</span> — その宛先アドレスとポートで待つプロセスがいない、という意味である。サーバーが別のアドレス（IPv4 側）で生きていても出る。</li>
+          <li><span class="wrong">IPv6 を使っていないので自分には関係ない</span> — 外向きの通信が IPv4 だけでも、ループバックの <code>::1</code> は OS が標準で持っており、<code>/etc/hosts</code> 経由で <code>localhost</code> の解決結果に入ってくる。</li>
         </ul>
       </div>
 
       <div class="glossary">
         <div class="box-title">📖 用語ミニ辞典</div>
         <dl>
-          <dt>分離レベル（isolation level）</dt><dd>実行中の他トランザクションの変更をどこまで見せるかの段階。PostgreSQL の既定 Read Committed は COMMIT 済みのデータだけを見せる。</dd>
-          <dt>after_commit</dt><dd>トランザクションの COMMIT が成功した後にだけ呼ばれる Active Record のコールバック。ロールバック時は呼ばれない。</dd>
-          <dt>enqueue_after_transaction_commit</dt><dd>トランザクション中の perform_later を COMMIT まで保留し、ロールバック時は捨てる Active Job の設定。Rails 7.2 で導入。</dd>
-          <dt>二重書き込み（dual write）</dt><dd>DB とキューのような別々のシステムへ順に書くこと。片方だけ成功する中途半端な状態が起こりうる。</dd>
-          <dt>Transactional Outbox</dt><dd>送るべきメッセージを業務データと同じトランザクションで DB に書き、別プロセスが後から送るパターン。</dd>
-          <dt>冪等（idempotent）</dt><dd>同じ処理を何回実行しても 1 回実行したのと同じ結果になる性質。重複配送への備えになる。</dd>
+          <dt>ループバックアドレス</dt><dd>外部に出ず自分自身に戻ってくる宛先。IPv4 は 127.0.0.1、IPv6 は ::1。</dd>
+          <dt>getaddrinfo</dt><dd>ホスト名を IP アドレスの一覧に変換する OS の関数。結果の並び順も OS が決める。</dd>
+          <dt>RFC 6724</dt><dd>複数の候補アドレスをどの順に試すかの既定ポリシーを定めた規格。::1 の優先度が最も高い。</dd>
+          <dt>Happy Eyeballs</dt><dd>IPv6 と IPv4 のアドレスを交互に、一定の間隔で次々に試して最初に繋がったものを使う接続方式（RFC 8305）。</dd>
+          <dt>ECONNREFUSED</dt><dd>接続先のアドレスとポートで待つプロセスがおらず、相手 OS に接続を拒否されたことを示すエラー。</dd>
         </dl>
       </div>
 
       <div class="further-reading">
         <div class="box-title">🔗 もっと深く</div>
         <ul>
-          <li><a href="https://edgeguides.rubyonrails.org/active_job_basics.html">Active Job Basics（Rails Guides）</a> — 「Transactions and Job Enqueuing」の節に、トランザクション内 enqueue の危険、enqueue_after_transaction_commit、同一 DB の Solid Queue の注意点がまとまっている。</li>
-          <li><a href="https://github.com/sidekiq/sidekiq/wiki/Advanced-Options">Sidekiq Wiki: Advanced Options</a> — transactional_push! の有効化方法と、push_bulk 非対応などの制約。</li>
-          <li><a href="https://microservices.io/patterns/data/transactional-outbox.html">Pattern: Transactional outbox（microservices.io）</a> — 二重書き込み問題の定式化と、リレーが重複送信しうるため受け手を冪等にせよという代償の説明。</li>
-          <li><a href="https://www.postgresql.org/docs/current/transaction-iso.html">PostgreSQL: Transaction Isolation</a> — Read Committed が既定であること、PostgreSQL ではダーティリードが起きないことの一次情報。</li>
+          <li><a href="https://nodejs.org/api/dns.html#dnslookuphostname-options-callback">Node.js Docs: dns.lookup()</a> — <code>order</code> / <code>verbatim</code> の既定値と v17.0.0 での変更履歴が載っている。</li>
+          <li><a href="https://nodejs.org/api/net.html#socketconnectoptions-connectlistener">Node.js Docs: socket.connect(options)</a> — <code>autoSelectFamily</code> の挙動と v20.0.0 で既定が true になった経緯。</li>
+          <li><a href="https://www.rfc-editor.org/rfc/rfc6724.html#section-2.1">RFC 6724 Section 2.1: Policy Table</a> — ::1 が最優先になる既定ポリシー表そのもの。</li>
+          <li><a href="https://www.rfc-editor.org/rfc/rfc8305.html">RFC 8305: Happy Eyeballs Version 2</a> — IPv6 と IPv4 を交互に試す手順と、待ち時間の推奨値。</li>
         </ul>
       </div>
     </article>
@@ -160,6 +153,11 @@ INSERT INTO orders (item) VALUES ('book') RETURNING id;</pre>
     <!-- recent:start -->
     <section class="section recent-articles">
       <div class="section-title">最近の記事</div>
+      <div class="card">
+        <h3><a href="archive/2026-11-22.html">保存した直後にジョブへ ID を渡しただけなのに、なぜジョブは「レコードが見つからない」で落ちるのか？</a></h3>
+        <div class="summary">トランザクション中に積んだジョブは COMMIT 前に走って行が見えず落ちる。COMMIT 後に積む方法と、それでも残る取りこぼしを Transactional Outbox で防ぐ仕組みを解説する。</div>
+        <div class="meta"><span class="tag tag-arch">Arch</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-22</span></div>
+      </div>
       <div class="card">
         <h3><a href="archive/2026-11-21.html">件数を 1 つ返すだけなのに、なぜ Postgres の COUNT(*) はテーブルが育つほど遅くなるのか？</a></h3>
         <div class="summary">Postgres は行数をどこにも保存していない。MVCC で見える行数がトランザクションごとに違うため COUNT(*) は全行を読んで可視性を確かめる仕組みと、Index Only Scan・visibility map の条件、推定値やページング見直しによる代替策。</div>
@@ -174,11 +172,6 @@ INSERT INTO orders (item) VALUES ('book') RETURNING id;</pre>
         <h3><a href="archive/2026-11-19.html">CPU limit は 2 なのに、なぜ Go のアプリは 8 コアぶん走ろうとして止められるのか？</a></h3>
         <div class="summary">Kubernetes の CPU limit は 100ms ごとの CPU 時間枠で、Go 1.24 までの GOMAXPROCS はノードのコア数になるため枠を早々に使い切って止められる。Go 1.25 の新しい既定値と、環境変数・GODEBUG での揃え方。</div>
         <div class="meta"><span class="tag tag-lang">Lang</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-19</span></div>
-      </div>
-      <div class="card">
-        <h3><a href="archive/2026-11-18.html">import と書いただけなのに、なぜ Node は「Cannot use import statement outside a module」で落ちるのか？</a></h3>
-        <div class="summary">Node が .js を CommonJS と ES Modules のどちらで読むかは拡張子と package.json の type で決まる。冒頭のエラーの正体と、require(esm) が top-level await で止まる理由を解説する。</div>
-        <div class="meta"><span class="tag tag-lang">Lang</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-18</span></div>
       </div>
       <div class="recent-more"><a href="archive/">アーカイブですべて見る →</a></div>
     </section>

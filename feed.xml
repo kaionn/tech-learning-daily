@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-11-22T10:29:52+09:00</updated>
+  <updated>2026-11-23T10:53:35+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>サーバーは localhost で動いているのに、なぜ「ECONNREFUSED ::1」で繋がらないのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-11-23.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-11-23.html</id>
+    <updated>2026-11-23T10:53:35+09:00</updated>
+    <summary>localhost は 127.0.0.1 と ::1 の 2 つに解決され、OS は ::1 を先に返す。サーバーが IPv4 だけで待つと最初の接続が拒否される仕組みと、Node v17 の並び順変更・v20 の Happy Eyeballs、待受アドレスを揃える対策。</summary>
+  </entry>
   <entry>
     <title>保存した直後にジョブへ ID を渡しただけなのに、なぜジョブは「レコードが見つからない」で落ちるのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-11-22.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-11-10.html</id>
     <updated>2026-11-10T12:42:12+09:00</updated>
     <summary>Prometheus はラベル値の組み合わせごとに別の時系列を作り、その本数がメモリを決める。生の URL やユーザー ID をラベルに入れると系列が掛け算で増えるため、計測側で値を有限に保ち、labeldrop や sample_limit を安全網にする。</summary>
-  </entry>
-  <entry>
-    <title>ターミナルでは 1 行ずつ出るのに、なぜパイプや docker logs に通すとログがまとめて遅れて届くのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-11-09.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-11-09.html</id>
-    <updated>2026-11-09T10:05:03+09:00</updated>
-    <summary>print は出力をプロセス内バッファに溜めてから write する。端末なら行単位、パイプやファイルならブロック単位で溜めるため、docker logs ではまとめて遅れて届く。PYTHONUNBUFFERED や $stdout.sync で溜めない設定にする。</summary>
   </entry>
 </feed>

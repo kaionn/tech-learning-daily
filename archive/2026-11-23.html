@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tech Learning Daily — サーバーは localhost で動いているのに、なぜ「ECONNREFUSED ::1」で繋がらないのか？</title>
+  <meta name="description" content="localhost は IPv4 の 127.0.0.1 と IPv6 の ::1 の 2 つに解決され、OS は ::1 を先に返す。サーバーが片方でしか待っていないと最初の接続が拒否される仕組みと、Happy Eyeballs による救済を解説する。">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Tech Learning Daily">
+  <meta property="og:title" content="Tech Learning Daily — サーバーは localhost で動いているのに、なぜ「ECONNREFUSED ::1」で繋がらないのか？">
+  <meta property="og:description" content="localhost は IPv4 の 127.0.0.1 と IPv6 の ::1 の 2 つに解決され、OS は ::1 を先に返す。サーバーが片方でしか待っていないと最初の接続が拒否される仕組みと、Happy Eyeballs による救済を解説する。">
+  <meta property="og:url" content="https://tech-learn.kaion-lab.com/archive/2026-11-23.html">
+  <meta property="og:image" content="https://tech-learn.kaion-lab.com/og.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="stylesheet" href="../style.css">
+  <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="../feed.xml">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Tech Learning Daily</h1>
+      <div class="date">2026-11-23 (Mon) — 第 129 号</div>
+      <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
+    </header>
+
+    <article class="article">
+      <div class="meta-bar">
+        <span class="tag tag-network">Network</span>
+        <span class="difficulty">🌿 基礎</span>
+        <span class="read-time">⏱ 約 7 分</span>
+      </div>
+      <h2 class="article-title">サーバーは localhost で動いているのに、なぜ「ECONNREFUSED ::1」で繋がらないのか？</h2>
+      <p class="lead">ローカルで DB やモックサーバーを立ち上げ、別のターミナルから <code>localhost:3000</code> に繋いだら <code>connect ECONNREFUSED ::1:3000</code> で落ちた。サーバーは確かに動いているし、<code>127.0.0.1:3000</code> と書き直すとあっさり繋がる。同じ自分のマシンを指しているはずの 2 つの書き方が、なぜ違う結果になるのだろうか。</p>
+
+      <div class="tldr">
+        <div class="box-title">🎯 3 行まとめ</div>
+        <ul>
+          <li><code>localhost</code> は 1 つの住所ではなく、IPv4 の <code>127.0.0.1</code> と IPv6 の <code>::1</code> の 2 つに解決される名前である。</li>
+          <li>OS の標準の並べ方（RFC 6724）では <code>::1</code> が先に来るため、サーバーが <code>127.0.0.1</code> でしか待っていないと最初の接続は拒否される。</li>
+          <li>Node は v17 で OS の並び順をそのまま使うよう変わり、v20 で両方を順に試す Happy Eyeballs が既定になった。根本対策は「待つ側と繋ぐ側の住所を揃える」ことである。</li>
+        </ul>
+      </div>
+
+      <section class="body-section">
+        <h3>localhost は「住所」ではなく「名前」である</h3>
+        <p><code>localhost</code> は IP アドレスではなくホスト名だ。ホスト名は接続の前に名前解決（名前から IP アドレスを引く処理）を経て IP アドレスに変換される。<code>localhost</code> の場合、問い合わせ先は DNS サーバーではなく、多くの OS で手元の <code>/etc/hosts</code> ファイルである。</p>
+        <p>macOS や多くの Linux ディストリビューションの <code>/etc/hosts</code> には、次のように <code>localhost</code> が 2 行書かれている。</p>
+        <pre class="code">127.0.0.1   localhost
+::1         localhost</pre>
+        <p><code>127.0.0.1</code> は IPv4 のループバックアドレス、<code>::1</code> は IPv6 のループバックアドレスだ。ループバックアドレスとは、ネットワークカードの外に出ず自分自身に戻ってくる宛先を指す。どちらも「自分のマシン」を指すが、IPv4 と IPv6 は別のプロトコルなので、OS から見ると別々の宛先である。<code>127.0.0.1:3000</code> で待っているサーバーに <code>[::1]:3000</code> から繋ごうとしても、そこには誰もいない。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>なぜ ::1 が先に選ばれるのか</h3>
+        <p>名前解決の結果が 2 つあるなら、どちらを先に試すかが問題になる。アプリは通常 <code>getaddrinfo()</code> という OS の関数で名前を解決し、OS は RFC 6724 が定める既定のポリシー表に従って結果を並べ替えて返す。この表で <code>::1/128</code> の優先度は 50 と最も高く、IPv4 アドレスを表す <code>::ffff:0:0/96</code> は 35 である。つまり OS の標準の並べ方では <code>::1</code> が先頭に来る。</p>
+        <p>「IPv4 のほうが昔からある標準なのだから、IPv4 が優先されるはずだ」と考えたくなる。しかし実際は逆で、IPv6 が使える環境では IPv6 を優先するのが今の OS の既定だ。IPv6 への移行を進めるために、両方が使えるなら新しいほうを先に試すよう設計されている。</p>
+        <pre class="diagram">クライアント: connect("localhost", 3000)
+        │
+        ▼
+ getaddrinfo("localhost")
+ ┌─────────────────────────┐
+ │ 1. ::1        (IPv6) 50 │
+ │ 2. 127.0.0.1  (IPv4) 35 │
+ └─────────────────────────┘
+        │ 先頭から試す
+        ▼
+ [::1]:3000 ──▶ 誰も待っていない
+        │       RST → ECONNREFUSED
+        ▼
+ 127.0.0.1:3000 ──▶ サーバー（待受中）
+ （2 番目を試すかはクライアント次第）</pre>
+        <p>ここで決定的なのは図の最後の行だ。先頭の <code>::1</code> が拒否されたとき、2 番目の <code>127.0.0.1</code> を試すかどうかはクライアントの実装に委ねられている。先頭だけ試して諦めるクライアントでは、サーバーが生きていても <code>ECONNREFUSED</code> になる。</p>
+      </section>
+
+      <div class="analogy">
+        <div class="box-title">🍱 たとえるなら</div>
+        <p>同じビルに「本館受付」と「新館受付」の 2 つの窓口があり、案内板には「新館を先にどうぞ」と書いてある。来客が新館に行くと、担当者は本館にしか座っていないので門前払いになる。気の利く来客は本館に回り直すが、門前払いされた時点で帰ってしまう来客もいる。<code>localhost</code> は「このビル」という名前で、<code>::1</code> と <code>127.0.0.1</code> が 2 つの窓口、案内板が RFC 6724 の並べ方である。</p>
+      </div>
+
+      <section class="body-section">
+        <h3>Node で突然この問題が増えた理由</h3>
+        <p>Node の <code>dns.lookup()</code> は v17.0.0 まで、OS が返した結果をわざわざ並べ替えて IPv4 を先頭にしていた。v17.0.0 でこの既定が <code>verbatim</code>（OS の並び順をそのまま使う）に変わった。この変更で、それまで <code>127.0.0.1</code> に繋がっていた <code>localhost</code> 宛ての接続が、同じコードのまま <code>::1</code> に向かうようになった。<code>127.0.0.1</code> でしか待っていない DB コンテナやモックサーバーに繋ぐ構成で、Node を上げただけで <code>ECONNREFUSED ::1</code> が出始めたのはこのためだ。</p>
+        <p>v20.0.0（v18.18.0 にも反映）では、<code>net.connect()</code> の <code>autoSelectFamily</code> オプションの既定値が <code>true</code> になった。これは Happy Eyeballs（RFC 8305）と呼ばれる方式で、名前解決で得た IPv6 と IPv4 のアドレスを交互に並べ、一定時間内に繋がらなければ次のアドレスを試す。すべて失敗したときだけ、全試行のエラーをまとめた <code>AggregateError</code> を返す。RFC 8305 は次の試行までの待ち時間の既定として 250 ミリ秒を推奨している。</p>
+        <p>挙動を戻したり固定したりする設定もある。Node の起動オプションで指定する場合は次のようになる。</p>
+        <pre class="code"># 名前解決の結果を IPv4 優先に並べ替える
+node --dns-result-order=ipv4first app.js
+
+# Happy Eyeballs を無効にする（先頭だけ試す）
+node --no-network-family-autoselection app.js</pre>
+        <p><code>--dns-result-order=ipv4first</code> を付けると v16 以前と同じく <code>127.0.0.1</code> が先頭になり、IPv4 でしか待たないサーバーにはすぐ繋がる。代わりに <code>::1</code> でしか待たないサーバーには繋がりにくくなるので、問題の向きが反転するだけである。コード中で <code>dns.setDefaultResultOrder('ipv4first')</code> を呼んでも同じ効果があり、こちらが起動オプションより優先される。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>待つ側の住所も確認する</h3>
+        <p>問題は繋ぐ側だけでなく、待つ側（サーバーがどのアドレスで listen しているか）にもある。サーバーが待受アドレスを <code>127.0.0.1</code> と明示していれば IPv4 だけ、<code>::1</code> なら IPv6 だけを受け付ける。待受アドレスに <code>localhost</code> と書いた場合は、サーバー側でも名前解決が行われ、その結果の先頭アドレス 1 つだけで待つ実装が多い。Node 17 以降の開発サーバーが <code>::1</code> だけで待ち、<code>curl 127.0.0.1:5173</code> が拒否されるという逆向きの事故はこれで起きる。</p>
+        <p>Node の <code>server.listen()</code> はホストを省略すると、IPv6 が使えれば未指定アドレス <code>::</code> で待つ。多くの OS では <code>::</code> で待つと IPv4 の接続も同時に受け付けるため、<code>::1</code> と <code>127.0.0.1</code> のどちらから来ても繋がる。ただしこれは外部のマシンからの接続も受け付けることを意味するので、ローカル専用にしたいサーバーではホストを省略せず、繋ぐ側と同じアドレスを明示するほうが安全である。</p>
+        <p>どの対策を取るにしても、「サーバーが待つアドレス」と「クライアントが最初に試すアドレス」を一致させるのが根本解決だ。設定ファイルの接続先を <code>localhost</code> ではなく <code>127.0.0.1</code> と書くのが最も手軽で、名前解決の結果に左右されない。</p>
+      </section>
+
+      <div class="practical">
+        <div class="box-title">💼 実務でどう出会うか</div>
+        <p>典型は、<code>docker run -p 127.0.0.1:5432:5432 postgres</code> のように IPv4 のループバックだけに公開したコンテナへ、Node のアプリやマイグレーションツールが <code>DATABASE_URL=postgres://...@localhost:5432</code> で繋ぐ場面だ。Node 17〜19 や、Happy Eyeballs を持たない古いクライアントでは <code>ECONNREFUSED ::1:5432</code> で落ちる。Node 20 以降では最終的に繋がるが、繋がる前に <code>::1</code> への試行を挟むことになる。エラーメッセージに <code>::1</code> が出たら「サーバーが落ちている」ではなく「住所の不一致」を疑い、接続先を <code>127.0.0.1</code> に書き換えるか、サーバーの待受アドレスを見直すとよい。</p>
+      </div>
+
+      <div class="hands-on">
+        <div class="box-title">⌨️ 手を動かす（5 分）</div>
+        <p>IPv4 のループバックだけで待つサーバーを立て、<code>localhost</code> 宛ての接続が <code>::1</code> を先に試す様子を観察する。ターミナル 1 で次を実行する。</p>
+        <pre class="code">cat /etc/hosts | grep localhost
+python3 -m http.server 8000 --bind 127.0.0.1</pre>
+        <p>ターミナル 2 で次の 3 つを順に実行する。</p>
+        <pre class="code">curl -v http://localhost:8000/ -o /dev/null 2&gt;&amp;1 | grep -i -E 'trying|connected|failed'
+
+node -e "require('dns').lookup('localhost',{all:true},(e,a)=&gt;console.log(a))"
+
+node --no-network-family-autoselection -e "require('net').connect(8000,'localhost').on('connect',()=&gt;{console.log('connected');process.exit()}).on('error',e=&gt;console.log(e.message))"</pre>
+        <p>環境によるが、<code>curl</code> は <code>::1</code> への試行が失敗した後に <code>127.0.0.1</code> で繋がる行を表示し、<code>dns.lookup</code> は <code>::1</code> と <code>127.0.0.1</code> の 2 件を返すはずだ。3 つ目は Happy Eyeballs を切っているので先頭の <code>::1</code> だけを試し、<code>connect ECONNREFUSED ::1:8000</code> が出る。同じコマンドから <code>--no-network-family-autoselection</code> を外すと <code>connected</code> に変わることも確かめられる。</p>
+      </div>
+
+      <div class="misconceptions">
+        <div class="box-title">🙅 よくある誤解</div>
+        <ul>
+          <li><span class="wrong">localhost と 127.0.0.1 は同じものの別名だ</span> — <code>localhost</code> は名前で、多くの環境で <code>127.0.0.1</code> と <code>::1</code> の 2 つに解決される。<code>127.0.0.1</code> は IPv4 の 1 アドレスにすぎない。</li>
+          <li><span class="wrong">ECONNREFUSED が出たらサーバーは落ちている</span> — その宛先アドレスとポートで待つプロセスがいない、という意味である。サーバーが別のアドレス（IPv4 側）で生きていても出る。</li>
+          <li><span class="wrong">IPv6 を使っていないので自分には関係ない</span> — 外向きの通信が IPv4 だけでも、ループバックの <code>::1</code> は OS が標準で持っており、<code>/etc/hosts</code> 経由で <code>localhost</code> の解決結果に入ってくる。</li>
+        </ul>
+      </div>
+
+      <div class="glossary">
+        <div class="box-title">📖 用語ミニ辞典</div>
+        <dl>
+          <dt>ループバックアドレス</dt><dd>外部に出ず自分自身に戻ってくる宛先。IPv4 は 127.0.0.1、IPv6 は ::1。</dd>
+          <dt>getaddrinfo</dt><dd>ホスト名を IP アドレスの一覧に変換する OS の関数。結果の並び順も OS が決める。</dd>
+          <dt>RFC 6724</dt><dd>複数の候補アドレスをどの順に試すかの既定ポリシーを定めた規格。::1 の優先度が最も高い。</dd>
+          <dt>Happy Eyeballs</dt><dd>IPv6 と IPv4 のアドレスを交互に、一定の間隔で次々に試して最初に繋がったものを使う接続方式（RFC 8305）。</dd>
+          <dt>ECONNREFUSED</dt><dd>接続先のアドレスとポートで待つプロセスがおらず、相手 OS に接続を拒否されたことを示すエラー。</dd>
+        </dl>
+      </div>
+
+      <div class="further-reading">
+        <div class="box-title">🔗 もっと深く</div>
+        <ul>
+          <li><a href="https://nodejs.org/api/dns.html#dnslookuphostname-options-callback">Node.js Docs: dns.lookup()</a> — <code>order</code> / <code>verbatim</code> の既定値と v17.0.0 での変更履歴が載っている。</li>
+          <li><a href="https://nodejs.org/api/net.html#socketconnectoptions-connectlistener">Node.js Docs: socket.connect(options)</a> — <code>autoSelectFamily</code> の挙動と v20.0.0 で既定が true になった経緯。</li>
+          <li><a href="https://www.rfc-editor.org/rfc/rfc6724.html#section-2.1">RFC 6724 Section 2.1: Policy Table</a> — ::1 が最優先になる既定ポリシー表そのもの。</li>
+          <li><a href="https://www.rfc-editor.org/rfc/rfc8305.html">RFC 8305: Happy Eyeballs Version 2</a> — IPv6 と IPv4 を交互に試す手順と、待ち時間の推奨値。</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- recent:start -->
+    <!-- recent:end -->
+
+    <footer>
+      <p>Generated by Claude Code (GitHub Actions)</p>
+      <a href="./" class="archive-link">過去の記事</a>
+    </footer>
+  </div>
+</body>
+</html>
