@@ -43,8 +43,8 @@
         <button class="chip" data-cat="db">DB <span class="chip-count">16</span></button>
         <button class="chip" data-cat="arch">Arch <span class="chip-count">10</span></button>
         <button class="chip" data-cat="security">Security <span class="chip-count">10</span></button>
+        <button class="chip" data-cat="infra">Infra <span class="chip-count">9</span></button>
         <button class="chip" data-cat="ai">AI <span class="chip-count">8</span></button>
-        <button class="chip" data-cat="infra">Infra <span class="chip-count">8</span></button>
         <button class="chip" data-cat="frontend" data-overflow="1" hidden>Frontend <span class="chip-count">6</span></button>
         <button class="chip" data-cat="dev" data-overflow="1" hidden>Dev <span class="chip-count">5</span></button>
         <button class="chip" data-cat="obs" data-overflow="1" hidden>Obs <span class="chip-count">5</span></button>
@@ -63,6 +63,13 @@
 
     <section class="section month" data-month="2026-11">
       <div class="section-title">2026 年 11 月 <span class="count"></span></div>
+      <div class="card" data-cat="infra" data-diff="基礎"
+           data-search="ターミナルでは動くスクリプトなのに、なぜ cron に登録すると「command not found」で落ちるのか？ 環境変数は親プロセスからのコピーで、path を足すのはシェルの設定ファイルだ。cron は設定ファイルを読まない最小環境でジョブを起動するため node などが見つからない仕組みと、crontab の path 行・絶対パスでの直し方。" data-terms="環境変数 / PATH / シェルの設定ファイル / 対話シェル / ログインシェル / cron デーモン">
+        <h3><a href="2026-11-24.html">ターミナルでは動くスクリプトなのに、なぜ cron に登録すると「command not found」で落ちるのか？</a></h3>
+        <div class="summary">環境変数は親プロセスからのコピーで、PATH を足すのはシェルの設定ファイルだ。cron は設定ファイルを読まない最小環境でジョブを起動するため node などが見つからない仕組みと、crontab の PATH 行・絶対パスでの直し方。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-infra">Infra</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-24</span></div>
+      </div>
       <div class="card" data-cat="network" data-diff="基礎"
            data-search="サーバーは localhost で動いているのに、なぜ「econnrefused ::1」で繋がらないのか？ localhost は 127.0.0.1 と ::1 の 2 つに解決され os は ::1 を先に返すため、ipv4 だけで待つサーバーへの接続が拒否される仕組みと、node の happy eyeballs・待受アドレスを揃える対策。" data-terms="ループバックアドレス / getaddrinfo / RFC 6724 / Happy Eyeballs / ECONNREFUSED">
         <h3><a href="2026-11-23.html">サーバーは localhost で動いているのに、なぜ「ECONNREFUSED ::1」で繋がらないのか？</a></h3>

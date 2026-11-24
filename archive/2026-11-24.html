@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tech Learning Daily — ターミナルでは動くスクリプトなのに、なぜ cron に登録すると「command not found」で落ちるのか？</title>
+  <meta name="description" content="環境変数は親プロセスから子へコピーされるだけで、PATH を足しているのはシェルの設定ファイルだ。cron はそれを読まない最小環境でジョブを起動するため、node や bundle が見つからなくなる。">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Tech Learning Daily">
+  <meta property="og:title" content="Tech Learning Daily — ターミナルでは動くスクリプトなのに、なぜ cron に登録すると「command not found」で落ちるのか？">
+  <meta property="og:description" content="環境変数は親プロセスから子へコピーされるだけで、PATH を足しているのはシェルの設定ファイルだ。cron はそれを読まない最小環境でジョブを起動するため、node や bundle が見つからなくなる。">
+  <meta property="og:url" content="https://tech-learn.kaion-lab.com/archive/2026-11-24.html">
+  <meta property="og:image" content="https://tech-learn.kaion-lab.com/og.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="stylesheet" href="../style.css">
+  <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="../feed.xml">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Tech Learning Daily</h1>
+      <div class="date">2026-11-24 (Tue) — 第 130 号</div>
+      <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
+    </header>
+
+    <article class="article">
+      <div class="meta-bar">
+        <span class="tag tag-infra">Infra</span>
+        <span class="difficulty">🌿 基礎</span>
+        <span class="read-time">⏱ 約 7 分</span>
+      </div>
+      <h2 class="article-title">ターミナルでは動くスクリプトなのに、なぜ cron に登録すると「command not found」で落ちるのか？</h2>
+      <p class="lead">手で <code>./backup.sh</code> を叩けば何度でも成功する。それを <code>crontab -e</code> で毎晩 3 時に登録した翌朝、届いていたのは <code>node: not found</code> のエラーメールだった。同じユーザー、同じマシン、同じスクリプトなのに、何が違ったのか説明できるだろうか。</p>
+
+      <div class="tldr">
+        <div class="box-title">🎯 3 行まとめ</div>
+        <ul>
+          <li>環境変数は「親プロセスが子プロセスに渡すコピー」で、OS 全体で共有された設定ではない。</li>
+          <li>ターミナルの <code>PATH</code> に <code>node</code> や <code>bundle</code> の場所を足しているのは <code>.zshrc</code> などシェルの設定ファイルで、cron が起動する <code>/bin/sh</code> はそれを読まない。</li>
+          <li>cron の既定 <code>PATH</code> は <code>/usr/bin:/bin</code> 程度しかないため、crontab に <code>PATH=</code> を書くか、コマンドを絶対パスで呼ぶ。</li>
+        </ul>
+      </div>
+
+      <section class="body-section">
+        <h3>環境変数は「親から子へのコピー」でしかない</h3>
+        <p><strong>環境変数</strong>とは、プロセスごとに持つ <code>NAME=value</code> 形式の文字列の一覧である。Linux の <code>environ(7)</code> によると、<code>fork(2)</code> で作られた子プロセスは親の環境の<em>コピー</em>を受け継ぎ、<code>execve(2)</code> で新しいプログラムを起動するときにはその一覧が新しいプログラムに渡される。</p>
+        <p>ここから一つの性質が出てくる。環境変数はプロセスの系図に沿って上から下へ流れるだけで、横には流れない。ターミナルで <code>export FOO=1</code> しても、すでに動いている別のプロセスや、別の親から生まれるプロセスには届かない。「このユーザーの環境変数」という OS 全体の置き場所は無く、どの親から起動されたかで中身が決まる。</p>
+        <p>そして <code>node</code> のようにスラッシュを含まないコマンド名を打ったとき、シェルは <code>PATH</code> に並んだディレクトリを先頭から順に探し、実行権限のあるファイルが見つかったところで止まる。<code>PATH</code> に <code>node</code> の置き場所が無ければ、ファイルがディスクに存在していても <code>command not found</code> になる。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>ターミナルの PATH は誰が作っているのか</h3>
+        <p>普段のターミナルの <code>PATH</code> は、OS が最初から用意したものではない。ログイン時やシェル起動時に読まれる<strong>シェルの設定ファイル</strong>（起動時に自動で実行されるスクリプト）が、少しずつ継ぎ足して作っている。Homebrew の <code>eval "$(brew shellenv)"</code>、nvm や rbenv の初期化行、<code>export PATH="$HOME/bin:$PATH"</code> といった行に見覚えがあるはずだ。</p>
+        <p>どのファイルが読まれるかは、シェルが「ログインシェルか」「対話シェルか」で変わる。<strong>対話シェル</strong>は人がプロンプトに入力するシェル、<strong>ログインシェル</strong>はログイン直後に最初に起動されるシェルを指す。zsh の公式マニュアルでは、<code>.zshenv</code> は常に、<code>.zprofile</code> と <code>.zlogin</code> はログインシェルだけ、<code>.zshrc</code> は対話シェルだけで読まれる。bash では対話の非ログインシェルが <code>~/.bashrc</code> を読み、対話しない（スクリプト実行の）シェルは <code>BASH_ENV</code> が指すファイル以外何も読まない。</p>
+        <p>つまり <code>.zshrc</code> に書いた nvm の初期化は、「人が打ち込むためのシェル」が起動したときにしか実行されない。手で <code>./backup.sh</code> を叩いたときに <code>node</code> が見つかったのは、スクリプトが自力で探したからではなく、親である対話シェルが作った <code>PATH</code> をコピーで受け取っていたからだ。</p>
+      </section>
+
+      <pre class="diagram">
+ 手で実行した場合
+┌──────────────────────────┐
+│ zsh（対話・ログイン）    │
+│  .zprofile/.zshrc を実行 │
+│  PATH=…/nvm/…:/opt/…:…   │
+└────────────┬─────────────┘
+             │ fork+execve（コピー）
+             ▼
+┌──────────────────────────┐
+│ backup.sh → node 発見 ✓  │
+└──────────────────────────┘
+
+ cron から実行した場合
+┌──────────────────────────┐
+│ cron デーモン            │
+│  設定ファイルは読まない  │
+└────────────┬─────────────┘
+             │ /bin/sh -c（非対話）
+             ▼
+┌──────────────────────────┐
+│ PATH=/usr/bin:/bin       │
+│ backup.sh → node 無し ✗  │
+└──────────────────────────┘</pre>
+
+      <section class="body-section">
+        <h3>cron の子プロセスはどんな環境で生まれるか</h3>
+        <p>cron のジョブは、ターミナルの子孫ではない。システム起動時に立ち上がった <strong>cron デーモン</strong>（時刻を監視して登録コマンドを起動する常駐プロセス）の子として生まれる。ユーザーが同じなので、ログイン時と同じ環境が用意されるように思える。しかし実際は、デーモンがほぼ空の環境を自分で組み立てて渡している。</p>
+        <p>Debian の <code>crontab(5)</code> は、cron が自動で設定する変数を明記している。<code>SHELL</code> は <code>/bin/sh</code>、<code>LOGNAME</code> と <code>HOME</code> は <code>/etc/passwd</code> の所有者の行から取られる。同じ man ページの bullseye 版は「<code>PATH</code> は <code>/usr/bin:/bin</code> に設定される。別の <code>PATH</code> を使いたければ crontab ファイル内で設定する必要がある」と書いている（Ubuntu の一部バージョンでは既定値が変わり man ページの記述と食い違った経緯があり、実装・ディストリビューションごとに差がある）。</p>
+        <p>起動されるのは <code>/bin/sh -c '登録したコマンド'</code> という非対話・非ログインのシェルだ。bash マニュアルによれば、<code>sh</code> という名前で起動された非対話シェルは起動ファイルを一つも読まない。<code>.zshrc</code> に足した nvm も、Homebrew の <code>/opt/homebrew/bin</code> も、<code>~/.rbenv/shims</code> も入らないまま、<code>PATH=/usr/bin:/bin</code> でスクリプトが走る。これが冒頭の <code>node: not found</code> の正体である。</p>
+      </section>
+
+      <div class="analogy">
+        <div class="box-title">🍱 たとえるなら</div>
+        <p>自分の机で仕事をするときは、引き出しに文房具を揃えてある（設定ファイルが整えた <code>PATH</code>）。cron に仕事を頼むのは、夜中に代理の人を空っぽの貸し会議室に呼んで「この手順書どおりにやって」と渡すのに近い。手順書に「赤ペンを使う」とだけ書いてあれば、代理の人は赤ペンを見つけられない。手順書に置き場所（絶対パス）を書くか、会議室にも文房具を運び込む（crontab に <code>PATH=</code>）必要がある。</p>
+      </div>
+
+      <section class="body-section">
+        <h3>直し方: どこで PATH を与えるか</h3>
+        <p>一番素直なのは、crontab の先頭に環境設定行を書くことだ。<code>crontab(5)</code> は <code>name = value</code> 形式の行を環境設定として扱う。ただし値の中の変数展開やチルダ展開は行われないと明記されているので、<code>$HOME</code> や <code>~</code> は使えず、全部書き下す。</p>
+        <pre class="code"># crontab -e
+SHELL=/bin/bash
+PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin
+MAILTO=""
+
+0 3 * * * cd /Users/me/app &amp;&amp; ./backup.sh &gt;&gt; /tmp/backup.log 2&gt;&amp;1</pre>
+        <p>各行の効果は次のとおりだ。<code>PATH</code> を書けば、その crontab のすべてのジョブで <code>node</code> などが見つかるようになる。<code>SHELL</code> を変えると <code>/bin/sh</code> の代わりに bash でコマンド行が解釈されるが、それでも非対話シェルなので <code>.bashrc</code> は読まれない。<code>MAILTO=""</code> にするとエラーメールが送られなくなる。未設定なら crontab の所有者宛てに出力がメールされるので、メールを止める場合はログをファイルに残す。</p>
+        <p>nvm や rbenv のようにバージョンごとにディレクトリが変わるツールでは、<code>PATH</code> の固定より絶対パス指定の方が壊れにくいことが多い。<code>command -v node</code> の出力をそのまま書けば、cron 側の <code>PATH</code> に依存しなくなる。もう一つの落とし穴は <code>%</code> だ。crontab のコマンド欄では、バックスラッシュでエスケープしない <code>%</code> は改行に変換され、最初の <code>%</code> 以降はコマンドの標準入力に回される。<code>date +%Y%m%d</code> を直書きすると、コマンドがそこで切られる。</p>
+        <pre class="code"># パスは command -v node の出力をそのまま書く
+0 3 * * * /Users/me/.nvm/versions/node/v22.11.0/bin/node /Users/me/app/job.js
+0 4 * * * tar czf /tmp/bk-$(date +\%Y\%m\%d).tgz /Users/me/data</pre>
+      </section>
+
+      <div class="practical">
+        <div class="box-title">💼 実務でどう出会うか</div>
+        <p>典型は「cron の <code>bundle exec rake</code> が <code>bundle: not found</code>」「Node のバッチだけ夜間に失敗する」「<code>aws</code> CLI が見つからない」の 3 つだ。同じ構造は cron 以外にも現れる。systemd のサービス、CI ランナー、Docker の <code>ENTRYPOINT</code> も、ターミナルの対話シェルを経由せず親プロセスが用意した環境でコマンドを起動するため、<code>.zshrc</code> に頼った設定は効かない。「手では動くのに自動実行だと動かない」と言われたら、まずジョブの先頭に <code>env &gt; /tmp/env.txt</code> を仕込み、手元の <code>env</code> と差分を取るのが早い。</p>
+      </div>
+
+      <div class="hands-on">
+        <div class="box-title">⌨️ 手を動かす（5 分）</div>
+        <p>cron と同等の最小環境を <code>env -i</code>（環境を空にしてから指定した変数だけ渡す）で再現し、ターミナルとの違いを見る。crontab を実際に登録する必要はない。</p>
+        <pre class="code"># 1. いつものターミナル
+echo "$PATH" | tr ':' '\n' | head -5
+command -v node || echo "node not found"
+
+# 2. cron 相当の最小環境で同じことをする
+env -i HOME="$HOME" LOGNAME="$USER" SHELL=/bin/sh \
+  PATH=/usr/bin:/bin \
+  /bin/sh -c 'echo "PATH=$PATH"; command -v node || echo "node not found"'
+
+# 3. 渡される環境変数の数を比べる
+env | wc -l
+env -i PATH=/usr/bin:/bin /bin/sh -c 'env | wc -l'</pre>
+        <p>1 では <code>/opt/homebrew/bin</code> や nvm のディレクトリが並び <code>node</code> のパスが出るはずだ。2 では <code>PATH=/usr/bin:/bin</code> となり、Homebrew や nvm で入れた <code>node</code> は <code>node not found</code> になる。3 では手元の環境変数が数十行あるのに対し、最小環境は数行しかないことが分かる。2 の <code>PATH</code> に <code>command -v node</code> の結果のディレクトリを足すと、見つかるようになる。</p>
+      </div>
+
+      <div class="misconceptions">
+        <div class="box-title">🙅 よくある誤解</div>
+        <ul>
+          <li><span class="wrong">同じユーザーで動くのだから、環境変数も同じはず</span> — 環境変数はユーザーではなくプロセスに属し、起動した親が渡したコピーで決まる。cron デーモンはシェルの設定ファイルを読まずに最小限の変数だけを渡す。</li>
+          <li><span class="wrong"><code>SHELL=/bin/bash</code> にすれば <code>.bashrc</code> が読まれる</span> — cron が起動するのは非対話シェルで、bash の非対話シェルは <code>BASH_ENV</code> が指すファイル以外の起動ファイルを読まない。シェルの種類を変えても <code>PATH</code> は増えない。</li>
+          <li><span class="wrong">crontab で <code>PATH=$HOME/bin:$PATH</code> と書けば継ぎ足せる</span> — crontab の環境設定行では変数展開もチルダ展開も行われない。値は文字列としてそのまま入るので、ディレクトリを全部書き下す。</li>
+        </ul>
+      </div>
+
+      <div class="glossary">
+        <div class="box-title">📖 用語ミニ辞典</div>
+        <dl>
+          <dt>環境変数</dt><dd>プロセスごとに持つ NAME=value の一覧。fork で子にコピーされ、execve で新しいプログラムに渡される。</dd>
+          <dt>PATH</dt><dd>スラッシュを含まないコマンド名を探すディレクトリの並び。先頭から順に探し、最初に見つかった実行ファイルを使う。</dd>
+          <dt>シェルの設定ファイル</dt><dd>.zshrc や .bash_profile など、シェル起動時に自動で実行されるスクリプト。どれが読まれるかは起動のされ方で決まる。</dd>
+          <dt>対話シェル / ログインシェル</dt><dd>対話シェルは人が入力するシェル、ログインシェルはログイン直後に最初に起動されるシェル。cron のジョブはどちらでもない。</dd>
+          <dt>cron デーモン</dt><dd>時刻を監視し、crontab に登録されたコマンドを /bin/sh 経由で起動する常駐プロセス。</dd>
+        </dl>
+      </div>
+
+      <div class="further-reading">
+        <div class="box-title">🔗 もっと深く</div>
+        <ul>
+          <li><a href="https://manpages.debian.org/bullseye/cron/crontab.5.en.html">crontab(5) — Debian manpages</a> — cron が自動設定する変数、PATH の既定値、変数展開をしない仕様、<code>%</code> の扱いが一次情報で書かれている。</li>
+          <li><a href="https://www.gnu.org/software/bash/manual/html_node/Bash-Startup-Files.html">Bash Startup Files — GNU Bash Manual</a> — ログイン / 対話 / 非対話 / sh 起動のそれぞれで読まれるファイルの一覧。</li>
+          <li><a href="https://zsh.sourceforge.io/Doc/Release/Files.html">Startup/Shutdown Files — zsh Manual</a> — .zshenv・.zprofile・.zshrc・.zlogin の読まれる条件と順序。</li>
+          <li><a href="https://man7.org/linux/man-pages/man7/environ.7.html">environ(7) — Linux manual page</a> — 環境が fork でコピーされ execve で渡される仕組みと PATH の探索ルール。</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- recent:start -->
+    <!-- recent:end -->
+
+    <footer>
+      <p>Generated by Claude Code (GitHub Actions)</p>
+      <a href="./" class="archive-link">過去の記事</a>
+    </footer>
+  </div>
+</body>
+</html>

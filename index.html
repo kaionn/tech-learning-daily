@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tech Learning Daily — サーバーは localhost で動いているのに、なぜ「ECONNREFUSED ::1」で繋がらないのか？</title>
-  <meta name="description" content="localhost は IPv4 の 127.0.0.1 と IPv6 の ::1 の 2 つに解決され、OS は ::1 を先に返す。サーバーが片方でしか待っていないと最初の接続が拒否される仕組みと、Happy Eyeballs による救済を解説する。">
+  <title>Tech Learning Daily — ターミナルでは動くスクリプトなのに、なぜ cron に登録すると「command not found」で落ちるのか？</title>
+  <meta name="description" content="環境変数は親プロセスから子へコピーされるだけで、PATH を足しているのはシェルの設定ファイルだ。cron はそれを読まない最小環境でジョブを起動するため、node や bundle が見つからなくなる。">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Tech Learning Daily">
-  <meta property="og:title" content="Tech Learning Daily — サーバーは localhost で動いているのに、なぜ「ECONNREFUSED ::1」で繋がらないのか？">
-  <meta property="og:description" content="localhost は IPv4 の 127.0.0.1 と IPv6 の ::1 の 2 つに解決され、OS は ::1 を先に返す。サーバーが片方でしか待っていないと最初の接続が拒否される仕組みと、Happy Eyeballs による救済を解説する。">
+  <meta property="og:title" content="Tech Learning Daily — ターミナルでは動くスクリプトなのに、なぜ cron に登録すると「command not found」で落ちるのか？">
+  <meta property="og:description" content="環境変数は親プロセスから子へコピーされるだけで、PATH を足しているのはシェルの設定ファイルだ。cron はそれを読まない最小環境でジョブを起動するため、node や bundle が見つからなくなる。">
   <meta property="og:url" content="https://tech-learn.kaion-lab.com/">
   <meta property="og:image" content="https://tech-learn.kaion-lab.com/og.png">
   <meta name="twitter:card" content="summary_large_image">
@@ -22,130 +22,145 @@
   <div class="container">
     <header>
       <h1>Tech Learning Daily</h1>
-      <div class="date">2026-11-23 (Mon) — 第 129 号</div>
+      <div class="date">2026-11-24 (Tue) — 第 130 号</div>
       <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
     </header>
 
     <article class="article">
       <div class="meta-bar">
-        <span class="tag tag-network">Network</span>
+        <span class="tag tag-infra">Infra</span>
         <span class="difficulty">🌿 基礎</span>
         <span class="read-time">⏱ 約 7 分</span>
       </div>
-      <h2 class="article-title">サーバーは localhost で動いているのに、なぜ「ECONNREFUSED ::1」で繋がらないのか？</h2>
-      <p class="lead">ローカルで DB やモックサーバーを立ち上げ、別のターミナルから <code>localhost:3000</code> に繋いだら <code>connect ECONNREFUSED ::1:3000</code> で落ちた。サーバーは確かに動いているし、<code>127.0.0.1:3000</code> と書き直すとあっさり繋がる。同じ自分のマシンを指しているはずの 2 つの書き方が、なぜ違う結果になるのだろうか。</p>
+      <h2 class="article-title">ターミナルでは動くスクリプトなのに、なぜ cron に登録すると「command not found」で落ちるのか？</h2>
+      <p class="lead">手で <code>./backup.sh</code> を叩けば何度でも成功する。それを <code>crontab -e</code> で毎晩 3 時に登録した翌朝、届いていたのは <code>node: not found</code> のエラーメールだった。同じユーザー、同じマシン、同じスクリプトなのに、何が違ったのか説明できるだろうか。</p>
 
       <div class="tldr">
         <div class="box-title">🎯 3 行まとめ</div>
         <ul>
-          <li><code>localhost</code> は 1 つの住所ではなく、IPv4 の <code>127.0.0.1</code> と IPv6 の <code>::1</code> の 2 つに解決される名前である。</li>
-          <li>OS の標準の並べ方（RFC 6724）では <code>::1</code> が先に来るため、サーバーが <code>127.0.0.1</code> でしか待っていないと最初の接続は拒否される。</li>
-          <li>Node は v17 で OS の並び順をそのまま使うよう変わり、v20 で両方を順に試す Happy Eyeballs が既定になった。根本対策は「待つ側と繋ぐ側の住所を揃える」ことである。</li>
+          <li>環境変数は「親プロセスが子プロセスに渡すコピー」で、OS 全体で共有された設定ではない。</li>
+          <li>ターミナルの <code>PATH</code> に <code>node</code> や <code>bundle</code> の場所を足しているのは <code>.zshrc</code> などシェルの設定ファイルで、cron が起動する <code>/bin/sh</code> はそれを読まない。</li>
+          <li>cron の既定 <code>PATH</code> は <code>/usr/bin:/bin</code> 程度しかないため、crontab に <code>PATH=</code> を書くか、コマンドを絶対パスで呼ぶ。</li>
         </ul>
       </div>
 
       <section class="body-section">
-        <h3>localhost は「住所」ではなく「名前」である</h3>
-        <p><code>localhost</code> は IP アドレスではなくホスト名だ。ホスト名は接続の前に名前解決（名前から IP アドレスを引く処理）を経て IP アドレスに変換される。<code>localhost</code> の場合、問い合わせ先は DNS サーバーではなく、多くの OS で手元の <code>/etc/hosts</code> ファイルである。</p>
-        <p>macOS や多くの Linux ディストリビューションの <code>/etc/hosts</code> には、次のように <code>localhost</code> が 2 行書かれている。</p>
-        <pre class="code">127.0.0.1   localhost
-::1         localhost</pre>
-        <p><code>127.0.0.1</code> は IPv4 のループバックアドレス、<code>::1</code> は IPv6 のループバックアドレスだ。ループバックアドレスとは、ネットワークカードの外に出ず自分自身に戻ってくる宛先を指す。どちらも「自分のマシン」を指すが、IPv4 と IPv6 は別のプロトコルなので、OS から見ると別々の宛先である。<code>127.0.0.1:3000</code> で待っているサーバーに <code>[::1]:3000</code> から繋ごうとしても、そこには誰もいない。</p>
+        <h3>環境変数は「親から子へのコピー」でしかない</h3>
+        <p><strong>環境変数</strong>とは、プロセスごとに持つ <code>NAME=value</code> 形式の文字列の一覧である。Linux の <code>environ(7)</code> によると、<code>fork(2)</code> で作られた子プロセスは親の環境の<em>コピー</em>を受け継ぎ、<code>execve(2)</code> で新しいプログラムを起動するときにはその一覧が新しいプログラムに渡される。</p>
+        <p>ここから一つの性質が出てくる。環境変数はプロセスの系図に沿って上から下へ流れるだけで、横には流れない。ターミナルで <code>export FOO=1</code> しても、すでに動いている別のプロセスや、別の親から生まれるプロセスには届かない。「このユーザーの環境変数」という OS 全体の置き場所は無く、どの親から起動されたかで中身が決まる。</p>
+        <p>そして <code>node</code> のようにスラッシュを含まないコマンド名を打ったとき、シェルは <code>PATH</code> に並んだディレクトリを先頭から順に探し、実行権限のあるファイルが見つかったところで止まる。<code>PATH</code> に <code>node</code> の置き場所が無ければ、ファイルがディスクに存在していても <code>command not found</code> になる。</p>
       </section>
 
       <section class="body-section">
-        <h3>なぜ ::1 が先に選ばれるのか</h3>
-        <p>名前解決の結果が 2 つあるなら、どちらを先に試すかが問題になる。アプリは通常 <code>getaddrinfo()</code> という OS の関数で名前を解決し、OS は RFC 6724 が定める既定のポリシー表に従って結果を並べ替えて返す。この表で <code>::1/128</code> の優先度は 50 と最も高く、IPv4 アドレスを表す <code>::ffff:0:0/96</code> は 35 である。つまり OS の標準の並べ方では <code>::1</code> が先頭に来る。</p>
-        <p>「IPv4 のほうが昔からある標準なのだから、IPv4 が優先されるはずだ」と考えたくなる。しかし実際は逆で、IPv6 が使える環境では IPv6 を優先するのが今の OS の既定だ。IPv6 への移行を進めるために、両方が使えるなら新しいほうを先に試すよう設計されている。</p>
-        <pre class="diagram">クライアント: connect("localhost", 3000)
-        │
-        ▼
- getaddrinfo("localhost")
- ┌─────────────────────────┐
- │ 1. ::1        (IPv6) 50 │
- │ 2. 127.0.0.1  (IPv4) 35 │
- └─────────────────────────┘
-        │ 先頭から試す
-        ▼
- [::1]:3000 ──▶ 誰も待っていない
-        │       RST → ECONNREFUSED
-        ▼
- 127.0.0.1:3000 ──▶ サーバー（待受中）
- （2 番目を試すかはクライアント次第）</pre>
-        <p>ここで決定的なのは図の最後の行だ。先頭の <code>::1</code> が拒否されたとき、2 番目の <code>127.0.0.1</code> を試すかどうかはクライアントの実装に委ねられている。先頭だけ試して諦めるクライアントでは、サーバーが生きていても <code>ECONNREFUSED</code> になる。</p>
+        <h3>ターミナルの PATH は誰が作っているのか</h3>
+        <p>普段のターミナルの <code>PATH</code> は、OS が最初から用意したものではない。ログイン時やシェル起動時に読まれる<strong>シェルの設定ファイル</strong>（起動時に自動で実行されるスクリプト）が、少しずつ継ぎ足して作っている。Homebrew の <code>eval "$(brew shellenv)"</code>、nvm や rbenv の初期化行、<code>export PATH="$HOME/bin:$PATH"</code> といった行に見覚えがあるはずだ。</p>
+        <p>どのファイルが読まれるかは、シェルが「ログインシェルか」「対話シェルか」で変わる。<strong>対話シェル</strong>は人がプロンプトに入力するシェル、<strong>ログインシェル</strong>はログイン直後に最初に起動されるシェルを指す。zsh の公式マニュアルでは、<code>.zshenv</code> は常に、<code>.zprofile</code> と <code>.zlogin</code> はログインシェルだけ、<code>.zshrc</code> は対話シェルだけで読まれる。bash では対話の非ログインシェルが <code>~/.bashrc</code> を読み、対話しない（スクリプト実行の）シェルは <code>BASH_ENV</code> が指すファイル以外何も読まない。</p>
+        <p>つまり <code>.zshrc</code> に書いた nvm の初期化は、「人が打ち込むためのシェル」が起動したときにしか実行されない。手で <code>./backup.sh</code> を叩いたときに <code>node</code> が見つかったのは、スクリプトが自力で探したからではなく、親である対話シェルが作った <code>PATH</code> をコピーで受け取っていたからだ。</p>
+      </section>
+
+      <pre class="diagram">
+ 手で実行した場合
+┌──────────────────────────┐
+│ zsh（対話・ログイン）    │
+│  .zprofile/.zshrc を実行 │
+│  PATH=…/nvm/…:/opt/…:…   │
+└────────────┬─────────────┘
+             │ fork+execve（コピー）
+             ▼
+┌──────────────────────────┐
+│ backup.sh → node 発見 ✓  │
+└──────────────────────────┘
+
+ cron から実行した場合
+┌──────────────────────────┐
+│ cron デーモン            │
+│  設定ファイルは読まない  │
+└────────────┬─────────────┘
+             │ /bin/sh -c（非対話）
+             ▼
+┌──────────────────────────┐
+│ PATH=/usr/bin:/bin       │
+│ backup.sh → node 無し ✗  │
+└──────────────────────────┘</pre>
+
+      <section class="body-section">
+        <h3>cron の子プロセスはどんな環境で生まれるか</h3>
+        <p>cron のジョブは、ターミナルの子孫ではない。システム起動時に立ち上がった <strong>cron デーモン</strong>（時刻を監視して登録コマンドを起動する常駐プロセス）の子として生まれる。ユーザーが同じなので、ログイン時と同じ環境が用意されるように思える。しかし実際は、デーモンがほぼ空の環境を自分で組み立てて渡している。</p>
+        <p>Debian の <code>crontab(5)</code> は、cron が自動で設定する変数を明記している。<code>SHELL</code> は <code>/bin/sh</code>、<code>LOGNAME</code> と <code>HOME</code> は <code>/etc/passwd</code> の所有者の行から取られる。同じ man ページの bullseye 版は「<code>PATH</code> は <code>/usr/bin:/bin</code> に設定される。別の <code>PATH</code> を使いたければ crontab ファイル内で設定する必要がある」と書いている（Ubuntu の一部バージョンでは既定値が変わり man ページの記述と食い違った経緯があり、実装・ディストリビューションごとに差がある）。</p>
+        <p>起動されるのは <code>/bin/sh -c '登録したコマンド'</code> という非対話・非ログインのシェルだ。bash マニュアルによれば、<code>sh</code> という名前で起動された非対話シェルは起動ファイルを一つも読まない。<code>.zshrc</code> に足した nvm も、Homebrew の <code>/opt/homebrew/bin</code> も、<code>~/.rbenv/shims</code> も入らないまま、<code>PATH=/usr/bin:/bin</code> でスクリプトが走る。これが冒頭の <code>node: not found</code> の正体である。</p>
       </section>
 
       <div class="analogy">
         <div class="box-title">🍱 たとえるなら</div>
-        <p>同じビルに「本館受付」と「新館受付」の 2 つの窓口があり、案内板には「新館を先にどうぞ」と書いてある。来客が新館に行くと、担当者は本館にしか座っていないので門前払いになる。気の利く来客は本館に回り直すが、門前払いされた時点で帰ってしまう来客もいる。<code>localhost</code> は「このビル」という名前で、<code>::1</code> と <code>127.0.0.1</code> が 2 つの窓口、案内板が RFC 6724 の並べ方である。</p>
+        <p>自分の机で仕事をするときは、引き出しに文房具を揃えてある（設定ファイルが整えた <code>PATH</code>）。cron に仕事を頼むのは、夜中に代理の人を空っぽの貸し会議室に呼んで「この手順書どおりにやって」と渡すのに近い。手順書に「赤ペンを使う」とだけ書いてあれば、代理の人は赤ペンを見つけられない。手順書に置き場所（絶対パス）を書くか、会議室にも文房具を運び込む（crontab に <code>PATH=</code>）必要がある。</p>
       </div>
 
       <section class="body-section">
-        <h3>Node で突然この問題が増えた理由</h3>
-        <p>Node の <code>dns.lookup()</code> は v17.0.0 まで、OS が返した結果をわざわざ並べ替えて IPv4 を先頭にしていた。v17.0.0 でこの既定が <code>verbatim</code>（OS の並び順をそのまま使う）に変わった。この変更で、それまで <code>127.0.0.1</code> に繋がっていた <code>localhost</code> 宛ての接続が、同じコードのまま <code>::1</code> に向かうようになった。<code>127.0.0.1</code> でしか待っていない DB コンテナやモックサーバーに繋ぐ構成で、Node を上げただけで <code>ECONNREFUSED ::1</code> が出始めたのはこのためだ。</p>
-        <p>v20.0.0（v18.18.0 にも反映）では、<code>net.connect()</code> の <code>autoSelectFamily</code> オプションの既定値が <code>true</code> になった。これは Happy Eyeballs（RFC 8305）と呼ばれる方式で、名前解決で得た IPv6 と IPv4 のアドレスを交互に並べ、一定時間内に繋がらなければ次のアドレスを試す。すべて失敗したときだけ、全試行のエラーをまとめた <code>AggregateError</code> を返す。RFC 8305 は次の試行までの待ち時間の既定として 250 ミリ秒を推奨している。</p>
-        <p>挙動を戻したり固定したりする設定もある。Node の起動オプションで指定する場合は次のようになる。</p>
-        <pre class="code"># 名前解決の結果を IPv4 優先に並べ替える
-node --dns-result-order=ipv4first app.js
+        <h3>直し方: どこで PATH を与えるか</h3>
+        <p>一番素直なのは、crontab の先頭に環境設定行を書くことだ。<code>crontab(5)</code> は <code>name = value</code> 形式の行を環境設定として扱う。ただし値の中の変数展開やチルダ展開は行われないと明記されているので、<code>$HOME</code> や <code>~</code> は使えず、全部書き下す。</p>
+        <pre class="code"># crontab -e
+SHELL=/bin/bash
+PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin
+MAILTO=""
 
-# Happy Eyeballs を無効にする（先頭だけ試す）
-node --no-network-family-autoselection app.js</pre>
-        <p><code>--dns-result-order=ipv4first</code> を付けると v16 以前と同じく <code>127.0.0.1</code> が先頭になり、IPv4 でしか待たないサーバーにはすぐ繋がる。代わりに <code>::1</code> でしか待たないサーバーには繋がりにくくなるので、問題の向きが反転するだけである。コード中で <code>dns.setDefaultResultOrder('ipv4first')</code> を呼んでも同じ効果があり、こちらが起動オプションより優先される。</p>
-      </section>
-
-      <section class="body-section">
-        <h3>待つ側の住所も確認する</h3>
-        <p>問題は繋ぐ側だけでなく、待つ側（サーバーがどのアドレスで listen しているか）にもある。サーバーが待受アドレスを <code>127.0.0.1</code> と明示していれば IPv4 だけ、<code>::1</code> なら IPv6 だけを受け付ける。待受アドレスに <code>localhost</code> と書いた場合は、サーバー側でも名前解決が行われ、その結果の先頭アドレス 1 つだけで待つ実装が多い。Node 17 以降の開発サーバーが <code>::1</code> だけで待ち、<code>curl 127.0.0.1:5173</code> が拒否されるという逆向きの事故はこれで起きる。</p>
-        <p>Node の <code>server.listen()</code> はホストを省略すると、IPv6 が使えれば未指定アドレス <code>::</code> で待つ。多くの OS では <code>::</code> で待つと IPv4 の接続も同時に受け付けるため、<code>::1</code> と <code>127.0.0.1</code> のどちらから来ても繋がる。ただしこれは外部のマシンからの接続も受け付けることを意味するので、ローカル専用にしたいサーバーではホストを省略せず、繋ぐ側と同じアドレスを明示するほうが安全である。</p>
-        <p>どの対策を取るにしても、「サーバーが待つアドレス」と「クライアントが最初に試すアドレス」を一致させるのが根本解決だ。設定ファイルの接続先を <code>localhost</code> ではなく <code>127.0.0.1</code> と書くのが最も手軽で、名前解決の結果に左右されない。</p>
+0 3 * * * cd /Users/me/app &amp;&amp; ./backup.sh &gt;&gt; /tmp/backup.log 2&gt;&amp;1</pre>
+        <p>各行の効果は次のとおりだ。<code>PATH</code> を書けば、その crontab のすべてのジョブで <code>node</code> などが見つかるようになる。<code>SHELL</code> を変えると <code>/bin/sh</code> の代わりに bash でコマンド行が解釈されるが、それでも非対話シェルなので <code>.bashrc</code> は読まれない。<code>MAILTO=""</code> にするとエラーメールが送られなくなる。未設定なら crontab の所有者宛てに出力がメールされるので、メールを止める場合はログをファイルに残す。</p>
+        <p>nvm や rbenv のようにバージョンごとにディレクトリが変わるツールでは、<code>PATH</code> の固定より絶対パス指定の方が壊れにくいことが多い。<code>command -v node</code> の出力をそのまま書けば、cron 側の <code>PATH</code> に依存しなくなる。もう一つの落とし穴は <code>%</code> だ。crontab のコマンド欄では、バックスラッシュでエスケープしない <code>%</code> は改行に変換され、最初の <code>%</code> 以降はコマンドの標準入力に回される。<code>date +%Y%m%d</code> を直書きすると、コマンドがそこで切られる。</p>
+        <pre class="code"># パスは command -v node の出力をそのまま書く
+0 3 * * * /Users/me/.nvm/versions/node/v22.11.0/bin/node /Users/me/app/job.js
+0 4 * * * tar czf /tmp/bk-$(date +\%Y\%m\%d).tgz /Users/me/data</pre>
       </section>
 
       <div class="practical">
         <div class="box-title">💼 実務でどう出会うか</div>
-        <p>典型は、<code>docker run -p 127.0.0.1:5432:5432 postgres</code> のように IPv4 のループバックだけに公開したコンテナへ、Node のアプリやマイグレーションツールが <code>DATABASE_URL=postgres://...@localhost:5432</code> で繋ぐ場面だ。Node 17〜19 や、Happy Eyeballs を持たない古いクライアントでは <code>ECONNREFUSED ::1:5432</code> で落ちる。Node 20 以降では最終的に繋がるが、繋がる前に <code>::1</code> への試行を挟むことになる。エラーメッセージに <code>::1</code> が出たら「サーバーが落ちている」ではなく「住所の不一致」を疑い、接続先を <code>127.0.0.1</code> に書き換えるか、サーバーの待受アドレスを見直すとよい。</p>
+        <p>典型は「cron の <code>bundle exec rake</code> が <code>bundle: not found</code>」「Node のバッチだけ夜間に失敗する」「<code>aws</code> CLI が見つからない」の 3 つだ。同じ構造は cron 以外にも現れる。systemd のサービス、CI ランナー、Docker の <code>ENTRYPOINT</code> も、ターミナルの対話シェルを経由せず親プロセスが用意した環境でコマンドを起動するため、<code>.zshrc</code> に頼った設定は効かない。「手では動くのに自動実行だと動かない」と言われたら、まずジョブの先頭に <code>env &gt; /tmp/env.txt</code> を仕込み、手元の <code>env</code> と差分を取るのが早い。</p>
       </div>
 
       <div class="hands-on">
         <div class="box-title">⌨️ 手を動かす（5 分）</div>
-        <p>IPv4 のループバックだけで待つサーバーを立て、<code>localhost</code> 宛ての接続が <code>::1</code> を先に試す様子を観察する。ターミナル 1 で次を実行する。</p>
-        <pre class="code">cat /etc/hosts | grep localhost
-python3 -m http.server 8000 --bind 127.0.0.1</pre>
-        <p>ターミナル 2 で次の 3 つを順に実行する。</p>
-        <pre class="code">curl -v http://localhost:8000/ -o /dev/null 2&gt;&amp;1 | grep -i -E 'trying|connected|failed'
+        <p>cron と同等の最小環境を <code>env -i</code>（環境を空にしてから指定した変数だけ渡す）で再現し、ターミナルとの違いを見る。crontab を実際に登録する必要はない。</p>
+        <pre class="code"># 1. いつものターミナル
+echo "$PATH" | tr ':' '\n' | head -5
+command -v node || echo "node not found"
 
-node -e "require('dns').lookup('localhost',{all:true},(e,a)=&gt;console.log(a))"
+# 2. cron 相当の最小環境で同じことをする
+env -i HOME="$HOME" LOGNAME="$USER" SHELL=/bin/sh \
+  PATH=/usr/bin:/bin \
+  /bin/sh -c 'echo "PATH=$PATH"; command -v node || echo "node not found"'
 
-node --no-network-family-autoselection -e "require('net').connect(8000,'localhost').on('connect',()=&gt;{console.log('connected');process.exit()}).on('error',e=&gt;console.log(e.message))"</pre>
-        <p>環境によるが、<code>curl</code> は <code>::1</code> への試行が失敗した後に <code>127.0.0.1</code> で繋がる行を表示し、<code>dns.lookup</code> は <code>::1</code> と <code>127.0.0.1</code> の 2 件を返すはずだ。3 つ目は Happy Eyeballs を切っているので先頭の <code>::1</code> だけを試し、<code>connect ECONNREFUSED ::1:8000</code> が出る。同じコマンドから <code>--no-network-family-autoselection</code> を外すと <code>connected</code> に変わることも確かめられる。</p>
+# 3. 渡される環境変数の数を比べる
+env | wc -l
+env -i PATH=/usr/bin:/bin /bin/sh -c 'env | wc -l'</pre>
+        <p>1 では <code>/opt/homebrew/bin</code> や nvm のディレクトリが並び <code>node</code> のパスが出るはずだ。2 では <code>PATH=/usr/bin:/bin</code> となり、Homebrew や nvm で入れた <code>node</code> は <code>node not found</code> になる。3 では手元の環境変数が数十行あるのに対し、最小環境は数行しかないことが分かる。2 の <code>PATH</code> に <code>command -v node</code> の結果のディレクトリを足すと、見つかるようになる。</p>
       </div>
 
       <div class="misconceptions">
         <div class="box-title">🙅 よくある誤解</div>
         <ul>
-          <li><span class="wrong">localhost と 127.0.0.1 は同じものの別名だ</span> — <code>localhost</code> は名前で、多くの環境で <code>127.0.0.1</code> と <code>::1</code> の 2 つに解決される。<code>127.0.0.1</code> は IPv4 の 1 アドレスにすぎない。</li>
-          <li><span class="wrong">ECONNREFUSED が出たらサーバーは落ちている</span> — その宛先アドレスとポートで待つプロセスがいない、という意味である。サーバーが別のアドレス（IPv4 側）で生きていても出る。</li>
-          <li><span class="wrong">IPv6 を使っていないので自分には関係ない</span> — 外向きの通信が IPv4 だけでも、ループバックの <code>::1</code> は OS が標準で持っており、<code>/etc/hosts</code> 経由で <code>localhost</code> の解決結果に入ってくる。</li>
+          <li><span class="wrong">同じユーザーで動くのだから、環境変数も同じはず</span> — 環境変数はユーザーではなくプロセスに属し、起動した親が渡したコピーで決まる。cron デーモンはシェルの設定ファイルを読まずに最小限の変数だけを渡す。</li>
+          <li><span class="wrong"><code>SHELL=/bin/bash</code> にすれば <code>.bashrc</code> が読まれる</span> — cron が起動するのは非対話シェルで、bash の非対話シェルは <code>BASH_ENV</code> が指すファイル以外の起動ファイルを読まない。シェルの種類を変えても <code>PATH</code> は増えない。</li>
+          <li><span class="wrong">crontab で <code>PATH=$HOME/bin:$PATH</code> と書けば継ぎ足せる</span> — crontab の環境設定行では変数展開もチルダ展開も行われない。値は文字列としてそのまま入るので、ディレクトリを全部書き下す。</li>
         </ul>
       </div>
 
       <div class="glossary">
         <div class="box-title">📖 用語ミニ辞典</div>
         <dl>
-          <dt>ループバックアドレス</dt><dd>外部に出ず自分自身に戻ってくる宛先。IPv4 は 127.0.0.1、IPv6 は ::1。</dd>
-          <dt>getaddrinfo</dt><dd>ホスト名を IP アドレスの一覧に変換する OS の関数。結果の並び順も OS が決める。</dd>
-          <dt>RFC 6724</dt><dd>複数の候補アドレスをどの順に試すかの既定ポリシーを定めた規格。::1 の優先度が最も高い。</dd>
-          <dt>Happy Eyeballs</dt><dd>IPv6 と IPv4 のアドレスを交互に、一定の間隔で次々に試して最初に繋がったものを使う接続方式（RFC 8305）。</dd>
-          <dt>ECONNREFUSED</dt><dd>接続先のアドレスとポートで待つプロセスがおらず、相手 OS に接続を拒否されたことを示すエラー。</dd>
+          <dt>環境変数</dt><dd>プロセスごとに持つ NAME=value の一覧。fork で子にコピーされ、execve で新しいプログラムに渡される。</dd>
+          <dt>PATH</dt><dd>スラッシュを含まないコマンド名を探すディレクトリの並び。先頭から順に探し、最初に見つかった実行ファイルを使う。</dd>
+          <dt>シェルの設定ファイル</dt><dd>.zshrc や .bash_profile など、シェル起動時に自動で実行されるスクリプト。どれが読まれるかは起動のされ方で決まる。</dd>
+          <dt>対話シェル / ログインシェル</dt><dd>対話シェルは人が入力するシェル、ログインシェルはログイン直後に最初に起動されるシェル。cron のジョブはどちらでもない。</dd>
+          <dt>cron デーモン</dt><dd>時刻を監視し、crontab に登録されたコマンドを /bin/sh 経由で起動する常駐プロセス。</dd>
         </dl>
       </div>
 
       <div class="further-reading">
         <div class="box-title">🔗 もっと深く</div>
         <ul>
-          <li><a href="https://nodejs.org/api/dns.html#dnslookuphostname-options-callback">Node.js Docs: dns.lookup()</a> — <code>order</code> / <code>verbatim</code> の既定値と v17.0.0 での変更履歴が載っている。</li>
-          <li><a href="https://nodejs.org/api/net.html#socketconnectoptions-connectlistener">Node.js Docs: socket.connect(options)</a> — <code>autoSelectFamily</code> の挙動と v20.0.0 で既定が true になった経緯。</li>
-          <li><a href="https://www.rfc-editor.org/rfc/rfc6724.html#section-2.1">RFC 6724 Section 2.1: Policy Table</a> — ::1 が最優先になる既定ポリシー表そのもの。</li>
-          <li><a href="https://www.rfc-editor.org/rfc/rfc8305.html">RFC 8305: Happy Eyeballs Version 2</a> — IPv6 と IPv4 を交互に試す手順と、待ち時間の推奨値。</li>
+          <li><a href="https://manpages.debian.org/bullseye/cron/crontab.5.en.html">crontab(5) — Debian manpages</a> — cron が自動設定する変数、PATH の既定値、変数展開をしない仕様、<code>%</code> の扱いが一次情報で書かれている。</li>
+          <li><a href="https://www.gnu.org/software/bash/manual/html_node/Bash-Startup-Files.html">Bash Startup Files — GNU Bash Manual</a> — ログイン / 対話 / 非対話 / sh 起動のそれぞれで読まれるファイルの一覧。</li>
+          <li><a href="https://zsh.sourceforge.io/Doc/Release/Files.html">Startup/Shutdown Files — zsh Manual</a> — .zshenv・.zprofile・.zshrc・.zlogin の読まれる条件と順序。</li>
+          <li><a href="https://man7.org/linux/man-pages/man7/environ.7.html">environ(7) — Linux manual page</a> — 環境が fork でコピーされ execve で渡される仕組みと PATH の探索ルール。</li>
         </ul>
       </div>
     </article>
@@ -153,6 +168,11 @@ node --no-network-family-autoselection -e "require('net').connect(8000,'localhos
     <!-- recent:start -->
     <section class="section recent-articles">
       <div class="section-title">最近の記事</div>
+      <div class="card">
+        <h3><a href="archive/2026-11-23.html">サーバーは localhost で動いているのに、なぜ「ECONNREFUSED ::1」で繋がらないのか？</a></h3>
+        <div class="summary">localhost は 127.0.0.1 と ::1 の 2 つに解決され OS は ::1 を先に返すため、IPv4 だけで待つサーバーへの接続が拒否される仕組みと、Node の Happy Eyeballs・待受アドレスを揃える対策。</div>
+        <div class="meta"><span class="tag tag-network">Network</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-23</span></div>
+      </div>
       <div class="card">
         <h3><a href="archive/2026-11-22.html">保存した直後にジョブへ ID を渡しただけなのに、なぜジョブは「レコードが見つからない」で落ちるのか？</a></h3>
         <div class="summary">トランザクション中に積んだジョブは COMMIT 前に走って行が見えず落ちる。COMMIT 後に積む方法と、それでも残る取りこぼしを Transactional Outbox で防ぐ仕組みを解説する。</div>
@@ -167,11 +187,6 @@ node --no-network-family-autoselection -e "require('net').connect(8000,'localhos
         <h3><a href="archive/2026-11-20.html">DB が数秒詰まっただけなのに、なぜ全部の Pod が一斉に再起動するのか？</a></h3>
         <div class="summary">liveness probe は失敗でコンテナを再起動し、readiness probe は宛先から外すだけ。DB を見る liveness が DB の詰まりで全 Pod を同時に再起動させる仕組みと、probe 設定値の読み方・startupProbe の使い方。</div>
         <div class="meta"><span class="tag tag-container">Container</span><span>🌿 基礎</span><span>⏱ 約 8 分</span><span>2026-11-20</span></div>
-      </div>
-      <div class="card">
-        <h3><a href="archive/2026-11-19.html">CPU limit は 2 なのに、なぜ Go のアプリは 8 コアぶん走ろうとして止められるのか？</a></h3>
-        <div class="summary">Kubernetes の CPU limit は 100ms ごとの CPU 時間枠で、Go 1.24 までの GOMAXPROCS はノードのコア数になるため枠を早々に使い切って止められる。Go 1.25 の新しい既定値と、環境変数・GODEBUG での揃え方。</div>
-        <div class="meta"><span class="tag tag-lang">Lang</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-19</span></div>
       </div>
       <div class="recent-more"><a href="archive/">アーカイブですべて見る →</a></div>
     </section>
