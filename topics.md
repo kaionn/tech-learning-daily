@@ -6,6 +6,7 @@
 
 ## 消化済み
 
+- 2026-11-25 rm したのに df の空き容量が増えない理由（ファイル名はディレクトリエントリで実体は inode、rm は unlink(2) で名前を外しリンクカウントを減らすだけで、最後の fd が閉じるまで実体が残ること、du は名前を辿り df はブロックを数えるため食い違うこと、lsof +L1 と /proc/PID/fd の (deleted)、/proc 経由の切り詰め、: > と truncate による予防、logrotate の create＋postrotate（nginx の USR1）と copytruncate の欠損リスク、docker の tmpfs で df が戻らないことを確かめる実験）（自動選定）
 - 2026-11-24 cron で command not found になる理由（環境変数が fork/execve で親から子へコピーされるだけで OS 全体の置き場所は無いこと、ターミナルの PATH は .zshrc・.zprofile・.bashrc などシェルの設定ファイルが継ぎ足していること、zsh/bash のログイン・対話・非対話で読まれる起動ファイルの違い、cron が SHELL=/bin/sh・HOME/LOGNAME だけを設定し既定 PATH が /usr/bin:/bin で起動ファイルを読まない非対話シェルを使うこと、crontab の PATH= 行は変数展開・チルダ展開されないこと、SHELL=/bin/bash でも .bashrc は読まれないこと、絶対パス指定、% が改行に変換される罠、MAILTO、systemd・CI・ENTRYPOINT も同じ構造であること、env -i で cron 相当の最小環境を再現する実験）（自動選定）
 - 2026-11-23 localhost が ::1 に解決されて ECONNREFUSED になる理由（/etc/hosts の 127.0.0.1 と ::1、RFC 6724 の既定ポリシーで ::1 が優先されること、Node v17 の dns.lookup verbatim 既定化と v20 の autoSelectFamily＝Happy Eyeballs、--dns-result-order と --no-network-family-autoselection、待受アドレス localhost・:: の挙動、127.0.0.1 だけで待つサーバーに curl と node で繋ぐ実験）（自動選定）
 - 2026-11-22 トランザクション内で enqueue したジョブが RecordNotFound で落ちる理由（COMMIT 前の行は Read Committed で他接続から見えないこと、Redis などのキューは DB のトランザクションを知らず perform_later が即座に積むレースコンディション、ロールバック時の幽霊ジョブ、after_create_commit・Rails 7.2 の enqueue_after_transaction_commit・Sidekiq.transactional_push! による COMMIT 後 enqueue、それでも残る COMMIT と enqueue の隙間＝二重書き込み問題、Transactional Outbox と重複配送・冪等性、同一 DB の Solid Queue の性質、docker の psql 2 接続で未確定行が見えないことを確かめる実験）（自動選定）

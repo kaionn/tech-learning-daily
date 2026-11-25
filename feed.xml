@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-11-24T14:26:17+09:00</updated>
+  <updated>2026-11-25T13:24:49+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>巨大なログを rm したのに、なぜ df の空き容量は 1 バイトも増えないのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-11-25.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-11-25.html</id>
+    <updated>2026-11-25T13:24:49+09:00</updated>
+    <summary>rm が消すのは名前だけで、プロセスが開いている間はファイルの実体が残る。lsof +L1 での発見、/proc 経由の切り詰め、logrotate の create と copytruncate の違いを解説。</summary>
+  </entry>
   <entry>
     <title>ターミナルでは動くスクリプトなのに、なぜ cron に登録すると「command not found」で落ちるのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-11-24.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-11-12.html</id>
     <updated>2026-11-12T11:22:55+09:00</updated>
     <summary>count++ は読む・足す・書くの 3 手順で、並行する goroutine が同じ古い値を読むと片方の加算が上書きで消える。sync.Mutex か sync/atomic で直列化し、go test -race で実際に起きた競合を検出する。</summary>
-  </entry>
-  <entry>
-    <title>ノードの CPU はほぼ空いているのに、なぜ Pod は Pending のまま動かないのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-11-11.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-11-11.html</id>
-    <updated>2026-11-11T10:22:37+09:00</updated>
-    <summary>スケジューラは実際の CPU 使用率ではなく requests の合計がノードの Allocatable に収まるかで配置を決める。過大な requests は暇なノードを満席にして Pod を Pending にするため、実測に合わせて見直す。</summary>
   </entry>
 </feed>

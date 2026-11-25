@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tech Learning Daily — ターミナルでは動くスクリプトなのに、なぜ cron に登録すると「command not found」で落ちるのか？</title>
-  <meta name="description" content="環境変数は親プロセスから子へコピーされるだけで、PATH を足しているのはシェルの設定ファイルだ。cron はそれを読まない最小環境でジョブを起動するため、node や bundle が見つからなくなる。">
+  <title>Tech Learning Daily — 巨大なログを rm したのに、なぜ df の空き容量は 1 バイトも増えないのか？</title>
+  <meta name="description" content="rm が消すのはディレクトリの「名前」だけで、ファイルの実体はプロセスが開いている間は残り続ける。原因の見つけ方、空にする方法、logrotate の create と copytruncate の違いまでを解説する。">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Tech Learning Daily">
-  <meta property="og:title" content="Tech Learning Daily — ターミナルでは動くスクリプトなのに、なぜ cron に登録すると「command not found」で落ちるのか？">
-  <meta property="og:description" content="環境変数は親プロセスから子へコピーされるだけで、PATH を足しているのはシェルの設定ファイルだ。cron はそれを読まない最小環境でジョブを起動するため、node や bundle が見つからなくなる。">
+  <meta property="og:title" content="Tech Learning Daily — 巨大なログを rm したのに、なぜ df の空き容量は 1 バイトも増えないのか？">
+  <meta property="og:description" content="rm が消すのはディレクトリの「名前」だけで、ファイルの実体はプロセスが開いている間は残り続ける。原因の見つけ方、空にする方法、logrotate の create と copytruncate の違いまでを解説する。">
   <meta property="og:url" content="https://tech-learn.kaion-lab.com/">
   <meta property="og:image" content="https://tech-learn.kaion-lab.com/og.png">
   <meta name="twitter:card" content="summary_large_image">
@@ -22,7 +22,7 @@
   <div class="container">
     <header>
       <h1>Tech Learning Daily</h1>
-      <div class="date">2026-11-24 (Tue) — 第 130 号</div>
+      <div class="date">2026-11-25 (Wed) — 第 131 号</div>
       <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
     </header>
 
@@ -32,135 +32,134 @@
         <span class="difficulty">🌿 基礎</span>
         <span class="read-time">⏱ 約 7 分</span>
       </div>
-      <h2 class="article-title">ターミナルでは動くスクリプトなのに、なぜ cron に登録すると「command not found」で落ちるのか？</h2>
-      <p class="lead">手で <code>./backup.sh</code> を叩けば何度でも成功する。それを <code>crontab -e</code> で毎晩 3 時に登録した翌朝、届いていたのは <code>node: not found</code> のエラーメールだった。同じユーザー、同じマシン、同じスクリプトなのに、何が違ったのか説明できるだろうか。</p>
+      <h2 class="article-title">巨大なログを rm したのに、なぜ df の空き容量は 1 バイトも増えないのか？</h2>
+      <p class="lead">「ディスク使用率 98%」のアラートで本番サーバーに入り、20GB に育った <code>production.log</code> を見つけて <code>rm</code> した。ところが <code>df -h</code> を打ち直しても使用率は 98% のままで、<code>du</code> で数えるとディレクトリは空っぽだ。消したはずの 20GB はどこにいるのだろうか。</p>
 
       <div class="tldr">
         <div class="box-title">🎯 3 行まとめ</div>
         <ul>
-          <li>環境変数は「親プロセスが子プロセスに渡すコピー」で、OS 全体で共有された設定ではない。</li>
-          <li>ターミナルの <code>PATH</code> に <code>node</code> や <code>bundle</code> の場所を足しているのは <code>.zshrc</code> などシェルの設定ファイルで、cron が起動する <code>/bin/sh</code> はそれを読まない。</li>
-          <li>cron の既定 <code>PATH</code> は <code>/usr/bin:/bin</code> 程度しかないため、crontab に <code>PATH=</code> を書くか、コマンドを絶対パスで呼ぶ。</li>
+          <li><code>rm</code> が消すのはディレクトリ内の「名前」だけで、ファイルの実体（inode とデータ）は別に存在する。</li>
+          <li>実体が解放されるのは、名前が 1 つも無くなり、かつそのファイルを開いているプロセスも 1 つも無くなった時である。</li>
+          <li>書き込み中のログは <code>rm</code> せず中身を空にするか、アプリにファイルを開き直させる。logrotate の <code>create</code> と <code>copytruncate</code> はこの 2 つの戦略に対応する。</li>
         </ul>
       </div>
 
       <section class="body-section">
-        <h3>環境変数は「親から子へのコピー」でしかない</h3>
-        <p><strong>環境変数</strong>とは、プロセスごとに持つ <code>NAME=value</code> 形式の文字列の一覧である。Linux の <code>environ(7)</code> によると、<code>fork(2)</code> で作られた子プロセスは親の環境の<em>コピー</em>を受け継ぎ、<code>execve(2)</code> で新しいプログラムを起動するときにはその一覧が新しいプログラムに渡される。</p>
-        <p>ここから一つの性質が出てくる。環境変数はプロセスの系図に沿って上から下へ流れるだけで、横には流れない。ターミナルで <code>export FOO=1</code> しても、すでに動いている別のプロセスや、別の親から生まれるプロセスには届かない。「このユーザーの環境変数」という OS 全体の置き場所は無く、どの親から起動されたかで中身が決まる。</p>
-        <p>そして <code>node</code> のようにスラッシュを含まないコマンド名を打ったとき、シェルは <code>PATH</code> に並んだディレクトリを先頭から順に探し、実行権限のあるファイルが見つかったところで止まる。<code>PATH</code> に <code>node</code> の置き場所が無ければ、ファイルがディスクに存在していても <code>command not found</code> になる。</p>
+        <h3>ファイル名とファイルの実体は別の場所にある</h3>
+        <p>Linux のファイルシステムでは、ファイルの実体を <strong>inode</strong> が表す。inode とは、ファイルの所有者・パーミッション・サイズ・データブロックの位置といったメタデータを持つ管理構造で、ファイルシステム内で一意な番号が付く。ここで意外なのは、inode が持つ情報の中に<strong>ファイル名が無い</strong>ことである。</p>
+        <p>名前を持っているのはディレクトリの側だ。ディレクトリは「名前 → inode 番号」の対応表であり、この表の 1 行を <strong>ディレクトリエントリ</strong>と呼ぶ。同じ inode を指す行を 2 つ作ればそれが <strong>ハードリンク</strong>で、inode は自分を指す行の数を <strong>リンクカウント</strong>（<code>stat</code> の <code>st_nlink</code>、<code>ls -l</code> の 2 列目）として数えている。</p>
+        <p>この構造の上で <code>rm</code> がしているのは、<code>unlink(2)</code> システムコールで対応表の 1 行を消し、リンクカウントを 1 減らすことだけである。データを消去する命令はどこにも出していない。データブロックを手放すかどうかは、カーネルが別の条件で判断する。</p>
       </section>
 
       <section class="body-section">
-        <h3>ターミナルの PATH は誰が作っているのか</h3>
-        <p>普段のターミナルの <code>PATH</code> は、OS が最初から用意したものではない。ログイン時やシェル起動時に読まれる<strong>シェルの設定ファイル</strong>（起動時に自動で実行されるスクリプト）が、少しずつ継ぎ足して作っている。Homebrew の <code>eval "$(brew shellenv)"</code>、nvm や rbenv の初期化行、<code>export PATH="$HOME/bin:$PATH"</code> といった行に見覚えがあるはずだ。</p>
-        <p>どのファイルが読まれるかは、シェルが「ログインシェルか」「対話シェルか」で変わる。<strong>対話シェル</strong>は人がプロンプトに入力するシェル、<strong>ログインシェル</strong>はログイン直後に最初に起動されるシェルを指す。zsh の公式マニュアルでは、<code>.zshenv</code> は常に、<code>.zprofile</code> と <code>.zlogin</code> はログインシェルだけ、<code>.zshrc</code> は対話シェルだけで読まれる。bash では対話の非ログインシェルが <code>~/.bashrc</code> を読み、対話しない（スクリプト実行の）シェルは <code>BASH_ENV</code> が指すファイル以外何も読まない。</p>
-        <p>つまり <code>.zshrc</code> に書いた nvm の初期化は、「人が打ち込むためのシェル」が起動したときにしか実行されない。手で <code>./backup.sh</code> を叩いたときに <code>node</code> が見つかったのは、スクリプトが自力で探したからではなく、親である対話シェルが作った <code>PATH</code> をコピーで受け取っていたからだ。</p>
-      </section>
+        <h3>実体が消えるのは「名前」と「開いている人」が両方いなくなった時</h3>
+        <p>その条件を <code>unlink(2)</code> の man ページはこう書いている。最後の名前が消されても、まだそのファイルを開いているプロセスがあれば、ファイルは「それを参照する最後のファイルディスクリプタが閉じられるまで存在し続ける」。<strong>ファイルディスクリプタ（fd）</strong>とは、プロセスが <code>open</code> したファイルを指す番号で、カーネルは fd ごとに inode への参照を握っている。</p>
+<pre class="diagram"> ディレクトリ /var/log/app (名前の表)
+ ┌─────────────────────┐
+ │ production.log -> #2│ ◀ rm が消すのは
+ └─────────────────────┘   この行だけ
+            │
+            ▼
+ ┌─────────────────────┐
+ │ inode #2   nlink: 0 │
+ │ data: 20 GB         │ ◀ まだ残っている
+ └─────────────────────┘
+            ▲
+            │ fd 5 (open したまま)
+ ┌─────────────────────┐
+ │ process: puma       │
+ └─────────────────────┘
 
-      <pre class="diagram">
- 手で実行した場合
-┌──────────────────────────┐
-│ zsh（対話・ログイン）    │
-│  .zprofile/.zshrc を実行 │
-│  PATH=…/nvm/…:/opt/…:…   │
-└────────────┬─────────────┘
-             │ fork+execve（コピー）
-             ▼
-┌──────────────────────────┐
-│ backup.sh → node 発見 ✓  │
-└──────────────────────────┘
-
- cron から実行した場合
-┌──────────────────────────┐
-│ cron デーモン            │
-│  設定ファイルは読まない  │
-└────────────┬─────────────┘
-             │ /bin/sh -c（非対話）
-             ▼
-┌──────────────────────────┐
-│ PATH=/usr/bin:/bin       │
-│ backup.sh → node 無し ✗  │
-└──────────────────────────┘</pre>
-
-      <section class="body-section">
-        <h3>cron の子プロセスはどんな環境で生まれるか</h3>
-        <p>cron のジョブは、ターミナルの子孫ではない。システム起動時に立ち上がった <strong>cron デーモン</strong>（時刻を監視して登録コマンドを起動する常駐プロセス）の子として生まれる。ユーザーが同じなので、ログイン時と同じ環境が用意されるように思える。しかし実際は、デーモンがほぼ空の環境を自分で組み立てて渡している。</p>
-        <p>Debian の <code>crontab(5)</code> は、cron が自動で設定する変数を明記している。<code>SHELL</code> は <code>/bin/sh</code>、<code>LOGNAME</code> と <code>HOME</code> は <code>/etc/passwd</code> の所有者の行から取られる。同じ man ページの bullseye 版は「<code>PATH</code> は <code>/usr/bin:/bin</code> に設定される。別の <code>PATH</code> を使いたければ crontab ファイル内で設定する必要がある」と書いている（Ubuntu の一部バージョンでは既定値が変わり man ページの記述と食い違った経緯があり、実装・ディストリビューションごとに差がある）。</p>
-        <p>起動されるのは <code>/bin/sh -c '登録したコマンド'</code> という非対話・非ログインのシェルだ。bash マニュアルによれば、<code>sh</code> という名前で起動された非対話シェルは起動ファイルを一つも読まない。<code>.zshrc</code> に足した nvm も、Homebrew の <code>/opt/homebrew/bin</code> も、<code>~/.rbenv/shims</code> も入らないまま、<code>PATH=/usr/bin:/bin</code> でスクリプトが走る。これが冒頭の <code>node: not found</code> の正体である。</p>
+ 解放 = nlink が 0 かつ 開いている fd が 0</pre>
+        <p>冒頭の現象はこれで説明が付く。Rails の Puma はログを開いたまま追記し続けているので、<code>rm</code> 後も inode #2 への参照が残り、20GB はディスク上に居座る。しかもプロセスは自分の fd に書き続けるので、名前の無いファイルはなお太っていく。</p>
+        <p><code>du</code> と <code>df</code> の数字が食い違う理由も同じ構造から来る。<code>du</code> はディレクトリを辿って名前の付いたファイルのサイズを足し合わせるので、名前を失ったファイルは数えようがない。<code>df</code> はファイルシステムに使用中ブロック数を直接尋ねるので、名前の有無に関係なく残っている実体を数える。「<code>du</code> の合計より <code>df</code> の使用量がずっと大きい」は、削除済みで開かれたままのファイルを疑う典型的なサインである。</p>
+        <p>この挙動は不具合ではなく意図された設計だ。もし <code>rm</code> の瞬間にデータが消えるなら、読み込み中の動画プレイヤーや実行中のプログラムが、別の誰かの <code>rm</code> 1 つで足元を崩される。名前を外すことと実体を捨てることを分けたおかげで、使っている人は最後まで安全に使い続けられる。</p>
       </section>
 
       <div class="analogy">
         <div class="box-title">🍱 たとえるなら</div>
-        <p>自分の机で仕事をするときは、引き出しに文房具を揃えてある（設定ファイルが整えた <code>PATH</code>）。cron に仕事を頼むのは、夜中に代理の人を空っぽの貸し会議室に呼んで「この手順書どおりにやって」と渡すのに近い。手順書に「赤ペンを使う」とだけ書いてあれば、代理の人は赤ペンを見つけられない。手順書に置き場所（絶対パス）を書くか、会議室にも文房具を運び込む（crontab に <code>PATH=</code>）必要がある。</p>
+        <p>図書館の目録カードと本の関係に近い。目録からカードを抜くと、その本は棚を探しても見つからなくなる（<code>du</code> に映らない）。しかし貸出中の本は利用者の手元にあり、廃棄されるのは返却され、かつ目録にも載っていないと確認できた時だけだ。ディスクを圧迫している「消したはずの本」は、まだ誰かが借りっぱなしにしている本である。</p>
       </div>
 
       <section class="body-section">
-        <h3>直し方: どこで PATH を与えるか</h3>
-        <p>一番素直なのは、crontab の先頭に環境設定行を書くことだ。<code>crontab(5)</code> は <code>name = value</code> 形式の行を環境設定として扱う。ただし値の中の変数展開やチルダ展開は行われないと明記されているので、<code>$HOME</code> や <code>~</code> は使えず、全部書き下す。</p>
-        <pre class="code"># crontab -e
-SHELL=/bin/bash
-PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin
-MAILTO=""
+        <h3>犯人の見つけ方と、再起動せずに空ける方法</h3>
+        <p>削除済みなのに開かれているファイルは <code>lsof</code> で一覧できる。<code>+L1</code> は「リンクカウントが 1 未満、つまり unlink 済みの開いているファイル」を選ぶ指定で、<code>NLINK</code> 列が 0、<code>NAME</code> 列の末尾に <code>(deleted)</code> が付いた行が出る。<code>lsof</code> が無い環境でも、<code>/proc/&lt;PID&gt;/fd/</code> のシンボリックリンクを <code>ls -l</code> で見れば同じ <code>(deleted)</code> 表示を確認できる。</p>
+<pre class="code"># 削除済みで開かれたままのファイルを探す
+sudo lsof +L1
+# COMMAND  PID ... NLINK ... NAME
+# puma    4123 ...     0 ... /var/log/app/production.log (deleted)
 
-0 3 * * * cd /Users/me/app &amp;&amp; ./backup.sh &gt;&gt; /tmp/backup.log 2&gt;&amp;1</pre>
-        <p>各行の効果は次のとおりだ。<code>PATH</code> を書けば、その crontab のすべてのジョブで <code>node</code> などが見つかるようになる。<code>SHELL</code> を変えると <code>/bin/sh</code> の代わりに bash でコマンド行が解釈されるが、それでも非対話シェルなので <code>.bashrc</code> は読まれない。<code>MAILTO=""</code> にするとエラーメールが送られなくなる。未設定なら crontab の所有者宛てに出力がメールされるので、メールを止める場合はログをファイルに残す。</p>
-        <p>nvm や rbenv のようにバージョンごとにディレクトリが変わるツールでは、<code>PATH</code> の固定より絶対パス指定の方が壊れにくいことが多い。<code>command -v node</code> の出力をそのまま書けば、cron 側の <code>PATH</code> に依存しなくなる。もう一つの落とし穴は <code>%</code> だ。crontab のコマンド欄では、バックスラッシュでエスケープしない <code>%</code> は改行に変換され、最初の <code>%</code> 以降はコマンドの標準入力に回される。<code>date +%Y%m%d</code> を直書きすると、コマンドがそこで切られる。</p>
-        <pre class="code"># パスは command -v node の出力をそのまま書く
-0 3 * * * /Users/me/.nvm/versions/node/v22.11.0/bin/node /Users/me/app/job.js
-0 4 * * * tar czf /tmp/bk-$(date +\%Y\%m\%d).tgz /Users/me/data</pre>
+# 該当プロセスの fd 番号を確かめる
+sudo ls -l /proc/4123/fd | grep deleted</pre>
+        <p>容量を取り戻す手はいくつかある。プロセスを再起動すれば fd が閉じて実体は解放されるが、本番の Web サーバーをすぐ止められるとは限らない。止めずに済ませたい場合は、<code>/proc/&lt;PID&gt;/fd/&lt;N&gt;</code> を経由して中身を 0 バイトに切り詰める。この経路は名前を失った inode そのものを指しているので、<code>: &gt;</code> のリダイレクトでファイルを空にでき、データブロックがその場で解放される。</p>
+<pre class="code"># fd 5 が指す削除済みファイルを 0 バイトにする
+sudo sh -c ': &gt; /proc/4123/fd/5'</pre>
+        <p>次からの予防策は単純で、書き込み中のログを片付けたい時は <code>rm</code> ではなく <code>: &gt; production.log</code> や <code>truncate -s 0 production.log</code> で中身だけを消す。名前も inode も残るので、プロセスはそのまま同じファイルに書き続け、容量は即座に戻る。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>logrotate の create と copytruncate は何が違うのか</h3>
+        <p>ログを定期的に切り替える logrotate も、この「名前と実体は別」という性質と向き合っている。既定の方式では、現在のログを <code>production.log.1</code> のようにリネームし、<code>create</code> 指定があれば同じ名前で新しい空ファイルを作る。ところがリネームは名前の表を書き換えるだけで inode は変わらないので、アプリは何も知らずに古い inode、つまり <code>.1</code> の方へ書き続ける。新しい <code>production.log</code> は空のまま、という状態になる。</p>
+        <p>そこで <code>create</code> 方式では、ローテーション後にアプリへファイルを開き直させる。nginx の場合は公式ドキュメントが手順を定めており、ログをリネームしてからマスタープロセスに <code>USR1</code> シグナルを送ると、新しいファイルを開いて古いファイルを閉じる。<code>postrotate</code> スクリプトにこの合図を書くのが定石だ。</p>
+<pre class="code">/var/log/nginx/*.log {
+    daily
+    rotate 7
+    create 0640 www-data adm
+    sharedscripts
+    postrotate
+        kill -USR1 $(cat /run/nginx.pid)
+    endscript
+}</pre>
+        <p>開き直しの合図を持たないアプリには <code>copytruncate</code> を使う。これは元のファイルをコピーした後、元ファイルをその場で 0 バイトに切り詰める方式で、inode が変わらないのでアプリは何もしなくてよい。代わりに、logrotate の man ページが注意している通り、コピーと切り詰めの間のわずかな隙間に書かれたログは失われうる。また合図なしで <code>create</code> を使い続けると、<code>rotate 7</code> で古い世代が削除された時に、それをまだ開いているアプリがいれば、冒頭と同じ「消したのに空かない」が再発する。</p>
       </section>
 
       <div class="practical">
         <div class="box-title">💼 実務でどう出会うか</div>
-        <p>典型は「cron の <code>bundle exec rake</code> が <code>bundle: not found</code>」「Node のバッチだけ夜間に失敗する」「<code>aws</code> CLI が見つからない」の 3 つだ。同じ構造は cron 以外にも現れる。systemd のサービス、CI ランナー、Docker の <code>ENTRYPOINT</code> も、ターミナルの対話シェルを経由せず親プロセスが用意した環境でコマンドを起動するため、<code>.zshrc</code> に頼った設定は効かない。「手では動くのに自動実行だと動かない」と言われたら、まずジョブの先頭に <code>env &gt; /tmp/env.txt</code> を仕込み、手元の <code>env</code> と差分を取るのが早い。</p>
+        <p>典型は深夜のディスク逼迫アラートで、焦って大きなログを <code>rm</code> した結果、使用率が変わらず慌てる場面である。<code>df</code> と <code>du</code> の合計が大きく食い違ったら、まず <code>lsof +L1</code> を打つ。自作アプリや Sidekiq をファイルにログ出力させている環境で logrotate を設定する時は、そのプロセスにログを開き直させる手段（シグナルや再起動）があるかを確認し、無ければ <code>copytruncate</code> を選ぶ。コンテナ環境でログを標準出力に出す構成が勧められる理由の一つも、アプリ側がファイルの開き直しを気にしなくて済むことにある。</p>
       </div>
 
       <div class="hands-on">
         <div class="box-title">⌨️ 手を動かす（5 分）</div>
-        <p>cron と同等の最小環境を <code>env -i</code>（環境を空にしてから指定した変数だけ渡す）で再現し、ターミナルとの違いを見る。crontab を実際に登録する必要はない。</p>
-        <pre class="code"># 1. いつものターミナル
-echo "$PATH" | tr ':' '\n' | head -5
-command -v node || echo "node not found"
-
-# 2. cron 相当の最小環境で同じことをする
-env -i HOME="$HOME" LOGNAME="$USER" SHELL=/bin/sh \
-  PATH=/usr/bin:/bin \
-  /bin/sh -c 'echo "PATH=$PATH"; command -v node || echo "node not found"'
-
-# 3. 渡される環境変数の数を比べる
-env | wc -l
-env -i PATH=/usr/bin:/bin /bin/sh -c 'env | wc -l'</pre>
-        <p>1 では <code>/opt/homebrew/bin</code> や nvm のディレクトリが並び <code>node</code> のパスが出るはずだ。2 では <code>PATH=/usr/bin:/bin</code> となり、Homebrew や nvm で入れた <code>node</code> は <code>node not found</code> になる。3 では手元の環境変数が数十行あるのに対し、最小環境は数行しかないことが分かる。2 の <code>PATH</code> に <code>command -v node</code> の結果のディレクトリを足すと、見つかるようになる。</p>
+        <p>容量 100MB の tmpfs を付けたコンテナで、50MB のファイルを開いたまま <code>rm</code> し、<code>df</code> の数字が戻らないこと、<code>/proc</code> 経由で空にすると戻ることを確かめる。</p>
+<pre class="code">docker run --rm --tmpfs /data:size=100m alpine sh -c '
+dd if=/dev/zero of=/data/app.log bs=1M count=50 2&gt;/dev/null
+sleep 300 &lt; /data/app.log &amp;
+sleep 1
+rm /data/app.log
+echo "--- rm 直後"; df -h /data; ls -l /proc/$!/fd/0
+: &gt; /proc/$!/fd/0
+echo "--- /proc 経由で空にした後"; df -h /data
+'</pre>
+        <p><code>rm</code> 直後の <code>df</code> は Used が 50.0M のままで、<code>/proc/7/fd/0 -&gt; /data/app.log (deleted)</code> のように削除済みの印が付いたリンクが見えるはずだ。<code>sleep</code> の標準入力（fd 0）が inode を握っているためである。切り詰めた後は Used が 0 に戻る。<code>: &gt;</code> の行を <code>kill $!; sleep 1</code> に差し替えると、プロセス終了で fd が閉じて同じように解放されることも確かめられる。</p>
       </div>
 
       <div class="misconceptions">
         <div class="box-title">🙅 よくある誤解</div>
         <ul>
-          <li><span class="wrong">同じユーザーで動くのだから、環境変数も同じはず</span> — 環境変数はユーザーではなくプロセスに属し、起動した親が渡したコピーで決まる。cron デーモンはシェルの設定ファイルを読まずに最小限の変数だけを渡す。</li>
-          <li><span class="wrong"><code>SHELL=/bin/bash</code> にすれば <code>.bashrc</code> が読まれる</span> — cron が起動するのは非対話シェルで、bash の非対話シェルは <code>BASH_ENV</code> が指すファイル以外の起動ファイルを読まない。シェルの種類を変えても <code>PATH</code> は増えない。</li>
-          <li><span class="wrong">crontab で <code>PATH=$HOME/bin:$PATH</code> と書けば継ぎ足せる</span> — crontab の環境設定行では変数展開もチルダ展開も行われない。値は文字列としてそのまま入るので、ディレクトリを全部書き下す。</li>
+          <li><span class="wrong">rm はファイルのデータを消去するコマンドだ</span> — <code>rm</code> は名前（ディレクトリエントリ）を外してリンクカウントを減らすだけである。データブロックの解放は、名前も開いている fd も無くなった時にカーネルが行う。</li>
+          <li><span class="wrong">df と du は同じものを別の方法で数えているので一致するはずだ</span> — <code>du</code> は名前を辿って数え、<code>df</code> はファイルシステムの使用ブロックを数える。削除済みで開かれたままのファイルは <code>df</code> にだけ現れる。</li>
+          <li><span class="wrong">ログを mv してリネームすれば、アプリは新しいファイルに書き始める</span> — リネームでは inode が変わらないので、アプリは開き直すまで旧ファイルに書き続ける。開き直しの合図を送るか、<code>copytruncate</code> を使う必要がある。</li>
         </ul>
       </div>
 
       <div class="glossary">
         <div class="box-title">📖 用語ミニ辞典</div>
         <dl>
-          <dt>環境変数</dt><dd>プロセスごとに持つ NAME=value の一覧。fork で子にコピーされ、execve で新しいプログラムに渡される。</dd>
-          <dt>PATH</dt><dd>スラッシュを含まないコマンド名を探すディレクトリの並び。先頭から順に探し、最初に見つかった実行ファイルを使う。</dd>
-          <dt>シェルの設定ファイル</dt><dd>.zshrc や .bash_profile など、シェル起動時に自動で実行されるスクリプト。どれが読まれるかは起動のされ方で決まる。</dd>
-          <dt>対話シェル / ログインシェル</dt><dd>対話シェルは人が入力するシェル、ログインシェルはログイン直後に最初に起動されるシェル。cron のジョブはどちらでもない。</dd>
-          <dt>cron デーモン</dt><dd>時刻を監視し、crontab に登録されたコマンドを /bin/sh 経由で起動する常駐プロセス。</dd>
+          <dt>inode</dt><dd>ファイルのメタデータとデータの位置を持つ管理構造。ファイル名は持たない。</dd>
+          <dt>ディレクトリエントリ</dt><dd>ディレクトリ内の「名前 → inode 番号」の対応 1 行。<code>rm</code> が消すのはこれ。</dd>
+          <dt>リンクカウント</dt><dd>inode を指すディレクトリエントリの数（<code>st_nlink</code>）。0 になると名前の無いファイルになる。</dd>
+          <dt>ファイルディスクリプタ</dt><dd>プロセスが開いたファイルを指す番号。開いている間は inode への参照を保持する。</dd>
+          <dt>copytruncate</dt><dd>logrotate の方式の一つ。コピー後に元ファイルをその場で 0 バイトにし、inode を変えずに切り替える。</dd>
         </dl>
       </div>
 
       <div class="further-reading">
         <div class="box-title">🔗 もっと深く</div>
         <ul>
-          <li><a href="https://manpages.debian.org/bullseye/cron/crontab.5.en.html">crontab(5) — Debian manpages</a> — cron が自動設定する変数、PATH の既定値、変数展開をしない仕様、<code>%</code> の扱いが一次情報で書かれている。</li>
-          <li><a href="https://www.gnu.org/software/bash/manual/html_node/Bash-Startup-Files.html">Bash Startup Files — GNU Bash Manual</a> — ログイン / 対話 / 非対話 / sh 起動のそれぞれで読まれるファイルの一覧。</li>
-          <li><a href="https://zsh.sourceforge.io/Doc/Release/Files.html">Startup/Shutdown Files — zsh Manual</a> — .zshenv・.zprofile・.zshrc・.zlogin の読まれる条件と順序。</li>
-          <li><a href="https://man7.org/linux/man-pages/man7/environ.7.html">environ(7) — Linux manual page</a> — 環境が fork でコピーされ execve で渡される仕組みと PATH の探索ルール。</li>
+          <li><a href="https://man7.org/linux/man-pages/man2/unlink.2.html">unlink(2) — Linux manual page</a> — 「最後の fd が閉じられるまで存在し続ける」という規定の一次資料。</li>
+          <li><a href="https://man7.org/linux/man-pages/man8/logrotate.8.html">logrotate(8) — Linux manual page</a> — <code>create</code> / <code>copytruncate</code> / <code>postrotate</code> の正確な定義と、copytruncate のログ欠損の注意書き。</li>
+          <li><a href="https://nginx.org/en/docs/control.html">Controlling nginx</a> — USR1 によるログの開き直しと、ローテーション手順の公式説明。</li>
+          <li><a href="https://man7.org/linux/man-pages/man8/lsof.8.html">lsof(8) — Linux manual page</a> — <code>+L1</code> を含むリンクカウントによる絞り込みの説明。</li>
         </ul>
       </div>
     </article>
@@ -168,6 +167,11 @@ env -i PATH=/usr/bin:/bin /bin/sh -c 'env | wc -l'</pre>
     <!-- recent:start -->
     <section class="section recent-articles">
       <div class="section-title">最近の記事</div>
+      <div class="card">
+        <h3><a href="archive/2026-11-24.html">ターミナルでは動くスクリプトなのに、なぜ cron に登録すると「command not found」で落ちるのか？</a></h3>
+        <div class="summary">環境変数は親プロセスからのコピーで、PATH を足すのはシェルの設定ファイルだ。cron は設定ファイルを読まない最小環境でジョブを起動するため node などが見つからない仕組みと、crontab の PATH 行・絶対パスでの直し方。</div>
+        <div class="meta"><span class="tag tag-infra">Infra</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-24</span></div>
+      </div>
       <div class="card">
         <h3><a href="archive/2026-11-23.html">サーバーは localhost で動いているのに、なぜ「ECONNREFUSED ::1」で繋がらないのか？</a></h3>
         <div class="summary">localhost は 127.0.0.1 と ::1 の 2 つに解決され OS は ::1 を先に返すため、IPv4 だけで待つサーバーへの接続が拒否される仕組みと、Node の Happy Eyeballs・待受アドレスを揃える対策。</div>
@@ -182,11 +186,6 @@ env -i PATH=/usr/bin:/bin /bin/sh -c 'env | wc -l'</pre>
         <h3><a href="archive/2026-11-21.html">件数を 1 つ返すだけなのに、なぜ Postgres の COUNT(*) はテーブルが育つほど遅くなるのか？</a></h3>
         <div class="summary">Postgres は行数をどこにも保存していない。MVCC で見える行数がトランザクションごとに違うため COUNT(*) は全行を読んで可視性を確かめる仕組みと、Index Only Scan・visibility map の条件、推定値やページング見直しによる代替策。</div>
         <div class="meta"><span class="tag tag-db">DB</span><span>🌿 基礎</span><span>⏱ 約 8 分</span><span>2026-11-21</span></div>
-      </div>
-      <div class="card">
-        <h3><a href="archive/2026-11-20.html">DB が数秒詰まっただけなのに、なぜ全部の Pod が一斉に再起動するのか？</a></h3>
-        <div class="summary">liveness probe は失敗でコンテナを再起動し、readiness probe は宛先から外すだけ。DB を見る liveness が DB の詰まりで全 Pod を同時に再起動させる仕組みと、probe 設定値の読み方・startupProbe の使い方。</div>
-        <div class="meta"><span class="tag tag-container">Container</span><span>🌿 基礎</span><span>⏱ 約 8 分</span><span>2026-11-20</span></div>
       </div>
       <div class="recent-more"><a href="archive/">アーカイブですべて見る →</a></div>
     </section>
