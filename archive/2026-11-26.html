@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tech Learning Daily — 初めての接続では「yes」で通すのに、なぜ SSH は鍵が変わった途端に接続を拒否するのか？</title>
+  <meta name="description" content="SSH はサーバーのホスト鍵を known_hosts に記録し、次回以降は署名で本人確認する。初回の yes は信頼の登録で、鍵の不一致は偽サーバーと区別できないため拒否される。">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Tech Learning Daily">
+  <meta property="og:title" content="Tech Learning Daily — 初めての接続では「yes」で通すのに、なぜ SSH は鍵が変わった途端に接続を拒否するのか？">
+  <meta property="og:description" content="SSH はサーバーのホスト鍵を known_hosts に記録し、次回以降は署名で本人確認する。初回の yes は信頼の登録で、鍵の不一致は偽サーバーと区別できないため拒否される。">
+  <meta property="og:url" content="https://tech-learn.kaion-lab.com/archive/2026-11-26.html">
+  <meta property="og:image" content="https://tech-learn.kaion-lab.com/og.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="stylesheet" href="../style.css">
+  <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="../feed.xml">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Tech Learning Daily</h1>
+      <div class="date">2026-11-26 (Thu) — 第 132 号</div>
+      <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
+    </header>
+
+    <article class="article">
+      <div class="meta-bar">
+        <span class="tag tag-security">Security</span>
+        <span class="difficulty">🌿 基礎</span>
+        <span class="read-time">⏱ 約 7 分</span>
+      </div>
+      <h2 class="article-title">初めての接続では「yes」で通すのに、なぜ SSH は鍵が変わった途端に接続を拒否するのか？</h2>
+      <p class="lead">新しいサーバーや <code>git clone git@github.com:...</code> で最初に出る「Are you sure you want to continue connecting (yes/no)?」に、あなたもほとんど反射で <code>yes</code> と打っているはずだ。ところがサーバーを作り直した翌日には、同じ相手に「WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!」と大きく怒られて繋がらない。初回は確認なしでも通すのに、2 回目以降はなぜこれほど厳しいのだろうか。</p>
+
+      <div class="tldr">
+        <div class="box-title">🎯 3 行まとめ</div>
+        <ul>
+          <li>SSH サーバーは固有の「ホスト鍵」を持ち、接続のたびにその秘密鍵で署名して自分が本物だと示す。クライアントは公開鍵を <code>~/.ssh/known_hosts</code> に記録して照合する</li>
+          <li>初回の <code>yes</code> は「この鍵を今後の基準として登録する」操作で、確認の重みは利用者に委ねられている（TOFU）。一度登録すると、鍵の不一致は中間者攻撃と区別できないため拒否される</li>
+          <li>正当な鍵交換なら <code>ssh-keygen -R</code> で古い行を消し、公式に公開された指紋と照合してから登録し直す。<code>StrictHostKeyChecking=no</code> で黙らせるのは検証そのものを捨てることになる</li>
+        </ul>
+      </div>
+
+      <section class="body-section">
+        <h3>SSH には「人の鍵」と「サーバーの鍵」の 2 種類がある</h3>
+        <p>普段意識する SSH の鍵は <code>~/.ssh/id_ed25519</code> のような<strong>ユーザー鍵</strong>で、これは「接続してきたのが自分である」とサーバーに示すためのものだ。GitHub の設定画面に公開鍵を貼るのもこちらである。</p>
+        <p>もう 1 種類、サーバー側にも <strong>ホスト鍵</strong>がある。ホスト鍵とは、SSH サーバー（<code>sshd</code>）がマシンごとに持つ公開鍵ペアで、多くの Linux ディストリビューションでは <code>/etc/ssh/ssh_host_ed25519_key</code> などに置かれる。こちらは逆向きに、「今繋がっている相手が本当にそのサーバーである」とクライアントに示すために使う。</p>
+        <p>なぜ逆向きの確認が要るのか。ネットワークの途中にいる攻撃者が、本物のサーバーになりすまして通信を中継すれば、暗号化されていても攻撃者とは平文で話していることになるからだ。この「間に割り込んで両側に本物のふりをする」攻撃を<strong>中間者攻撃（MITM）</strong>と呼ぶ。暗号化だけでは「誰と」暗号化しているかは保証されない。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>サーバーは毎回、その接続にだけ通用する署名を出す</h3>
+        <p>SSH の接続開始時、クライアントとサーバーは Diffie-Hellman 鍵交換で共有の秘密値を作る。RFC 4253 によれば、サーバーはこのとき、双方のバージョン文字列・アルゴリズム交渉の内容・自分のホスト公開鍵・鍵交換の値・共有秘密をまとめたハッシュ値 <code>H</code>（<strong>交換ハッシュ</strong>）を作り、ホスト秘密鍵で署名して送る。</p>
+        <p>クライアントは同じ材料から <code>H</code> を自分でも計算し、受け取った公開鍵で署名を検証する。<code>H</code> には今回の鍵交換でしか出てこない値が混ざっているので、過去の署名を録画して再送しても通らない。つまり署名が検証できた時点で「相手はこの公開鍵に対応する秘密鍵を今まさに持っている」ことまでは証明される。</p>
+        <p>しかし、ここに穴がある。署名が証明するのは「送られてきた公開鍵の持ち主と話している」ことだけで、その公開鍵が本物のサーバーのものかどうかは何も言っていない。攻撃者が自分の鍵ペアで署名すれば、署名は完璧に検証できてしまう。最後の一歩、「この公開鍵は <code>github.com</code> のものだ」という対応付けは、暗号の外側から持ち込む必要がある。</p>
+<pre class="diagram"> クライアント               サーバー
+ ┌──────────────┐        ┌──────────────┐
+ │ known_hosts  │        │ ホスト秘密鍵 │
+ └──────────────┘        └──────────────┘
+        │   ◀── 公開鍵 + H への署名 ──
+        │
+        ├─ ① 署名は正しいか (暗号で検証)
+        │
+        └─ ② その公開鍵は記録と同じか
+             同じ   ▶ 接続を続ける
+             未登録 ▶ yes/no を聞く
+             違う   ▶ WARNING で拒否</pre>
+      </section>
+
+      <div class="analogy">
+        <div class="box-title">🍱 たとえるなら</div>
+        <p>初めて来た宅配業者の顔を玄関で覚えておき、次回からはその顔と照合する家のようなものだ。初回は相手が本物かを確かめる手段が乏しく、「たぶん本物だろう」で顔を覚えるしかない。だが一度覚えた後に別の顔の人が同じ社名を名乗って来たら、担当替えなのか偽物なのかは玄関先では区別できない。だからいったん扉を閉めて、会社に問い合わせる。</p>
+      </div>
+
+      <section class="body-section">
+        <h3>初回の「yes」は確認ではなく、信頼の登録である</h3>
+        <p>RFC 4251 は、この対応付けの方法として 2 つのモデルを挙げている。1 つはクライアントが「ホスト名 → 公開鍵」のローカルなデータベースを持つ方式、もう 1 つは信頼できる認証局（CA）にその対応を証明させる方式だ。OpenSSH の既定は前者で、そのデータベースが <code>~/.ssh/known_hosts</code> である。中身は 1 行 1 ホストの素朴なテキストだ。</p>
+<pre class="code">github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl</pre>
+        <p>初回接続ではこの表に行が無いので、<code>ssh</code> は鍵の指紋（公開鍵のハッシュ）を表示して <code>yes/no</code> を尋ねる。ここで <code>yes</code> と答えると、その鍵が表に書き込まれ、以後の基準になる。初回だけは検証せずに信じ、2 回目からはそれと比べる。この方式を <strong>TOFU（Trust On First Use）</strong>と呼ぶ。RFC 4251 も、初回に対応を確認しない運用は受動的な盗聴には強いが、能動的な中間者攻撃には弱いと明記している。</p>
+        <p>冒頭の疑問はここで解ける。初回が甘く見えるのは、比較対象がまだ無いので確かめようがなく、判断を利用者に委ねているからだ。本来は表示された指紋を公式の値と見比べてから <code>yes</code> を打つ前提であり、反射で打つと「その時たまたま繋がった相手」を本物として登録することになる。一方で 2 回目以降に鍵が食い違うと、<code>ssh</code> の側には「サーバーが作り直された」と「誰かが割り込んでいる」を区別する材料が無い。区別できないなら、危険な側に倒して止める。あの警告が派手なのはそのためだ。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>StrictHostKeyChecking で「未登録」と「不一致」の扱いが変わる</h3>
+        <p>この挙動は <code>ssh_config</code> の <code>StrictHostKeyChecking</code> で決まる。man ページによれば値は 4 つあり、既定は <code>ask</code> だ。どの値でも、すでに登録済みの鍵との照合自体は常に行われる。</p>
+<pre class="code"># ~/.ssh/config
+Host *.internal.example.com
+  StrictHostKeyChecking accept-new</pre>
+        <p><code>ask</code>（既定）は未登録なら確認を求め、不一致なら拒否する。<code>accept-new</code> は未登録の鍵を確認なしで登録し、不一致は拒否する。CI のように対話できない環境で初回だけ自動登録したいときの落としどころがこれだ。<code>yes</code> は未登録でも自動登録せず拒否するので、<code>known_hosts</code> を事前に配っておく運用向きになる。</p>
+        <p>問題は <code>no</code> だ。未登録の鍵を自動登録するうえ、鍵が変わったホストへの接続も（パスワード認証を無効にするなどの制限つきで）続行させる。「警告がうるさいから」とこれを書くと、TOFU の 2 回目以降の照合まで捨てることになり、残る守りが実質的に無くなる。</p>
+        <p>関連して、<code>HashKnownHosts</code>（既定 <code>no</code>）を <code>yes</code> にするとホスト名がハッシュ化されて書き込まれ、ファイルを盗み見られても接続先一覧が漏れにくくなる。ただしハッシュ化された行は目で探せないので、検索や削除は <code>ssh-keygen -F</code> / <code>-R</code> を使うことになる。</p>
+      </section>
+
+      <div class="practical">
+        <div class="box-title">💼 実務でどう出会うか</div>
+        <p>一番多いのは、同じ IP やホスト名で EC2 インスタンスを作り直したときだ。新しいマシンは新しいホスト鍵を生成するので、手元の <code>known_hosts</code> の古い行と食い違う。このときは <code>ssh-keygen -R &lt;ホスト名またはIP&gt;</code> で古い行を消し、可能ならコンソール出力などで新しい指紋を確かめてから登録し直す。</p>
+        <p>本物の鍵交換が全員に降ってきた例もある。GitHub は 2023 年 3 月 24 日、RSA のホスト秘密鍵が公開リポジトリに一時的に露出したことを受けて RSA ホスト鍵を差し替え、多くの利用者の <code>git push</code> がこの警告で止まった（ECDSA と Ed25519 の鍵は変わっていない）。GitHub は <code>ssh-keygen -R github.com</code> で古い鍵を消し、公式に公開した指紋と照合して登録し直す手順を案内している。</p>
+        <p>台数が多い環境では、TOFU をやめて <code>ssh-keygen -h</code> で発行するホスト証明書（CA が「この鍵はこのホスト名のもの」と署名したもの）を使い、クライアントには CA の公開鍵だけを配る方法がある。RFC 4251 の 2 つ目のモデルにあたり、サーバーを作り直しても警告が出なくなる。</p>
+      </div>
+
+      <div class="hands-on">
+        <div class="box-title">⌨️ 手を動かす（5 分）</div>
+        <p>本物の GitHub のホスト鍵の指紋を確かめたあと、使い捨ての <code>known_hosts</code> にわざと偽の鍵を書いて、あの警告を安全に再現する。普段の <code>~/.ssh/known_hosts</code> には触らない。</p>
+        <pre class="code"># 1. サーバーが名乗るホスト鍵の指紋を見る
+ssh-keyscan -t ed25519 github.com 2&gt;/dev/null | ssh-keygen -lf -
+
+# 2. 偽の鍵を作り、github.com の鍵として登録
+ssh-keygen -t ed25519 -f /tmp/fakehost -N '' -q
+echo "github.com $(cut -d' ' -f1,2 /tmp/fakehost.pub)" &gt; /tmp/kh
+
+# 3. その表を使って接続してみる
+ssh -o UserKnownHostsFile=/tmp/kh \
+    -o GlobalKnownHostsFile=/dev/null \
+    -T git@github.com
+
+# 4. 後片付け
+rm -f /tmp/fakehost /tmp/fakehost.pub /tmp/kh</pre>
+        <p>1 で表示される <code>SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU</code> が GitHub のドキュメントに載っている Ed25519 の指紋と一致すれば、本物と話せている。3 では、ユーザー認証に進む前に <code>REMOTE HOST IDENTIFICATION HAS CHANGED!</code> と <code>Host key verification failed.</code> が出て止まるはずだ。サーバー側は何も変わっていないのに、手元の記録が違うだけで同じ警告になる。<code>ssh</code> から見れば「鍵の交換」と「なりすまし」が同じに見えることを体感できる。</p>
+      </div>
+
+      <div class="misconceptions">
+        <div class="box-title">🙅 よくある誤解</div>
+        <ul>
+          <li><span class="wrong">通信は暗号化されているから、相手が誰でも安全だ</span> — 暗号化は「鍵を共有した相手」との通信を守るだけで、その相手が本物かどうかはホスト鍵の照合でしか分からない。照合を省くと、攻撃者と暗号化して話すことになりうる</li>
+          <li><span class="wrong">警告は known_hosts の行を消せば直る、ただの古いキャッシュの問題だ</span> — 結果的に行を消すことは多いが、消す前に「鍵が変わった正当な理由があるか」を確かめるのが本来の手順である。理由が無いのに鍵が変わっていたら、それこそ警告が守ろうとしている状況だ</li>
+          <li><span class="wrong">ユーザー鍵を登録していれば、サーバーの本人確認も済んでいる</span> — ユーザー鍵はサーバーがクライアントを確かめるためのもので、向きが逆である。クライアントがサーバーを確かめる手段はホスト鍵だけだ</li>
+        </ul>
+      </div>
+
+      <div class="glossary">
+        <div class="box-title">📖 用語ミニ辞典</div>
+        <dl>
+          <dt>ホスト鍵</dt><dd>SSH サーバーがマシンごとに持つ鍵ペア。接続のたびに秘密鍵で署名し、自分が本物であることをクライアントに示す</dd>
+          <dt>known_hosts</dt><dd>クライアント側の「ホスト名 → ホスト公開鍵」の対応表。既定は <code>~/.ssh/known_hosts</code></dd>
+          <dt>TOFU</dt><dd>Trust On First Use。初回に見た鍵を検証なしで信じて記録し、以後はそれとの一致で本人確認する方式</dd>
+          <dt>中間者攻撃（MITM）</dt><dd>通信の間に割り込み、両側に本物の相手のふりをして中継する攻撃</dd>
+          <dt>交換ハッシュ</dt><dd>鍵交換の材料をまとめたハッシュ値。サーバーがホスト秘密鍵で署名し、その接続限りの本人証明になる</dd>
+          <dt>StrictHostKeyChecking</dt><dd>未登録・不一致のホスト鍵をどう扱うかを決める <code>ssh_config</code> の設定。既定は <code>ask</code></dd>
+        </dl>
+      </div>
+
+      <div class="further-reading">
+        <div class="box-title">🔗 もっと深く</div>
+        <ul>
+          <li><a href="https://www.rfc-editor.org/rfc/rfc4251#section-4.1">RFC 4251 Section 4.1: Host Keys</a> — ローカルデータベースと CA の 2 つの信頼モデル、初回未確認の危険性を原典で確かめられる</li>
+          <li><a href="https://www.rfc-editor.org/rfc/rfc4253#section-8">RFC 4253 Section 8: Diffie-Hellman Key Exchange</a> — 交換ハッシュ H に何が含まれ、サーバーが何に署名しているかの定義</li>
+          <li><a href="https://man.openbsd.org/ssh_config#StrictHostKeyChecking">ssh_config(5) StrictHostKeyChecking</a> — <code>ask</code> / <code>accept-new</code> / <code>yes</code> / <code>no</code> の正確な挙動と関連設定</li>
+          <li><a href="https://github.blog/news-insights/company-news/we-updated-our-rsa-ssh-host-key/">We updated our RSA SSH host key (GitHub Blog)</a> — 実際にホスト鍵を差し替えたときに利用者側で何が起き、どう直すべきだったかの実例</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- recent:start -->
+    <!-- recent:end -->
+
+    <footer>
+      <p>Generated by Claude Code (GitHub Actions)</p>
+      <a href="./" class="archive-link">過去の記事</a>
+    </footer>
+  </div>
+</body>
+</html>

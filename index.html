@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tech Learning Daily — 巨大なログを rm したのに、なぜ df の空き容量は 1 バイトも増えないのか？</title>
-  <meta name="description" content="rm が消すのはディレクトリの「名前」だけで、ファイルの実体はプロセスが開いている間は残り続ける。原因の見つけ方、空にする方法、logrotate の create と copytruncate の違いまでを解説する。">
+  <title>Tech Learning Daily — 初めての接続では「yes」で通すのに、なぜ SSH は鍵が変わった途端に接続を拒否するのか？</title>
+  <meta name="description" content="SSH はサーバーのホスト鍵を known_hosts に記録し、次回以降は署名で本人確認する。初回の yes は信頼の登録で、鍵の不一致は偽サーバーと区別できないため拒否される。">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Tech Learning Daily">
-  <meta property="og:title" content="Tech Learning Daily — 巨大なログを rm したのに、なぜ df の空き容量は 1 バイトも増えないのか？">
-  <meta property="og:description" content="rm が消すのはディレクトリの「名前」だけで、ファイルの実体はプロセスが開いている間は残り続ける。原因の見つけ方、空にする方法、logrotate の create と copytruncate の違いまでを解説する。">
+  <meta property="og:title" content="Tech Learning Daily — 初めての接続では「yes」で通すのに、なぜ SSH は鍵が変わった途端に接続を拒否するのか？">
+  <meta property="og:description" content="SSH はサーバーのホスト鍵を known_hosts に記録し、次回以降は署名で本人確認する。初回の yes は信頼の登録で、鍵の不一致は偽サーバーと区別できないため拒否される。">
   <meta property="og:url" content="https://tech-learn.kaion-lab.com/">
   <meta property="og:image" content="https://tech-learn.kaion-lab.com/og.png">
   <meta name="twitter:card" content="summary_large_image">
@@ -22,144 +22,133 @@
   <div class="container">
     <header>
       <h1>Tech Learning Daily</h1>
-      <div class="date">2026-11-25 (Wed) — 第 131 号</div>
+      <div class="date">2026-11-26 (Thu) — 第 132 号</div>
       <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
     </header>
 
     <article class="article">
       <div class="meta-bar">
-        <span class="tag tag-infra">Infra</span>
+        <span class="tag tag-security">Security</span>
         <span class="difficulty">🌿 基礎</span>
         <span class="read-time">⏱ 約 7 分</span>
       </div>
-      <h2 class="article-title">巨大なログを rm したのに、なぜ df の空き容量は 1 バイトも増えないのか？</h2>
-      <p class="lead">「ディスク使用率 98%」のアラートで本番サーバーに入り、20GB に育った <code>production.log</code> を見つけて <code>rm</code> した。ところが <code>df -h</code> を打ち直しても使用率は 98% のままで、<code>du</code> で数えるとディレクトリは空っぽだ。消したはずの 20GB はどこにいるのだろうか。</p>
+      <h2 class="article-title">初めての接続では「yes」で通すのに、なぜ SSH は鍵が変わった途端に接続を拒否するのか？</h2>
+      <p class="lead">新しいサーバーや <code>git clone git@github.com:...</code> で最初に出る「Are you sure you want to continue connecting (yes/no)?」に、あなたもほとんど反射で <code>yes</code> と打っているはずだ。ところがサーバーを作り直した翌日には、同じ相手に「WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!」と大きく怒られて繋がらない。初回は確認なしでも通すのに、2 回目以降はなぜこれほど厳しいのだろうか。</p>
 
       <div class="tldr">
         <div class="box-title">🎯 3 行まとめ</div>
         <ul>
-          <li><code>rm</code> が消すのはディレクトリ内の「名前」だけで、ファイルの実体（inode とデータ）は別に存在する。</li>
-          <li>実体が解放されるのは、名前が 1 つも無くなり、かつそのファイルを開いているプロセスも 1 つも無くなった時である。</li>
-          <li>書き込み中のログは <code>rm</code> せず中身を空にするか、アプリにファイルを開き直させる。logrotate の <code>create</code> と <code>copytruncate</code> はこの 2 つの戦略に対応する。</li>
+          <li>SSH サーバーは固有の「ホスト鍵」を持ち、接続のたびにその秘密鍵で署名して自分が本物だと示す。クライアントは公開鍵を <code>~/.ssh/known_hosts</code> に記録して照合する</li>
+          <li>初回の <code>yes</code> は「この鍵を今後の基準として登録する」操作で、確認の重みは利用者に委ねられている（TOFU）。一度登録すると、鍵の不一致は中間者攻撃と区別できないため拒否される</li>
+          <li>正当な鍵交換なら <code>ssh-keygen -R</code> で古い行を消し、公式に公開された指紋と照合してから登録し直す。<code>StrictHostKeyChecking=no</code> で黙らせるのは検証そのものを捨てることになる</li>
         </ul>
       </div>
 
       <section class="body-section">
-        <h3>ファイル名とファイルの実体は別の場所にある</h3>
-        <p>Linux のファイルシステムでは、ファイルの実体を <strong>inode</strong> が表す。inode とは、ファイルの所有者・パーミッション・サイズ・データブロックの位置といったメタデータを持つ管理構造で、ファイルシステム内で一意な番号が付く。ここで意外なのは、inode が持つ情報の中に<strong>ファイル名が無い</strong>ことである。</p>
-        <p>名前を持っているのはディレクトリの側だ。ディレクトリは「名前 → inode 番号」の対応表であり、この表の 1 行を <strong>ディレクトリエントリ</strong>と呼ぶ。同じ inode を指す行を 2 つ作ればそれが <strong>ハードリンク</strong>で、inode は自分を指す行の数を <strong>リンクカウント</strong>（<code>stat</code> の <code>st_nlink</code>、<code>ls -l</code> の 2 列目）として数えている。</p>
-        <p>この構造の上で <code>rm</code> がしているのは、<code>unlink(2)</code> システムコールで対応表の 1 行を消し、リンクカウントを 1 減らすことだけである。データを消去する命令はどこにも出していない。データブロックを手放すかどうかは、カーネルが別の条件で判断する。</p>
+        <h3>SSH には「人の鍵」と「サーバーの鍵」の 2 種類がある</h3>
+        <p>普段意識する SSH の鍵は <code>~/.ssh/id_ed25519</code> のような<strong>ユーザー鍵</strong>で、これは「接続してきたのが自分である」とサーバーに示すためのものだ。GitHub の設定画面に公開鍵を貼るのもこちらである。</p>
+        <p>もう 1 種類、サーバー側にも <strong>ホスト鍵</strong>がある。ホスト鍵とは、SSH サーバー（<code>sshd</code>）がマシンごとに持つ公開鍵ペアで、多くの Linux ディストリビューションでは <code>/etc/ssh/ssh_host_ed25519_key</code> などに置かれる。こちらは逆向きに、「今繋がっている相手が本当にそのサーバーである」とクライアントに示すために使う。</p>
+        <p>なぜ逆向きの確認が要るのか。ネットワークの途中にいる攻撃者が、本物のサーバーになりすまして通信を中継すれば、暗号化されていても攻撃者とは平文で話していることになるからだ。この「間に割り込んで両側に本物のふりをする」攻撃を<strong>中間者攻撃（MITM）</strong>と呼ぶ。暗号化だけでは「誰と」暗号化しているかは保証されない。</p>
       </section>
 
       <section class="body-section">
-        <h3>実体が消えるのは「名前」と「開いている人」が両方いなくなった時</h3>
-        <p>その条件を <code>unlink(2)</code> の man ページはこう書いている。最後の名前が消されても、まだそのファイルを開いているプロセスがあれば、ファイルは「それを参照する最後のファイルディスクリプタが閉じられるまで存在し続ける」。<strong>ファイルディスクリプタ（fd）</strong>とは、プロセスが <code>open</code> したファイルを指す番号で、カーネルは fd ごとに inode への参照を握っている。</p>
-<pre class="diagram"> ディレクトリ /var/log/app (名前の表)
- ┌─────────────────────┐
- │ production.log -> #2│ ◀ rm が消すのは
- └─────────────────────┘   この行だけ
-            │
-            ▼
- ┌─────────────────────┐
- │ inode #2   nlink: 0 │
- │ data: 20 GB         │ ◀ まだ残っている
- └─────────────────────┘
-            ▲
-            │ fd 5 (open したまま)
- ┌─────────────────────┐
- │ process: puma       │
- └─────────────────────┘
-
- 解放 = nlink が 0 かつ 開いている fd が 0</pre>
-        <p>冒頭の現象はこれで説明が付く。Rails の Puma はログを開いたまま追記し続けているので、<code>rm</code> 後も inode #2 への参照が残り、20GB はディスク上に居座る。しかもプロセスは自分の fd に書き続けるので、名前の無いファイルはなお太っていく。</p>
-        <p><code>du</code> と <code>df</code> の数字が食い違う理由も同じ構造から来る。<code>du</code> はディレクトリを辿って名前の付いたファイルのサイズを足し合わせるので、名前を失ったファイルは数えようがない。<code>df</code> はファイルシステムに使用中ブロック数を直接尋ねるので、名前の有無に関係なく残っている実体を数える。「<code>du</code> の合計より <code>df</code> の使用量がずっと大きい」は、削除済みで開かれたままのファイルを疑う典型的なサインである。</p>
-        <p>この挙動は不具合ではなく意図された設計だ。もし <code>rm</code> の瞬間にデータが消えるなら、読み込み中の動画プレイヤーや実行中のプログラムが、別の誰かの <code>rm</code> 1 つで足元を崩される。名前を外すことと実体を捨てることを分けたおかげで、使っている人は最後まで安全に使い続けられる。</p>
+        <h3>サーバーは毎回、その接続にだけ通用する署名を出す</h3>
+        <p>SSH の接続開始時、クライアントとサーバーは Diffie-Hellman 鍵交換で共有の秘密値を作る。RFC 4253 によれば、サーバーはこのとき、双方のバージョン文字列・アルゴリズム交渉の内容・自分のホスト公開鍵・鍵交換の値・共有秘密をまとめたハッシュ値 <code>H</code>（<strong>交換ハッシュ</strong>）を作り、ホスト秘密鍵で署名して送る。</p>
+        <p>クライアントは同じ材料から <code>H</code> を自分でも計算し、受け取った公開鍵で署名を検証する。<code>H</code> には今回の鍵交換でしか出てこない値が混ざっているので、過去の署名を録画して再送しても通らない。つまり署名が検証できた時点で「相手はこの公開鍵に対応する秘密鍵を今まさに持っている」ことまでは証明される。</p>
+        <p>しかし、ここに穴がある。署名が証明するのは「送られてきた公開鍵の持ち主と話している」ことだけで、その公開鍵が本物のサーバーのものかどうかは何も言っていない。攻撃者が自分の鍵ペアで署名すれば、署名は完璧に検証できてしまう。最後の一歩、「この公開鍵は <code>github.com</code> のものだ」という対応付けは、暗号の外側から持ち込む必要がある。</p>
+<pre class="diagram"> クライアント               サーバー
+ ┌──────────────┐        ┌──────────────┐
+ │ known_hosts  │        │ ホスト秘密鍵 │
+ └──────────────┘        └──────────────┘
+        │   ◀── 公開鍵 + H への署名 ──
+        │
+        ├─ ① 署名は正しいか (暗号で検証)
+        │
+        └─ ② その公開鍵は記録と同じか
+             同じ   ▶ 接続を続ける
+             未登録 ▶ yes/no を聞く
+             違う   ▶ WARNING で拒否</pre>
       </section>
 
       <div class="analogy">
         <div class="box-title">🍱 たとえるなら</div>
-        <p>図書館の目録カードと本の関係に近い。目録からカードを抜くと、その本は棚を探しても見つからなくなる（<code>du</code> に映らない）。しかし貸出中の本は利用者の手元にあり、廃棄されるのは返却され、かつ目録にも載っていないと確認できた時だけだ。ディスクを圧迫している「消したはずの本」は、まだ誰かが借りっぱなしにしている本である。</p>
+        <p>初めて来た宅配業者の顔を玄関で覚えておき、次回からはその顔と照合する家のようなものだ。初回は相手が本物かを確かめる手段が乏しく、「たぶん本物だろう」で顔を覚えるしかない。だが一度覚えた後に別の顔の人が同じ社名を名乗って来たら、担当替えなのか偽物なのかは玄関先では区別できない。だからいったん扉を閉めて、会社に問い合わせる。</p>
       </div>
 
       <section class="body-section">
-        <h3>犯人の見つけ方と、再起動せずに空ける方法</h3>
-        <p>削除済みなのに開かれているファイルは <code>lsof</code> で一覧できる。<code>+L1</code> は「リンクカウントが 1 未満、つまり unlink 済みの開いているファイル」を選ぶ指定で、<code>NLINK</code> 列が 0、<code>NAME</code> 列の末尾に <code>(deleted)</code> が付いた行が出る。<code>lsof</code> が無い環境でも、<code>/proc/&lt;PID&gt;/fd/</code> のシンボリックリンクを <code>ls -l</code> で見れば同じ <code>(deleted)</code> 表示を確認できる。</p>
-<pre class="code"># 削除済みで開かれたままのファイルを探す
-sudo lsof +L1
-# COMMAND  PID ... NLINK ... NAME
-# puma    4123 ...     0 ... /var/log/app/production.log (deleted)
-
-# 該当プロセスの fd 番号を確かめる
-sudo ls -l /proc/4123/fd | grep deleted</pre>
-        <p>容量を取り戻す手はいくつかある。プロセスを再起動すれば fd が閉じて実体は解放されるが、本番の Web サーバーをすぐ止められるとは限らない。止めずに済ませたい場合は、<code>/proc/&lt;PID&gt;/fd/&lt;N&gt;</code> を経由して中身を 0 バイトに切り詰める。この経路は名前を失った inode そのものを指しているので、<code>: &gt;</code> のリダイレクトでファイルを空にでき、データブロックがその場で解放される。</p>
-<pre class="code"># fd 5 が指す削除済みファイルを 0 バイトにする
-sudo sh -c ': &gt; /proc/4123/fd/5'</pre>
-        <p>次からの予防策は単純で、書き込み中のログを片付けたい時は <code>rm</code> ではなく <code>: &gt; production.log</code> や <code>truncate -s 0 production.log</code> で中身だけを消す。名前も inode も残るので、プロセスはそのまま同じファイルに書き続け、容量は即座に戻る。</p>
+        <h3>初回の「yes」は確認ではなく、信頼の登録である</h3>
+        <p>RFC 4251 は、この対応付けの方法として 2 つのモデルを挙げている。1 つはクライアントが「ホスト名 → 公開鍵」のローカルなデータベースを持つ方式、もう 1 つは信頼できる認証局（CA）にその対応を証明させる方式だ。OpenSSH の既定は前者で、そのデータベースが <code>~/.ssh/known_hosts</code> である。中身は 1 行 1 ホストの素朴なテキストだ。</p>
+<pre class="code">github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl</pre>
+        <p>初回接続ではこの表に行が無いので、<code>ssh</code> は鍵の指紋（公開鍵のハッシュ）を表示して <code>yes/no</code> を尋ねる。ここで <code>yes</code> と答えると、その鍵が表に書き込まれ、以後の基準になる。初回だけは検証せずに信じ、2 回目からはそれと比べる。この方式を <strong>TOFU（Trust On First Use）</strong>と呼ぶ。RFC 4251 も、初回に対応を確認しない運用は受動的な盗聴には強いが、能動的な中間者攻撃には弱いと明記している。</p>
+        <p>冒頭の疑問はここで解ける。初回が甘く見えるのは、比較対象がまだ無いので確かめようがなく、判断を利用者に委ねているからだ。本来は表示された指紋を公式の値と見比べてから <code>yes</code> を打つ前提であり、反射で打つと「その時たまたま繋がった相手」を本物として登録することになる。一方で 2 回目以降に鍵が食い違うと、<code>ssh</code> の側には「サーバーが作り直された」と「誰かが割り込んでいる」を区別する材料が無い。区別できないなら、危険な側に倒して止める。あの警告が派手なのはそのためだ。</p>
       </section>
 
       <section class="body-section">
-        <h3>logrotate の create と copytruncate は何が違うのか</h3>
-        <p>ログを定期的に切り替える logrotate も、この「名前と実体は別」という性質と向き合っている。既定の方式では、現在のログを <code>production.log.1</code> のようにリネームし、<code>create</code> 指定があれば同じ名前で新しい空ファイルを作る。ところがリネームは名前の表を書き換えるだけで inode は変わらないので、アプリは何も知らずに古い inode、つまり <code>.1</code> の方へ書き続ける。新しい <code>production.log</code> は空のまま、という状態になる。</p>
-        <p>そこで <code>create</code> 方式では、ローテーション後にアプリへファイルを開き直させる。nginx の場合は公式ドキュメントが手順を定めており、ログをリネームしてからマスタープロセスに <code>USR1</code> シグナルを送ると、新しいファイルを開いて古いファイルを閉じる。<code>postrotate</code> スクリプトにこの合図を書くのが定石だ。</p>
-<pre class="code">/var/log/nginx/*.log {
-    daily
-    rotate 7
-    create 0640 www-data adm
-    sharedscripts
-    postrotate
-        kill -USR1 $(cat /run/nginx.pid)
-    endscript
-}</pre>
-        <p>開き直しの合図を持たないアプリには <code>copytruncate</code> を使う。これは元のファイルをコピーした後、元ファイルをその場で 0 バイトに切り詰める方式で、inode が変わらないのでアプリは何もしなくてよい。代わりに、logrotate の man ページが注意している通り、コピーと切り詰めの間のわずかな隙間に書かれたログは失われうる。また合図なしで <code>create</code> を使い続けると、<code>rotate 7</code> で古い世代が削除された時に、それをまだ開いているアプリがいれば、冒頭と同じ「消したのに空かない」が再発する。</p>
+        <h3>StrictHostKeyChecking で「未登録」と「不一致」の扱いが変わる</h3>
+        <p>この挙動は <code>ssh_config</code> の <code>StrictHostKeyChecking</code> で決まる。man ページによれば値は 4 つあり、既定は <code>ask</code> だ。どの値でも、すでに登録済みの鍵との照合自体は常に行われる。</p>
+<pre class="code"># ~/.ssh/config
+Host *.internal.example.com
+  StrictHostKeyChecking accept-new</pre>
+        <p><code>ask</code>（既定）は未登録なら確認を求め、不一致なら拒否する。<code>accept-new</code> は未登録の鍵を確認なしで登録し、不一致は拒否する。CI のように対話できない環境で初回だけ自動登録したいときの落としどころがこれだ。<code>yes</code> は未登録でも自動登録せず拒否するので、<code>known_hosts</code> を事前に配っておく運用向きになる。</p>
+        <p>問題は <code>no</code> だ。未登録の鍵を自動登録するうえ、鍵が変わったホストへの接続も（パスワード認証を無効にするなどの制限つきで）続行させる。「警告がうるさいから」とこれを書くと、TOFU の 2 回目以降の照合まで捨てることになり、残る守りが実質的に無くなる。</p>
+        <p>関連して、<code>HashKnownHosts</code>（既定 <code>no</code>）を <code>yes</code> にするとホスト名がハッシュ化されて書き込まれ、ファイルを盗み見られても接続先一覧が漏れにくくなる。ただしハッシュ化された行は目で探せないので、検索や削除は <code>ssh-keygen -F</code> / <code>-R</code> を使うことになる。</p>
       </section>
 
       <div class="practical">
         <div class="box-title">💼 実務でどう出会うか</div>
-        <p>典型は深夜のディスク逼迫アラートで、焦って大きなログを <code>rm</code> した結果、使用率が変わらず慌てる場面である。<code>df</code> と <code>du</code> の合計が大きく食い違ったら、まず <code>lsof +L1</code> を打つ。自作アプリや Sidekiq をファイルにログ出力させている環境で logrotate を設定する時は、そのプロセスにログを開き直させる手段（シグナルや再起動）があるかを確認し、無ければ <code>copytruncate</code> を選ぶ。コンテナ環境でログを標準出力に出す構成が勧められる理由の一つも、アプリ側がファイルの開き直しを気にしなくて済むことにある。</p>
+        <p>一番多いのは、同じ IP やホスト名で EC2 インスタンスを作り直したときだ。新しいマシンは新しいホスト鍵を生成するので、手元の <code>known_hosts</code> の古い行と食い違う。このときは <code>ssh-keygen -R &lt;ホスト名またはIP&gt;</code> で古い行を消し、可能ならコンソール出力などで新しい指紋を確かめてから登録し直す。</p>
+        <p>本物の鍵交換が全員に降ってきた例もある。GitHub は 2023 年 3 月 24 日、RSA のホスト秘密鍵が公開リポジトリに一時的に露出したことを受けて RSA ホスト鍵を差し替え、多くの利用者の <code>git push</code> がこの警告で止まった（ECDSA と Ed25519 の鍵は変わっていない）。GitHub は <code>ssh-keygen -R github.com</code> で古い鍵を消し、公式に公開した指紋と照合して登録し直す手順を案内している。</p>
+        <p>台数が多い環境では、TOFU をやめて <code>ssh-keygen -h</code> で発行するホスト証明書（CA が「この鍵はこのホスト名のもの」と署名したもの）を使い、クライアントには CA の公開鍵だけを配る方法がある。RFC 4251 の 2 つ目のモデルにあたり、サーバーを作り直しても警告が出なくなる。</p>
       </div>
 
       <div class="hands-on">
         <div class="box-title">⌨️ 手を動かす（5 分）</div>
-        <p>容量 100MB の tmpfs を付けたコンテナで、50MB のファイルを開いたまま <code>rm</code> し、<code>df</code> の数字が戻らないこと、<code>/proc</code> 経由で空にすると戻ることを確かめる。</p>
-<pre class="code">docker run --rm --tmpfs /data:size=100m alpine sh -c '
-dd if=/dev/zero of=/data/app.log bs=1M count=50 2&gt;/dev/null
-sleep 300 &lt; /data/app.log &amp;
-sleep 1
-rm /data/app.log
-echo "--- rm 直後"; df -h /data; ls -l /proc/$!/fd/0
-: &gt; /proc/$!/fd/0
-echo "--- /proc 経由で空にした後"; df -h /data
-'</pre>
-        <p><code>rm</code> 直後の <code>df</code> は Used が 50.0M のままで、<code>/proc/7/fd/0 -&gt; /data/app.log (deleted)</code> のように削除済みの印が付いたリンクが見えるはずだ。<code>sleep</code> の標準入力（fd 0）が inode を握っているためである。切り詰めた後は Used が 0 に戻る。<code>: &gt;</code> の行を <code>kill $!; sleep 1</code> に差し替えると、プロセス終了で fd が閉じて同じように解放されることも確かめられる。</p>
+        <p>本物の GitHub のホスト鍵の指紋を確かめたあと、使い捨ての <code>known_hosts</code> にわざと偽の鍵を書いて、あの警告を安全に再現する。普段の <code>~/.ssh/known_hosts</code> には触らない。</p>
+        <pre class="code"># 1. サーバーが名乗るホスト鍵の指紋を見る
+ssh-keyscan -t ed25519 github.com 2&gt;/dev/null | ssh-keygen -lf -
+
+# 2. 偽の鍵を作り、github.com の鍵として登録
+ssh-keygen -t ed25519 -f /tmp/fakehost -N '' -q
+echo "github.com $(cut -d' ' -f1,2 /tmp/fakehost.pub)" &gt; /tmp/kh
+
+# 3. その表を使って接続してみる
+ssh -o UserKnownHostsFile=/tmp/kh \
+    -o GlobalKnownHostsFile=/dev/null \
+    -T git@github.com
+
+# 4. 後片付け
+rm -f /tmp/fakehost /tmp/fakehost.pub /tmp/kh</pre>
+        <p>1 で表示される <code>SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU</code> が GitHub のドキュメントに載っている Ed25519 の指紋と一致すれば、本物と話せている。3 では、ユーザー認証に進む前に <code>REMOTE HOST IDENTIFICATION HAS CHANGED!</code> と <code>Host key verification failed.</code> が出て止まるはずだ。サーバー側は何も変わっていないのに、手元の記録が違うだけで同じ警告になる。<code>ssh</code> から見れば「鍵の交換」と「なりすまし」が同じに見えることを体感できる。</p>
       </div>
 
       <div class="misconceptions">
         <div class="box-title">🙅 よくある誤解</div>
         <ul>
-          <li><span class="wrong">rm はファイルのデータを消去するコマンドだ</span> — <code>rm</code> は名前（ディレクトリエントリ）を外してリンクカウントを減らすだけである。データブロックの解放は、名前も開いている fd も無くなった時にカーネルが行う。</li>
-          <li><span class="wrong">df と du は同じものを別の方法で数えているので一致するはずだ</span> — <code>du</code> は名前を辿って数え、<code>df</code> はファイルシステムの使用ブロックを数える。削除済みで開かれたままのファイルは <code>df</code> にだけ現れる。</li>
-          <li><span class="wrong">ログを mv してリネームすれば、アプリは新しいファイルに書き始める</span> — リネームでは inode が変わらないので、アプリは開き直すまで旧ファイルに書き続ける。開き直しの合図を送るか、<code>copytruncate</code> を使う必要がある。</li>
+          <li><span class="wrong">通信は暗号化されているから、相手が誰でも安全だ</span> — 暗号化は「鍵を共有した相手」との通信を守るだけで、その相手が本物かどうかはホスト鍵の照合でしか分からない。照合を省くと、攻撃者と暗号化して話すことになりうる</li>
+          <li><span class="wrong">警告は known_hosts の行を消せば直る、ただの古いキャッシュの問題だ</span> — 結果的に行を消すことは多いが、消す前に「鍵が変わった正当な理由があるか」を確かめるのが本来の手順である。理由が無いのに鍵が変わっていたら、それこそ警告が守ろうとしている状況だ</li>
+          <li><span class="wrong">ユーザー鍵を登録していれば、サーバーの本人確認も済んでいる</span> — ユーザー鍵はサーバーがクライアントを確かめるためのもので、向きが逆である。クライアントがサーバーを確かめる手段はホスト鍵だけだ</li>
         </ul>
       </div>
 
       <div class="glossary">
         <div class="box-title">📖 用語ミニ辞典</div>
         <dl>
-          <dt>inode</dt><dd>ファイルのメタデータとデータの位置を持つ管理構造。ファイル名は持たない。</dd>
-          <dt>ディレクトリエントリ</dt><dd>ディレクトリ内の「名前 → inode 番号」の対応 1 行。<code>rm</code> が消すのはこれ。</dd>
-          <dt>リンクカウント</dt><dd>inode を指すディレクトリエントリの数（<code>st_nlink</code>）。0 になると名前の無いファイルになる。</dd>
-          <dt>ファイルディスクリプタ</dt><dd>プロセスが開いたファイルを指す番号。開いている間は inode への参照を保持する。</dd>
-          <dt>copytruncate</dt><dd>logrotate の方式の一つ。コピー後に元ファイルをその場で 0 バイトにし、inode を変えずに切り替える。</dd>
+          <dt>ホスト鍵</dt><dd>SSH サーバーがマシンごとに持つ鍵ペア。接続のたびに秘密鍵で署名し、自分が本物であることをクライアントに示す</dd>
+          <dt>known_hosts</dt><dd>クライアント側の「ホスト名 → ホスト公開鍵」の対応表。既定は <code>~/.ssh/known_hosts</code></dd>
+          <dt>TOFU</dt><dd>Trust On First Use。初回に見た鍵を検証なしで信じて記録し、以後はそれとの一致で本人確認する方式</dd>
+          <dt>中間者攻撃（MITM）</dt><dd>通信の間に割り込み、両側に本物の相手のふりをして中継する攻撃</dd>
+          <dt>交換ハッシュ</dt><dd>鍵交換の材料をまとめたハッシュ値。サーバーがホスト秘密鍵で署名し、その接続限りの本人証明になる</dd>
+          <dt>StrictHostKeyChecking</dt><dd>未登録・不一致のホスト鍵をどう扱うかを決める <code>ssh_config</code> の設定。既定は <code>ask</code></dd>
         </dl>
       </div>
 
       <div class="further-reading">
         <div class="box-title">🔗 もっと深く</div>
         <ul>
-          <li><a href="https://man7.org/linux/man-pages/man2/unlink.2.html">unlink(2) — Linux manual page</a> — 「最後の fd が閉じられるまで存在し続ける」という規定の一次資料。</li>
-          <li><a href="https://man7.org/linux/man-pages/man8/logrotate.8.html">logrotate(8) — Linux manual page</a> — <code>create</code> / <code>copytruncate</code> / <code>postrotate</code> の正確な定義と、copytruncate のログ欠損の注意書き。</li>
-          <li><a href="https://nginx.org/en/docs/control.html">Controlling nginx</a> — USR1 によるログの開き直しと、ローテーション手順の公式説明。</li>
-          <li><a href="https://man7.org/linux/man-pages/man8/lsof.8.html">lsof(8) — Linux manual page</a> — <code>+L1</code> を含むリンクカウントによる絞り込みの説明。</li>
+          <li><a href="https://www.rfc-editor.org/rfc/rfc4251#section-4.1">RFC 4251 Section 4.1: Host Keys</a> — ローカルデータベースと CA の 2 つの信頼モデル、初回未確認の危険性を原典で確かめられる</li>
+          <li><a href="https://www.rfc-editor.org/rfc/rfc4253#section-8">RFC 4253 Section 8: Diffie-Hellman Key Exchange</a> — 交換ハッシュ H に何が含まれ、サーバーが何に署名しているかの定義</li>
+          <li><a href="https://man.openbsd.org/ssh_config#StrictHostKeyChecking">ssh_config(5) StrictHostKeyChecking</a> — <code>ask</code> / <code>accept-new</code> / <code>yes</code> / <code>no</code> の正確な挙動と関連設定</li>
+          <li><a href="https://github.blog/news-insights/company-news/we-updated-our-rsa-ssh-host-key/">We updated our RSA SSH host key (GitHub Blog)</a> — 実際にホスト鍵を差し替えたときに利用者側で何が起き、どう直すべきだったかの実例</li>
         </ul>
       </div>
     </article>
@@ -167,6 +156,11 @@ echo "--- /proc 経由で空にした後"; df -h /data
     <!-- recent:start -->
     <section class="section recent-articles">
       <div class="section-title">最近の記事</div>
+      <div class="card">
+        <h3><a href="archive/2026-11-25.html">巨大なログを rm したのに、なぜ df の空き容量は 1 バイトも増えないのか？</a></h3>
+        <div class="summary">rm が消すのはディレクトリの名前だけで、ファイルを開いているプロセスがいる間は実体が残り続ける。du と df の食い違い、lsof +L1 での発見と /proc 経由の切り詰め、logrotate の create と copytruncate の違いまで。</div>
+        <div class="meta"><span class="tag tag-infra">Infra</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-25</span></div>
+      </div>
       <div class="card">
         <h3><a href="archive/2026-11-24.html">ターミナルでは動くスクリプトなのに、なぜ cron に登録すると「command not found」で落ちるのか？</a></h3>
         <div class="summary">環境変数は親プロセスからのコピーで、PATH を足すのはシェルの設定ファイルだ。cron は設定ファイルを読まない最小環境でジョブを起動するため node などが見つからない仕組みと、crontab の PATH 行・絶対パスでの直し方。</div>
@@ -181,11 +175,6 @@ echo "--- /proc 経由で空にした後"; df -h /data
         <h3><a href="archive/2026-11-22.html">保存した直後にジョブへ ID を渡しただけなのに、なぜジョブは「レコードが見つからない」で落ちるのか？</a></h3>
         <div class="summary">トランザクション中に積んだジョブは COMMIT 前に走って行が見えず落ちる。COMMIT 後に積む方法と、それでも残る取りこぼしを Transactional Outbox で防ぐ仕組みを解説する。</div>
         <div class="meta"><span class="tag tag-arch">Arch</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-22</span></div>
-      </div>
-      <div class="card">
-        <h3><a href="archive/2026-11-21.html">件数を 1 つ返すだけなのに、なぜ Postgres の COUNT(*) はテーブルが育つほど遅くなるのか？</a></h3>
-        <div class="summary">Postgres は行数をどこにも保存していない。MVCC で見える行数がトランザクションごとに違うため COUNT(*) は全行を読んで可視性を確かめる仕組みと、Index Only Scan・visibility map の条件、推定値やページング見直しによる代替策。</div>
-        <div class="meta"><span class="tag tag-db">DB</span><span>🌿 基礎</span><span>⏱ 約 8 分</span><span>2026-11-21</span></div>
       </div>
       <div class="recent-more"><a href="archive/">アーカイブですべて見る →</a></div>
     </section>
