@@ -45,8 +45,8 @@
         <button class="chip" data-cat="arch">Arch <span class="chip-count">10</span></button>
         <button class="chip" data-cat="infra">Infra <span class="chip-count">10</span></button>
         <button class="chip" data-cat="ai">AI <span class="chip-count">8</span></button>
+        <button class="chip" data-cat="dev" data-overflow="1" hidden>Dev <span class="chip-count">6</span></button>
         <button class="chip" data-cat="frontend" data-overflow="1" hidden>Frontend <span class="chip-count">6</span></button>
-        <button class="chip" data-cat="dev" data-overflow="1" hidden>Dev <span class="chip-count">5</span></button>
         <button class="chip" data-cat="obs" data-overflow="1" hidden>Obs <span class="chip-count">5</span></button>
         <button class="chip" data-cat="perf" data-overflow="1" hidden>Perf <span class="chip-count">5</span></button>
         <button class="chip chip-more" id="chip-more">+ 4 件</button>
@@ -63,6 +63,13 @@
 
     <section class="section month" data-month="2026-11">
       <div class="section-title">2026 年 11 月 <span class="count"></span></div>
+      <div class="card" data-cat="dev" data-diff="基礎"
+           data-search=".gitignore に書いたのに、なぜそのファイルは git status に出続けるのか？ .gitignore は index に載っていない未追跡ファイルにしか効かず、一度 add したファイルは追跡され続ける。git status が見ている 3 つの比較、git rm --cached での外し方と pull 時の副作用、check-ignore での切り分け、履歴に残る秘密は失効が先である理由。" data-terms="作業ツリー（working tree） / index（ステージングエリア） / tracked / untracked / git rm --cached / git check-ignore / core.excludesFile">
+        <h3><a href="2026-11-27.html">.gitignore に書いたのに、なぜそのファイルは git status に出続けるのか？</a></h3>
+        <div class="summary">.gitignore は index に載っていない未追跡ファイルにしか効かず、一度 add したファイルは追跡され続ける。git status が見ている 3 つの比較、git rm --cached での外し方と pull 時の副作用、check-ignore での切り分け、履歴に残る秘密は失効が先である理由。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-dev">Dev</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-27</span></div>
+      </div>
       <div class="card" data-cat="security" data-diff="基礎"
            data-search="初めての接続では「yes」で通すのに、なぜ ssh は鍵が変わった途端に接続を拒否するのか？ ssh サーバーはホスト鍵で接続ごとに署名し、クライアントは known_hosts の記録と照合する。初回の yes は tofu による信頼の登録で、鍵の不一致は中間者攻撃と区別できないため拒否される仕組みと、stricthostkeychecking の各値・正しい鍵の更新手順。" data-terms="ホスト鍵 / known_hosts / TOFU / 中間者攻撃（MITM） / 交換ハッシュ / StrictHostKeyChecking">
         <h3><a href="2026-11-26.html">初めての接続では「yes」で通すのに、なぜ SSH は鍵が変わった途端に接続を拒否するのか？</a></h3>

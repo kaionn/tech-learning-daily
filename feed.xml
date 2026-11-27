@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-11-26T12:42:14+09:00</updated>
+  <updated>2026-11-27T12:43:43+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>.gitignore に書いたのに、なぜそのファイルは git status に出続けるのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-11-27.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-11-27.html</id>
+    <updated>2026-11-27T12:43:43+09:00</updated>
+    <summary>.gitignore が効くのは index に載っていない未追跡ファイルだけで、一度 add したファイルは追跡され続ける。git rm --cached での外し方と、履歴に残る秘密は失効が先である理由を解説。</summary>
+  </entry>
   <entry>
     <title>初めての接続では「yes」で通すのに、なぜ SSH は鍵が変わった途端に接続を拒否するのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-11-26.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-11-14.html</id>
     <updated>2026-11-14T10:32:42+09:00</updated>
     <summary>開発中に Effect が 2 回走るのは StrictMode の再マウント検査で、本番では起きない。2 回目を止めるのではなく、cleanup で接続を閉じ fetch 結果を無視するのが正しい直し方である。</summary>
-  </entry>
-  <entry>
-    <title>ユーザーはもう画面を閉じたのに、なぜサーバーの重い処理は最後まで走り続けるのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-11-13.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-11-13.html</id>
-    <updated>2026-11-13T11:01:09+09:00</updated>
-    <summary>Go の context キャンセルは Done チャネルを閉じる合図にすぎず、ctx を QueryContext などへ渡し続けた処理だけが止まる。WithTimeout と defer cancel、DB 側の切断検知設定まで揃えて初めて重い処理が止まる。</summary>
   </entry>
 </feed>

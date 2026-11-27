@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tech Learning Daily — 初めての接続では「yes」で通すのに、なぜ SSH は鍵が変わった途端に接続を拒否するのか？</title>
-  <meta name="description" content="SSH はサーバーのホスト鍵を known_hosts に記録し、次回以降は署名で本人確認する。初回の yes は信頼の登録で、鍵の不一致は偽サーバーと区別できないため拒否される。">
+  <title>Tech Learning Daily — .gitignore に書いたのに、なぜそのファイルは git status に出続けるのか？</title>
+  <meta name="description" content=".gitignore が効くのは index に載っていない未追跡ファイルだけ。一度 add したファイルは追跡され続ける仕組みと、git rm --cached での外し方、履歴に残る秘密情報の扱いを解説する。">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Tech Learning Daily">
-  <meta property="og:title" content="Tech Learning Daily — 初めての接続では「yes」で通すのに、なぜ SSH は鍵が変わった途端に接続を拒否するのか？">
-  <meta property="og:description" content="SSH はサーバーのホスト鍵を known_hosts に記録し、次回以降は署名で本人確認する。初回の yes は信頼の登録で、鍵の不一致は偽サーバーと区別できないため拒否される。">
+  <meta property="og:title" content="Tech Learning Daily — .gitignore に書いたのに、なぜそのファイルは git status に出続けるのか？">
+  <meta property="og:description" content=".gitignore が効くのは index に載っていない未追跡ファイルだけ。一度 add したファイルは追跡され続ける仕組みと、git rm --cached での外し方、履歴に残る秘密情報の扱いを解説する。">
   <meta property="og:url" content="https://tech-learn.kaion-lab.com/">
   <meta property="og:image" content="https://tech-learn.kaion-lab.com/og.png">
   <meta name="twitter:card" content="summary_large_image">
@@ -22,133 +22,154 @@
   <div class="container">
     <header>
       <h1>Tech Learning Daily</h1>
-      <div class="date">2026-11-26 (Thu) — 第 132 号</div>
+      <div class="date">2026-11-27 (Fri) — 第 133 号</div>
       <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
     </header>
 
     <article class="article">
       <div class="meta-bar">
-        <span class="tag tag-security">Security</span>
+        <span class="tag tag-dev">Dev</span>
         <span class="difficulty">🌿 基礎</span>
         <span class="read-time">⏱ 約 7 分</span>
       </div>
-      <h2 class="article-title">初めての接続では「yes」で通すのに、なぜ SSH は鍵が変わった途端に接続を拒否するのか？</h2>
-      <p class="lead">新しいサーバーや <code>git clone git@github.com:...</code> で最初に出る「Are you sure you want to continue connecting (yes/no)?」に、あなたもほとんど反射で <code>yes</code> と打っているはずだ。ところがサーバーを作り直した翌日には、同じ相手に「WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!」と大きく怒られて繋がらない。初回は確認なしでも通すのに、2 回目以降はなぜこれほど厳しいのだろうか。</p>
+      <h2 class="article-title">.gitignore に書いたのに、なぜそのファイルは git status に出続けるのか？</h2>
+      <p class="lead">うっかりコミットしてしまった <code>.env</code> や <code>config/database.yml</code> を、慌てて <code>.gitignore</code> に書き足した経験はないだろうか。ところが次に編集すると、<code>git status</code> には相変わらず <code>modified: .env</code> と出る。ignore と書いたのに、git はなぜ無視してくれないのか。</p>
 
       <div class="tldr">
         <div class="box-title">🎯 3 行まとめ</div>
         <ul>
-          <li>SSH サーバーは固有の「ホスト鍵」を持ち、接続のたびにその秘密鍵で署名して自分が本物だと示す。クライアントは公開鍵を <code>~/.ssh/known_hosts</code> に記録して照合する</li>
-          <li>初回の <code>yes</code> は「この鍵を今後の基準として登録する」操作で、確認の重みは利用者に委ねられている（TOFU）。一度登録すると、鍵の不一致は中間者攻撃と区別できないため拒否される</li>
-          <li>正当な鍵交換なら <code>ssh-keygen -R</code> で古い行を消し、公式に公開された指紋と照合してから登録し直す。<code>StrictHostKeyChecking=no</code> で黙らせるのは検証そのものを捨てることになる</li>
+          <li>git が「追跡しているファイル」とは、<code>.git/index</code>（index）に載っているファイルのことである。</li>
+          <li><code>.gitignore</code> は「まだ index に無いファイルを、新たに載せないための規則」であり、既に載っているファイルには一切効かない。</li>
+          <li>追跡をやめるには <code>git rm --cached</code> で index から外してコミットする。ただし過去のコミットには残るので、秘密情報なら先に失効・ローテーションする。</li>
         </ul>
       </div>
 
       <section class="body-section">
-        <h3>SSH には「人の鍵」と「サーバーの鍵」の 2 種類がある</h3>
-        <p>普段意識する SSH の鍵は <code>~/.ssh/id_ed25519</code> のような<strong>ユーザー鍵</strong>で、これは「接続してきたのが自分である」とサーバーに示すためのものだ。GitHub の設定画面に公開鍵を貼るのもこちらである。</p>
-        <p>もう 1 種類、サーバー側にも <strong>ホスト鍵</strong>がある。ホスト鍵とは、SSH サーバー（<code>sshd</code>）がマシンごとに持つ公開鍵ペアで、多くの Linux ディストリビューションでは <code>/etc/ssh/ssh_host_ed25519_key</code> などに置かれる。こちらは逆向きに、「今繋がっている相手が本当にそのサーバーである」とクライアントに示すために使う。</p>
-        <p>なぜ逆向きの確認が要るのか。ネットワークの途中にいる攻撃者が、本物のサーバーになりすまして通信を中継すれば、暗号化されていても攻撃者とは平文で話していることになるからだ。この「間に割り込んで両側に本物のふりをする」攻撃を<strong>中間者攻撃（MITM）</strong>と呼ぶ。暗号化だけでは「誰と」暗号化しているかは保証されない。</p>
+        <h3>git はファイルを 3 か所で管理している</h3>
+        <p>git の手元のリポジトリには、ファイルの置き場所が 3 つある。1 つ目は<strong>作業ツリー</strong>（working tree）で、エディタで開いているディスク上の普通のファイル群だ。2 つ目は <strong>index</strong>（ステージングエリアとも呼ぶ）で、「次のコミットに入れるファイルの一覧と中身」を記録した <code>.git/index</code> という 1 つのバイナリファイルである。3 つ目は <strong>HEAD</strong>、つまり今いるブランチの最新コミットだ。</p>
+        <p><code>git add</code> はファイルの中身を git のオブジェクトとして保存し、index のそのパスの行を更新する。<code>git commit</code> は index の内容をそのまま固めてコミットにする。コミットが作業ツリーではなく index から作られるため、「add したものだけがコミットされる」という挙動になる。</p>
+        <p>ここから「追跡されている（tracked）ファイル」の定義が出てくる。tracked とは index に行があるファイルのことであり、index に行が無いファイルが untracked（未追跡）だ。この区別がそのまま、冒頭の疑問の答えになる。</p>
+        <pre class="diagram"> 作業ツリー（ディスク上のファイル）
+ ┌──────────────────────────┐
+ │ app.rb   .env   tmp/x.log│
+ └──────────────────────────┘
+       │ git add        ▲ checkout
+       ▼                │
+ index（.git/index）＝追跡リスト
+ ┌──────────────────────────┐
+ │ app.rb   .env            │
+ └──────────────────────────┘
+       │ git commit
+       ▼
+ HEAD（最新コミット）
+ ┌──────────────────────────┐
+ │ app.rb   .env            │
+ └──────────────────────────┘
+
+ .gitignore が見るのは index に無い物だけ
+   tmp/x.log → 無視される
+   .env      → index に居るので素通り</pre>
       </section>
 
       <section class="body-section">
-        <h3>サーバーは毎回、その接続にだけ通用する署名を出す</h3>
-        <p>SSH の接続開始時、クライアントとサーバーは Diffie-Hellman 鍵交換で共有の秘密値を作る。RFC 4253 によれば、サーバーはこのとき、双方のバージョン文字列・アルゴリズム交渉の内容・自分のホスト公開鍵・鍵交換の値・共有秘密をまとめたハッシュ値 <code>H</code>（<strong>交換ハッシュ</strong>）を作り、ホスト秘密鍵で署名して送る。</p>
-        <p>クライアントは同じ材料から <code>H</code> を自分でも計算し、受け取った公開鍵で署名を検証する。<code>H</code> には今回の鍵交換でしか出てこない値が混ざっているので、過去の署名を録画して再送しても通らない。つまり署名が検証できた時点で「相手はこの公開鍵に対応する秘密鍵を今まさに持っている」ことまでは証明される。</p>
-        <p>しかし、ここに穴がある。署名が証明するのは「送られてきた公開鍵の持ち主と話している」ことだけで、その公開鍵が本物のサーバーのものかどうかは何も言っていない。攻撃者が自分の鍵ペアで署名すれば、署名は完璧に検証できてしまう。最後の一歩、「この公開鍵は <code>github.com</code> のものだ」という対応付けは、暗号の外側から持ち込む必要がある。</p>
-<pre class="diagram"> クライアント               サーバー
- ┌──────────────┐        ┌──────────────┐
- │ known_hosts  │        │ ホスト秘密鍵 │
- └──────────────┘        └──────────────┘
-        │   ◀── 公開鍵 + H への署名 ──
-        │
-        ├─ ① 署名は正しいか (暗号で検証)
-        │
-        └─ ② その公開鍵は記録と同じか
-             同じ   ▶ 接続を続ける
-             未登録 ▶ yes/no を聞く
-             違う   ▶ WARNING で拒否</pre>
+        <h3>.gitignore は「新規登録お断り」の規則にすぎない</h3>
+        <p>名前からは「このファイルを git の世界から消す設定」のように思える。しかし公式ドキュメントは冒頭で、gitignore は「意図的に未追跡にしておくファイル」を指定するものであり、「既に git が追跡しているファイルは影響を受けない」と明言している。効く範囲は最初から untracked なファイルに限られている。</p>
+        <p>具体的には、ignore 規則が参照される場面は 2 つだ。<code>git status</code> が untracked ファイルを列挙するときに一覧から除くことと、<code>git add .</code> のようなディレクトリ単位の add で該当ファイルを拾わないことである。どちらも「index に無いファイルをどう扱うか」の判断で、index に既に行がある <code>.env</code> はこの判断の対象にならない。</p>
+        <p><code>git status</code> がやっている比較を分解すると理由がはっきりする。git-status は「index と HEAD の差」「作業ツリーと index の差」「追跡されておらず、かつ ignore されていないファイル」の 3 種を表示する。編集した <code>.env</code> は 2 番目の「作業ツリーと index の差」に該当し、この比較には ignore 規則が登場しない。だから <code>modified</code> として出続ける。</p>
+        <p>なぜ git は「ignore に書いたら追跡もやめる」と自動でやってくれないのか。gitfaq は追跡中ファイルの変更を無視する方法は「無い」と答え、理由として checkout などでファイルを上書きする必要が出たとき、その変更が大事なものか捨ててよいものか git には判断できないことを挙げている。追跡状態を変えるのは利用者の明示的な操作に限る、という安全側の設計だ。</p>
       </section>
 
       <div class="analogy">
         <div class="box-title">🍱 たとえるなら</div>
-        <p>初めて来た宅配業者の顔を玄関で覚えておき、次回からはその顔と照合する家のようなものだ。初回は相手が本物かを確かめる手段が乏しく、「たぶん本物だろう」で顔を覚えるしかない。だが一度覚えた後に別の顔の人が同じ社名を名乗って来たら、担当替えなのか偽物なのかは玄関先では区別できない。だからいったん扉を閉めて、会社に問い合わせる。</p>
+        <p>index は会社の入館者名簿で、<code>.gitignore</code> は受付に貼られた「この業者は今後入館登録しないこと」という張り紙だ。張り紙は新規の登録を止めるだけで、すでに名簿に載って入館証を持っている人は今日も普通に出入りする。止めたいなら、名簿からその人の行を消す（<code>git rm --cached</code>）しかない。</p>
       </div>
 
       <section class="body-section">
-        <h3>初回の「yes」は確認ではなく、信頼の登録である</h3>
-        <p>RFC 4251 は、この対応付けの方法として 2 つのモデルを挙げている。1 つはクライアントが「ホスト名 → 公開鍵」のローカルなデータベースを持つ方式、もう 1 つは信頼できる認証局（CA）にその対応を証明させる方式だ。OpenSSH の既定は前者で、そのデータベースが <code>~/.ssh/known_hosts</code> である。中身は 1 行 1 ホストの素朴なテキストだ。</p>
-<pre class="code">github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl</pre>
-        <p>初回接続ではこの表に行が無いので、<code>ssh</code> は鍵の指紋（公開鍵のハッシュ）を表示して <code>yes/no</code> を尋ねる。ここで <code>yes</code> と答えると、その鍵が表に書き込まれ、以後の基準になる。初回だけは検証せずに信じ、2 回目からはそれと比べる。この方式を <strong>TOFU（Trust On First Use）</strong>と呼ぶ。RFC 4251 も、初回に対応を確認しない運用は受動的な盗聴には強いが、能動的な中間者攻撃には弱いと明記している。</p>
-        <p>冒頭の疑問はここで解ける。初回が甘く見えるのは、比較対象がまだ無いので確かめようがなく、判断を利用者に委ねているからだ。本来は表示された指紋を公式の値と見比べてから <code>yes</code> を打つ前提であり、反射で打つと「その時たまたま繋がった相手」を本物として登録することになる。一方で 2 回目以降に鍵が食い違うと、<code>ssh</code> の側には「サーバーが作り直された」と「誰かが割り込んでいる」を区別する材料が無い。区別できないなら、危険な側に倒して止める。あの警告が派手なのはそのためだ。</p>
+        <h3>追跡をやめる正しい手順と、その副作用</h3>
+        <p>追跡をやめるには、index からだけ行を消す <code>git rm --cached</code> を使う。<code>--cached</code> は「index からのみ取り除き、作業ツリーのファイルは変更の有無にかかわらず残す」オプションだ。付け忘れると <code>git rm</code> は作業ツリーのファイルも消すので、手元の <code>.env</code> が無くなる。</p>
+        <pre class="code"># 1. .gitignore に規則を追加（再追加を防ぐ）
+echo ".env" &gt;&gt; .gitignore
+
+# 2. index からだけ外す（手元のファイルは残る）
+git rm --cached .env
+#   ディレクトリごとなら: git rm -r --cached tmp/
+
+# 3. 「.env を削除した」コミットとして記録
+git add .gitignore
+git commit -m "Stop tracking .env"</pre>
+        <p>手順 3 のコミットは、git から見れば「<code>.env</code> を削除した」変更である。このため、他のメンバーがこのコミットを <code>git pull</code> すると、そのメンバーの作業ツリーから <code>.env</code> が消える。各自のローカル設定が入ったファイルを外すときは、事前にバックアップを取ってもらうか、<code>.env.example</code> のようなテンプレートを追跡し、実ファイルは各自コピーして作る運用に切り替えるのが gitfaq の勧める形だ。</p>
+        <p>もう 1 つの落とし穴は、<code>git rm --cached</code> が過去のコミットには何もしないことだ。<code>.env</code> の中身は外す前のコミットにそのまま残り、<code>git log -p</code> や GitHub の履歴から読める。GitHub のドキュメントは、機密データをコミットした場合はまず秘密を失効・ローテーションすることを最初の手順に挙げており、履歴の書き換え（<code>git-filter-repo</code>）はクローン済みの全員と調整が必要な重い作業として扱っている。鍵を差し替えれば履歴に残った値は使えなくなる、という順番で考える。</p>
       </section>
 
       <section class="body-section">
-        <h3>StrictHostKeyChecking で「未登録」と「不一致」の扱いが変わる</h3>
-        <p>この挙動は <code>ssh_config</code> の <code>StrictHostKeyChecking</code> で決まる。man ページによれば値は 4 つあり、既定は <code>ask</code> だ。どの値でも、すでに登録済みの鍵との照合自体は常に行われる。</p>
-<pre class="code"># ~/.ssh/config
-Host *.internal.example.com
-  StrictHostKeyChecking accept-new</pre>
-        <p><code>ask</code>（既定）は未登録なら確認を求め、不一致なら拒否する。<code>accept-new</code> は未登録の鍵を確認なしで登録し、不一致は拒否する。CI のように対話できない環境で初回だけ自動登録したいときの落としどころがこれだ。<code>yes</code> は未登録でも自動登録せず拒否するので、<code>known_hosts</code> を事前に配っておく運用向きになる。</p>
-        <p>問題は <code>no</code> だ。未登録の鍵を自動登録するうえ、鍵が変わったホストへの接続も（パスワード認証を無効にするなどの制限つきで）続行させる。「警告がうるさいから」とこれを書くと、TOFU の 2 回目以降の照合まで捨てることになり、残る守りが実質的に無くなる。</p>
-        <p>関連して、<code>HashKnownHosts</code>（既定 <code>no</code>）を <code>yes</code> にするとホスト名がハッシュ化されて書き込まれ、ファイルを盗み見られても接続先一覧が漏れにくくなる。ただしハッシュ化された行は目で探せないので、検索や削除は <code>ssh-keygen -F</code> / <code>-R</code> を使うことになる。</p>
+        <h3>「効かない」ときに規則を疑う前に確かめること</h3>
+        <p>ignore が効かない原因は、追跡済みであることのほかに、規則の書き方そのものにもある。どちらなのかを切り分けるのが <code>git check-ignore -v &lt;path&gt;</code> だ。マッチした規則の「ファイル名:行番号:パターン」とパスを表示してくれる。ただし追跡済みファイルは ignore 規則の対象外なので、既定では何も表示されない。<code>--no-index</code> を付けると index を見ずに規則だけで判定するので、「規則は合っているが追跡済み」の状態が見分けられる。</p>
+        <p>規則の書き方でつまずきやすいのは次の 3 点である。末尾に <code>/</code> を付けたパターン（<code>tmp/</code>）はディレクトリにだけマッチする。先頭または途中に <code>/</code> があるパターン（<code>/config/local.yml</code>）はその <code>.gitignore</code> の置き場所からの相対パスに固定され、<code>/</code> を含まないパターン（<code>*.log</code>）は配下のどの階層にもマッチする。そして、親ディレクトリを丸ごと除外すると、その中のファイルを <code>!</code> で再び含めることはできない。git は性能のために除外されたディレクトリの中を見に行かないからだ。</p>
+        <pre class="code"># NG: logs/ 自体を除外しているので !keep は効かない
+logs/
+!logs/.keep
+
+# OK: 中身だけを除外し、.keep を戻す
+logs/*
+!logs/.keep</pre>
+        <p>規則の置き場所も 1 つではない。優先度の高い順に、コマンドラインで渡したパターン、各ディレクトリの <code>.gitignore</code>、リポジトリ内の <code>.git/info/exclude</code>、そして <code>core.excludesFile</code> で指定したファイルである。<code>core.excludesFile</code> の既定は <code>$XDG_CONFIG_HOME/git/ignore</code>（未設定なら <code>~/.config/git/ignore</code>）だ。<code>.DS_Store</code> やエディタの一時ファイルのような「自分の環境だけの都合」はここに書けば、チームの <code>.gitignore</code> を汚さずに済む。</p>
       </section>
 
       <div class="practical">
         <div class="box-title">💼 実務でどう出会うか</div>
-        <p>一番多いのは、同じ IP やホスト名で EC2 インスタンスを作り直したときだ。新しいマシンは新しいホスト鍵を生成するので、手元の <code>known_hosts</code> の古い行と食い違う。このときは <code>ssh-keygen -R &lt;ホスト名またはIP&gt;</code> で古い行を消し、可能ならコンソール出力などで新しい指紋を確かめてから登録し直す。</p>
-        <p>本物の鍵交換が全員に降ってきた例もある。GitHub は 2023 年 3 月 24 日、RSA のホスト秘密鍵が公開リポジトリに一時的に露出したことを受けて RSA ホスト鍵を差し替え、多くの利用者の <code>git push</code> がこの警告で止まった（ECDSA と Ed25519 の鍵は変わっていない）。GitHub は <code>ssh-keygen -R github.com</code> で古い鍵を消し、公式に公開した指紋と照合して登録し直す手順を案内している。</p>
-        <p>台数が多い環境では、TOFU をやめて <code>ssh-keygen -h</code> で発行するホスト証明書（CA が「この鍵はこのホスト名のもの」と署名したもの）を使い、クライアントには CA の公開鍵だけを配る方法がある。RFC 4251 の 2 つ目のモデルにあたり、サーバーを作り直しても警告が出なくなる。</p>
+        <p>典型は、プロジェクト初期に <code>.gitignore</code> を用意する前に <code>git add .</code> してしまい、<code>node_modules/</code>・<code>log/</code>・<code>.env</code> がまとめて追跡されたケースだ。後から規則を書いても差分に出続け、PR に巨大な diff が混ざる。<code>git ls-files | grep 対象</code> で追跡済みかを確かめ、<code>git rm -r --cached</code> で外すのが正攻法になる。もう 1 つは「ローカルで値を書き換える設定ファイル」をコミットしてしまったケースで、ここで <code>git update-index --assume-unchanged</code> を使う記事がよく見つかる。しかし gitfaq はこの用途での assume-unchanged / skip-worktree の利用を「正しく動かないので使うべきでない」としており、テンプレートを追跡して実ファイルを ignore する構成へ直すほうが後で困らない。</p>
       </div>
 
       <div class="hands-on">
         <div class="box-title">⌨️ 手を動かす（5 分）</div>
-        <p>本物の GitHub のホスト鍵の指紋を確かめたあと、使い捨ての <code>known_hosts</code> にわざと偽の鍵を書いて、あの警告を安全に再現する。普段の <code>~/.ssh/known_hosts</code> には触らない。</p>
-        <pre class="code"># 1. サーバーが名乗るホスト鍵の指紋を見る
-ssh-keyscan -t ed25519 github.com 2&gt;/dev/null | ssh-keygen -lf -
+        <p>使い捨てのリポジトリで、追跡済みファイルに ignore が効かないことと、<code>git rm --cached</code> で状態が変わることを確かめる。</p>
+        <pre class="code">cd "$(mktemp -d)" &amp;&amp; git init -q
+echo "SECRET=1" &gt; .env
+git add .env
+git -c user.name=me -c user.email=me@example.com commit -qm "add env"
 
-# 2. 偽の鍵を作り、github.com の鍵として登録
-ssh-keygen -t ed25519 -f /tmp/fakehost -N '' -q
-echo "github.com $(cut -d' ' -f1,2 /tmp/fakehost.pub)" &gt; /tmp/kh
+echo ".env" &gt; .gitignore
+echo "SECRET=2" &gt; .env
+git status --short
 
-# 3. その表を使って接続してみる
-ssh -o UserKnownHostsFile=/tmp/kh \
-    -o GlobalKnownHostsFile=/dev/null \
-    -T git@github.com
+git check-ignore -v .env; echo "exit=$?"
+git check-ignore -v --no-index .env
+git ls-files --stage
 
-# 4. 後片付け
-rm -f /tmp/fakehost /tmp/fakehost.pub /tmp/kh</pre>
-        <p>1 で表示される <code>SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU</code> が GitHub のドキュメントに載っている Ed25519 の指紋と一致すれば、本物と話せている。3 では、ユーザー認証に進む前に <code>REMOTE HOST IDENTIFICATION HAS CHANGED!</code> と <code>Host key verification failed.</code> が出て止まるはずだ。サーバー側は何も変わっていないのに、手元の記録が違うだけで同じ警告になる。<code>ssh</code> から見れば「鍵の交換」と「なりすまし」が同じに見えることを体感できる。</p>
+git rm --cached .env
+git status --short
+ls .env</pre>
+        <p>最初の <code>git status --short</code> では <code> M .env</code>（作業ツリーと index の差）と <code>?? .gitignore</code> が出て、<code>.env</code> が ignore されていないことが分かる。<code>git check-ignore -v .env</code> は追跡済みのため何も出さず exit 1 で終わり、<code>--no-index</code> を付けると <code>.gitignore:1:.env</code> と規則自体はマッチしていることが表示される。<code>git ls-files --stage</code> には index の中身（モード・blob のハッシュ・ステージ番号・パス）が 1 行ずつ見える。<code>git rm --cached</code> の後は <code>D  .env</code>（削除がステージ済み）に変わり、<code>ls</code> でファイル自体は手元に残っていることが確かめられる。</p>
       </div>
 
       <div class="misconceptions">
         <div class="box-title">🙅 よくある誤解</div>
         <ul>
-          <li><span class="wrong">通信は暗号化されているから、相手が誰でも安全だ</span> — 暗号化は「鍵を共有した相手」との通信を守るだけで、その相手が本物かどうかはホスト鍵の照合でしか分からない。照合を省くと、攻撃者と暗号化して話すことになりうる</li>
-          <li><span class="wrong">警告は known_hosts の行を消せば直る、ただの古いキャッシュの問題だ</span> — 結果的に行を消すことは多いが、消す前に「鍵が変わった正当な理由があるか」を確かめるのが本来の手順である。理由が無いのに鍵が変わっていたら、それこそ警告が守ろうとしている状況だ</li>
-          <li><span class="wrong">ユーザー鍵を登録していれば、サーバーの本人確認も済んでいる</span> — ユーザー鍵はサーバーがクライアントを確かめるためのもので、向きが逆である。クライアントがサーバーを確かめる手段はホスト鍵だけだ</li>
+          <li><span class="wrong">.gitignore に書けば、そのファイルは git の管理から外れる</span> — 外れるのは「これから追跡されるかもしれない」未追跡ファイルだけだ。追跡済みのファイルは <code>git rm --cached</code> で index から外すまで、変更が検出され続ける。</li>
+          <li><span class="wrong">git rm --cached で外してコミットすれば、漏れた秘密は消える</span> — 消えるのは以後のコミットからだけで、過去のコミットには中身が残る。秘密情報ならまず失効・ローテーションし、必要なら履歴の書き換えを検討する。</li>
+          <li><span class="wrong">assume-unchanged を立てれば追跡中ファイルの変更を安全に無視できる</span> — gitfaq はこの用途での利用を否定している。checkout などで git がファイルを扱う場面で期待どおりに動く保証が無く、テンプレートを追跡して実ファイルを ignore する構成が推奨される。</li>
         </ul>
       </div>
 
       <div class="glossary">
         <div class="box-title">📖 用語ミニ辞典</div>
         <dl>
-          <dt>ホスト鍵</dt><dd>SSH サーバーがマシンごとに持つ鍵ペア。接続のたびに秘密鍵で署名し、自分が本物であることをクライアントに示す</dd>
-          <dt>known_hosts</dt><dd>クライアント側の「ホスト名 → ホスト公開鍵」の対応表。既定は <code>~/.ssh/known_hosts</code></dd>
-          <dt>TOFU</dt><dd>Trust On First Use。初回に見た鍵を検証なしで信じて記録し、以後はそれとの一致で本人確認する方式</dd>
-          <dt>中間者攻撃（MITM）</dt><dd>通信の間に割り込み、両側に本物の相手のふりをして中継する攻撃</dd>
-          <dt>交換ハッシュ</dt><dd>鍵交換の材料をまとめたハッシュ値。サーバーがホスト秘密鍵で署名し、その接続限りの本人証明になる</dd>
-          <dt>StrictHostKeyChecking</dt><dd>未登録・不一致のホスト鍵をどう扱うかを決める <code>ssh_config</code> の設定。既定は <code>ask</code></dd>
+          <dt>作業ツリー（working tree）</dt><dd>ディスク上に展開された、普段編集している実ファイル群。</dd>
+          <dt>index（ステージングエリア）</dt><dd>次のコミットに入るファイルの一覧と中身を記録した <code>.git/index</code>。ここに行があるファイルが tracked。</dd>
+          <dt>tracked / untracked</dt><dd>index に載っているか否か。.gitignore は untracked なファイルにだけ効く。</dd>
+          <dt>git rm --cached</dt><dd>index からだけパスを取り除き、作業ツリーのファイルは残すコマンド。</dd>
+          <dt>git check-ignore</dt><dd>パスがどの ignore 規則にマッチしたかを表示するコマンド。<code>-v</code> でファイル名・行番号・パターンを出す。</dd>
+          <dt>core.excludesFile</dt><dd>リポジトリ横断で効く個人用 ignore ファイルの場所。既定は <code>~/.config/git/ignore</code>（XDG 未設定時）。</dd>
         </dl>
       </div>
 
       <div class="further-reading">
         <div class="box-title">🔗 もっと深く</div>
         <ul>
-          <li><a href="https://www.rfc-editor.org/rfc/rfc4251#section-4.1">RFC 4251 Section 4.1: Host Keys</a> — ローカルデータベースと CA の 2 つの信頼モデル、初回未確認の危険性を原典で確かめられる</li>
-          <li><a href="https://www.rfc-editor.org/rfc/rfc4253#section-8">RFC 4253 Section 8: Diffie-Hellman Key Exchange</a> — 交換ハッシュ H に何が含まれ、サーバーが何に署名しているかの定義</li>
-          <li><a href="https://man.openbsd.org/ssh_config#StrictHostKeyChecking">ssh_config(5) StrictHostKeyChecking</a> — <code>ask</code> / <code>accept-new</code> / <code>yes</code> / <code>no</code> の正確な挙動と関連設定</li>
-          <li><a href="https://github.blog/news-insights/company-news/we-updated-our-rsa-ssh-host-key/">We updated our RSA SSH host key (GitHub Blog)</a> — 実際にホスト鍵を差し替えたときに利用者側で何が起き、どう直すべきだったかの実例</li>
+          <li><a href="https://git-scm.com/docs/gitignore">Git - gitignore Documentation</a> — パターンの文法、規則の優先順位、親ディレクトリ除外時の再包含不可まで一次情報で確認できる。</li>
+          <li><a href="https://git-scm.com/docs/gitfaq">Git - gitfaq Documentation</a> — 「ignore したのに追跡される」「追跡中ファイルの変更を無視したい」への公式の回答と、その設計理由。</li>
+          <li><a href="https://git-scm.com/docs/git-check-ignore">Git - git-check-ignore Documentation</a> — <code>-v</code> の出力形式と、追跡済みファイルを判定する <code>--no-index</code> の用途。</li>
+          <li><a href="https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/removing-sensitive-data-from-a-repository">Removing sensitive data from a repository - GitHub Docs</a> — 秘密をコミットした後の正しい順番（失効が先、履歴書き換えは調整が要る）を知るために。</li>
         </ul>
       </div>
     </article>
@@ -156,6 +177,11 @@ rm -f /tmp/fakehost /tmp/fakehost.pub /tmp/kh</pre>
     <!-- recent:start -->
     <section class="section recent-articles">
       <div class="section-title">最近の記事</div>
+      <div class="card">
+        <h3><a href="archive/2026-11-26.html">初めての接続では「yes」で通すのに、なぜ SSH は鍵が変わった途端に接続を拒否するのか？</a></h3>
+        <div class="summary">SSH サーバーはホスト鍵で接続ごとに署名し、クライアントは known_hosts の記録と照合する。初回の yes は TOFU による信頼の登録で、鍵の不一致は中間者攻撃と区別できないため拒否される仕組みと、StrictHostKeyChecking の各値・正しい鍵の更新手順。</div>
+        <div class="meta"><span class="tag tag-security">Security</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-26</span></div>
+      </div>
       <div class="card">
         <h3><a href="archive/2026-11-25.html">巨大なログを rm したのに、なぜ df の空き容量は 1 バイトも増えないのか？</a></h3>
         <div class="summary">rm が消すのはディレクトリの名前だけで、ファイルを開いているプロセスがいる間は実体が残り続ける。du と df の食い違い、lsof +L1 での発見と /proc 経由の切り詰め、logrotate の create と copytruncate の違いまで。</div>
@@ -170,11 +196,6 @@ rm -f /tmp/fakehost /tmp/fakehost.pub /tmp/kh</pre>
         <h3><a href="archive/2026-11-23.html">サーバーは localhost で動いているのに、なぜ「ECONNREFUSED ::1」で繋がらないのか？</a></h3>
         <div class="summary">localhost は 127.0.0.1 と ::1 の 2 つに解決され OS は ::1 を先に返すため、IPv4 だけで待つサーバーへの接続が拒否される仕組みと、Node の Happy Eyeballs・待受アドレスを揃える対策。</div>
         <div class="meta"><span class="tag tag-network">Network</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-23</span></div>
-      </div>
-      <div class="card">
-        <h3><a href="archive/2026-11-22.html">保存した直後にジョブへ ID を渡しただけなのに、なぜジョブは「レコードが見つからない」で落ちるのか？</a></h3>
-        <div class="summary">トランザクション中に積んだジョブは COMMIT 前に走って行が見えず落ちる。COMMIT 後に積む方法と、それでも残る取りこぼしを Transactional Outbox で防ぐ仕組みを解説する。</div>
-        <div class="meta"><span class="tag tag-arch">Arch</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-22</span></div>
       </div>
       <div class="recent-more"><a href="archive/">アーカイブですべて見る →</a></div>
     </section>
