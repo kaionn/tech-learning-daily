@@ -6,6 +6,7 @@
 
 ## 消化済み
 
+- 2026-11-28 ORDER BY の並び順が手元と本番で変わる理由（collation の定義と libc・icu・builtin プロバイダ、initdb が LC_ALL・LC_COLLATE・LANG の順にロケールを決め未設定なら C になること、LC_COLLATE が DB 作成後に変えられない理由、glibc 2.28 のロケールデータ更新でインデックスが壊れる仕組みと REINDEX → REFRESH COLLATION VERSION の順序、論理ダンプでは起きないこと、C 以外では LIKE 前方一致が通常インデックスを使えず COLLATE "C" や text_pattern_ops が要ること、COLLATE の明示、公式 Docker イメージで default と C の並びを比べる実験）（自動選定）
 - 2026-11-27 .gitignore に書いたのにファイルが git status に出続ける理由（作業ツリー・index・HEAD の 3 か所と tracked の定義、gitignore は未追跡ファイルにしか効かないこと、git status の 3 種の比較、gitfaq が追跡中ファイルの変更無視を提供しない理由、git rm --cached の手順と pull した他メンバーの手元からファイルが消える副作用、過去コミットに残る秘密は失効・ローテーションが先であること、check-ignore -v と --no-index、末尾/先頭スラッシュ・親ディレクトリ除外時に ! で戻せない規則、規則の優先順位と core.excludesFile、assume-unchanged を使うべきでない理由、使い捨てリポジトリで再現する実験）（自動選定）
 - 2026-11-26 SSH の「REMOTE HOST IDENTIFICATION HAS CHANGED」で接続が拒否される理由（ユーザー鍵とホスト鍵の向きの違い、鍵交換で交換ハッシュ H にホスト秘密鍵で署名する仕組み、署名だけでは公開鍵の持ち主を保証できず known_hosts で対応付けること、初回 yes は TOFU による信頼の登録であること、RFC 4251 の 2 つの信頼モデル、StrictHostKeyChecking の ask・accept-new・yes・no、HashKnownHosts と ssh-keygen -F/-R、GitHub の 2023 年 RSA ホスト鍵差し替え、ホスト証明書、偽の known_hosts で警告を再現する実験）（自動選定）
 - 2026-11-25 rm したのに df の空き容量が増えない理由（ファイル名はディレクトリエントリで実体は inode、rm は unlink(2) で名前を外しリンクカウントを減らすだけで、最後の fd が閉じるまで実体が残ること、du は名前を辿り df はブロックを数えるため食い違うこと、lsof +L1 と /proc/PID/fd の (deleted)、/proc 経由の切り詰め、: > と truncate による予防、logrotate の create＋postrotate（nginx の USR1）と copytruncate の欠損リスク、docker の tmpfs で df が戻らないことを確かめる実験）（自動選定）

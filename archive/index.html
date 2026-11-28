@@ -39,8 +39,8 @@
         <button class="chip on" data-cat="">すべて</button>
         <button class="chip" data-cat="container">Container <span class="chip-count">20</span></button>
         <button class="chip" data-cat="network">Network <span class="chip-count">19</span></button>
+        <button class="chip" data-cat="db">DB <span class="chip-count">17</span></button>
         <button class="chip" data-cat="lang">Lang <span class="chip-count">17</span></button>
-        <button class="chip" data-cat="db">DB <span class="chip-count">16</span></button>
         <button class="chip" data-cat="security">Security <span class="chip-count">11</span></button>
         <button class="chip" data-cat="arch">Arch <span class="chip-count">10</span></button>
         <button class="chip" data-cat="infra">Infra <span class="chip-count">10</span></button>
@@ -63,6 +63,13 @@
 
     <section class="section month" data-month="2026-11">
       <div class="section-title">2026 年 11 月 <span class="count"></span></div>
+      <div class="card" data-cat="db" data-diff="基礎"
+           data-search="同じ order by name なのに、なぜ手元と本番で並び順が変わるのか？ 文字列の大小を決める collation は db 作成時の環境変数で固定され、c と en_us.utf8 の違いや os 更新による規則変更が order by・インデックス・like の挙動を変える仕組みを解説する。" data-terms="collation（照合順序） / C ロケール / プロバイダ / glibc / REINDEX">
+        <h3><a href="2026-11-28.html">同じ ORDER BY name なのに、なぜ手元と本番で並び順が変わるのか？</a></h3>
+        <div class="summary">文字列の大小を決める collation は DB 作成時の環境変数で固定され、C と en_US.utf8 の違いや OS 更新による規則変更が ORDER BY・インデックス・LIKE の挙動を変える仕組みを解説する。</div>
+        <div class="term-hit"></div>
+        <div class="meta"><span class="tag tag-db">DB</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-28</span></div>
+      </div>
       <div class="card" data-cat="dev" data-diff="基礎"
            data-search=".gitignore に書いたのに、なぜそのファイルは git status に出続けるのか？ .gitignore は index に載っていない未追跡ファイルにしか効かず、一度 add したファイルは追跡され続ける。git status が見ている 3 つの比較、git rm --cached での外し方と pull 時の副作用、check-ignore での切り分け、履歴に残る秘密は失効が先である理由。" data-terms="作業ツリー（working tree） / index（ステージングエリア） / tracked / untracked / git rm --cached / git check-ignore / core.excludesFile">
         <h3><a href="2026-11-27.html">.gitignore に書いたのに、なぜそのファイルは git status に出続けるのか？</a></h3>

@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tech Learning Daily — .gitignore に書いたのに、なぜそのファイルは git status に出続けるのか？</title>
-  <meta name="description" content=".gitignore が効くのは index に載っていない未追跡ファイルだけ。一度 add したファイルは追跡され続ける仕組みと、git rm --cached での外し方、履歴に残る秘密情報の扱いを解説する。">
+  <title>Tech Learning Daily — 同じ ORDER BY name なのに、なぜ手元と本番で並び順が変わるのか？</title>
+  <meta name="description" content="文字列の大小は DB 作成時に固定される collation が決める。C はバイト順、en_US は OS のロケール規則で、OS 更新で規則が変わればインデックスとずれる。">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Tech Learning Daily">
-  <meta property="og:title" content="Tech Learning Daily — .gitignore に書いたのに、なぜそのファイルは git status に出続けるのか？">
-  <meta property="og:description" content=".gitignore が効くのは index に載っていない未追跡ファイルだけ。一度 add したファイルは追跡され続ける仕組みと、git rm --cached での外し方、履歴に残る秘密情報の扱いを解説する。">
+  <meta property="og:title" content="Tech Learning Daily — 同じ ORDER BY name なのに、なぜ手元と本番で並び順が変わるのか？">
+  <meta property="og:description" content="文字列の大小は DB 作成時に固定される collation が決める。C はバイト順、en_US は OS のロケール規則で、OS 更新で規則が変わればインデックスとずれる。">
   <meta property="og:url" content="https://tech-learn.kaion-lab.com/">
   <meta property="og:image" content="https://tech-learn.kaion-lab.com/og.png">
   <meta name="twitter:card" content="summary_large_image">
@@ -22,154 +22,142 @@
   <div class="container">
     <header>
       <h1>Tech Learning Daily</h1>
-      <div class="date">2026-11-27 (Fri) — 第 133 号</div>
+      <div class="date">2026-11-28 (Sat) — 第 134 号</div>
       <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
     </header>
 
     <article class="article">
       <div class="meta-bar">
-        <span class="tag tag-dev">Dev</span>
+        <span class="tag tag-db">DB</span>
         <span class="difficulty">🌿 基礎</span>
         <span class="read-time">⏱ 約 7 分</span>
       </div>
-      <h2 class="article-title">.gitignore に書いたのに、なぜそのファイルは git status に出続けるのか？</h2>
-      <p class="lead">うっかりコミットしてしまった <code>.env</code> や <code>config/database.yml</code> を、慌てて <code>.gitignore</code> に書き足した経験はないだろうか。ところが次に編集すると、<code>git status</code> には相変わらず <code>modified: .env</code> と出る。ignore と書いたのに、git はなぜ無視してくれないのか。</p>
+      <h2 class="article-title">同じ ORDER BY name なのに、なぜ手元と本番で並び順が変わるのか？</h2>
+      <p class="lead">ユーザー一覧を <code>ORDER BY name</code> で並べ、テストも手元の画面も問題なかった。ところが本番では <code>apple</code> と <code>Banana</code> の順番が逆になっている。SQL は 1 文字も変えていないのに、結果を決めたのは誰なのだろうか。</p>
 
       <div class="tldr">
         <div class="box-title">🎯 3 行まとめ</div>
         <ul>
-          <li>git が「追跡しているファイル」とは、<code>.git/index</code>（index）に載っているファイルのことである。</li>
-          <li><code>.gitignore</code> は「まだ index に無いファイルを、新たに載せないための規則」であり、既に載っているファイルには一切効かない。</li>
-          <li>追跡をやめるには <code>git rm --cached</code> で index から外してコミットする。ただし過去のコミットには残るので、秘密情報なら先に失効・ローテーションする。</li>
+          <li>文字列の大小は「collation（照合順序）」という規則で決まり、Postgres では DB を作った瞬間の環境変数で既定値が固定される</li>
+          <li><code>C</code> はバイト値の順、<code>en_US.utf8</code> は OS の C ライブラリが持つ言語規則の順で、OS を上げると同じ名前の規則が変わることがある</li>
+          <li>並び順に依存する画面は <code>COLLATE</code> を明示し、規則変更後は <code>REINDEX</code> でインデックスを並べ直す</li>
         </ul>
       </div>
 
       <section class="body-section">
-        <h3>git はファイルを 3 か所で管理している</h3>
-        <p>git の手元のリポジトリには、ファイルの置き場所が 3 つある。1 つ目は<strong>作業ツリー</strong>（working tree）で、エディタで開いているディスク上の普通のファイル群だ。2 つ目は <strong>index</strong>（ステージングエリアとも呼ぶ）で、「次のコミットに入れるファイルの一覧と中身」を記録した <code>.git/index</code> という 1 つのバイナリファイルである。3 つ目は <strong>HEAD</strong>、つまり今いるブランチの最新コミットだ。</p>
-        <p><code>git add</code> はファイルの中身を git のオブジェクトとして保存し、index のそのパスの行を更新する。<code>git commit</code> は index の内容をそのまま固めてコミットにする。コミットが作業ツリーではなく index から作られるため、「add したものだけがコミットされる」という挙動になる。</p>
-        <p>ここから「追跡されている（tracked）ファイル」の定義が出てくる。tracked とは index に行があるファイルのことであり、index に行が無いファイルが untracked（未追跡）だ。この区別がそのまま、冒頭の疑問の答えになる。</p>
-        <pre class="diagram"> 作業ツリー（ディスク上のファイル）
+        <h3>文字列の「大小」は SQL ではなく規則表が決める</h3>
+        <p>数値の <code>1 &lt; 2</code> は誰が計算しても同じだが、文字列の <code>'a' &lt; 'B'</code> には唯一の正解が無い。文字コード上は <code>B</code> が 0x42、<code>a</code> が 0x61 なので <code>B</code> が先になる。一方、辞書を引く人間の感覚では大文字小文字を区別せず <code>a</code> が先だ。</p>
+        <p>この「文字列をどの順に並べるか」の規則を <strong>collation（照合順序）</strong>と呼ぶ。<code>ORDER BY</code>、<code>&lt;</code> や <code>BETWEEN</code> による比較、そして文字列列の B-tree インデックスは、すべてこの規則を通して大小を判定している。</p>
+        <p>Postgres では collation の実装元を<strong>プロバイダ</strong>と呼び、主に 3 種類ある。<code>libc</code> は OS の C ライブラリ（Linux なら glibc）が持つロケールデータに比較を任せる。<code>icu</code> は ICU というライブラリの Unicode 照合アルゴリズムを使う。Postgres 17 で追加された <code>builtin</code> は外部ライブラリに頼らず、コードポイント順で比較する。</p>
+        <pre class="diagram">
+  SELECT ... ORDER BY name
+        │
+        ▼
  ┌──────────────────────────┐
- │ app.rb   .env   tmp/x.log│
- └──────────────────────────┘
-       │ git add        ▲ checkout
-       ▼                │
- index（.git/index）＝追跡リスト
- ┌──────────────────────────┐
- │ app.rb   .env            │
- └──────────────────────────┘
-       │ git commit
-       ▼
- HEAD（最新コミット）
- ┌──────────────────────────┐
- │ app.rb   .env            │
- └──────────────────────────┘
-
- .gitignore が見るのは index に無い物だけ
-   tmp/x.log → 無視される
-   .env      → index に居るので素通り</pre>
+ │ name 列の collation は？ │
+ │ 未指定なら DB の default │
+ └────────────┬─────────────┘
+    ┌─────────┼──────────┐
+    ▼         ▼          ▼
+ ┌──────┐ ┌────────┐ ┌───────┐
+ │  C   │ │  libc  │ │  icu  │
+ │バイト│ │ glibc  │ │  ICU  │
+ │ 値順 │ │ の規則 │ │ の規則│
+ └──────┘ └────────┘ └───────┘
+  不変     OS 更新で  ICU 更新で
+          変わり得る 変わり得る</pre>
       </section>
 
       <section class="body-section">
-        <h3>.gitignore は「新規登録お断り」の規則にすぎない</h3>
-        <p>名前からは「このファイルを git の世界から消す設定」のように思える。しかし公式ドキュメントは冒頭で、gitignore は「意図的に未追跡にしておくファイル」を指定するものであり、「既に git が追跡しているファイルは影響を受けない」と明言している。効く範囲は最初から untracked なファイルに限られている。</p>
-        <p>具体的には、ignore 規則が参照される場面は 2 つだ。<code>git status</code> が untracked ファイルを列挙するときに一覧から除くことと、<code>git add .</code> のようなディレクトリ単位の add で該当ファイルを拾わないことである。どちらも「index に無いファイルをどう扱うか」の判断で、index に既に行がある <code>.env</code> はこの判断の対象にならない。</p>
-        <p><code>git status</code> がやっている比較を分解すると理由がはっきりする。git-status は「index と HEAD の差」「作業ツリーと index の差」「追跡されておらず、かつ ignore されていないファイル」の 3 種を表示する。編集した <code>.env</code> は 2 番目の「作業ツリーと index の差」に該当し、この比較には ignore 規則が登場しない。だから <code>modified</code> として出続ける。</p>
-        <p>なぜ git は「ignore に書いたら追跡もやめる」と自動でやってくれないのか。gitfaq は追跡中ファイルの変更を無視する方法は「無い」と答え、理由として checkout などでファイルを上書きする必要が出たとき、その変更が大事なものか捨ててよいものか git には判断できないことを挙げている。追跡状態を変えるのは利用者の明示的な操作に限る、という安全側の設計だ。</p>
+        <h3>既定の collation は DB を作った瞬間の環境変数で決まる</h3>
+        <p>アプリ側で何も指定しなければ、列の collation は DB の <code>default</code> になる。公式ドキュメントによれば、<code>initdb</code> は実行環境のロケールでクラスタを初期化し、<code>LC_ALL</code> → <code>LC_COLLATE</code> → <code>LANG</code> の順に環境変数を探す。どれも設定されていなければ <code>C</code> になる。</p>
+        <p>つまり並び順は、SQL を書いた人ではなく「DB を作った時のシェルやコンテナに何が入っていたか」で決まる。公式 Docker イメージ <code>postgres</code> の Debian 版は <code>en_US.utf8</code> で初期化されるので、手元の Docker では辞書順になる。一方で <code>LANG</code> を設定しない環境で <code>initdb</code> されたサーバーや、移行時に <code>--locale=C</code> を付けて作った DB はバイト順になる。両者で同じ SQL を流すと、冒頭の現象が起きる。</p>
+        <p>しかも <code>LC_COLLATE</code> は DB 作成後に変更できない。ドキュメントはその理由を「インデックスの並び順に影響するので、固定しておかないとテキスト列のインデックスが壊れる」と説明している。自分の DB がどちらかは次の SQL で分かる。</p>
+        <pre class="code">SELECT datname, datlocprovider, datcollate, datcollversion
+FROM pg_database WHERE datname = current_database();
+-- datlocprovider: c = libc / i = icu / b = builtin</pre>
       </section>
 
       <div class="analogy">
         <div class="box-title">🍱 たとえるなら</div>
-        <p>index は会社の入館者名簿で、<code>.gitignore</code> は受付に貼られた「この業者は今後入館登録しないこと」という張り紙だ。張り紙は新規の登録を止めるだけで、すでに名簿に載って入館証を持っている人は今日も普通に出入りする。止めたいなら、名簿からその人の行を消す（<code>git rm --cached</code>）しかない。</p>
+        <p>図書館の本棚だ。棚に本を差す司書は「並べ方の規則書」に従って位置を決め、利用者は同じ規則書で棚を二分探索して本を探す。B-tree インデックスはこの棚にあたる。規則書が「大文字小文字を区別しない版」か「文字コード順の版」かで棚の並びは変わるし、規則書が途中で改訂されると、すでに差した本の位置と探し方が食い違い、棚にある本が「見つからない」ことになる。</p>
       </div>
 
       <section class="body-section">
-        <h3>追跡をやめる正しい手順と、その副作用</h3>
-        <p>追跡をやめるには、index からだけ行を消す <code>git rm --cached</code> を使う。<code>--cached</code> は「index からのみ取り除き、作業ツリーのファイルは変更の有無にかかわらず残す」オプションだ。付け忘れると <code>git rm</code> は作業ツリーのファイルも消すので、手元の <code>.env</code> が無くなる。</p>
-        <pre class="code"># 1. .gitignore に規則を追加（再追加を防ぐ）
-echo ".env" &gt;&gt; .gitignore
-
-# 2. index からだけ外す（手元のファイルは残る）
-git rm --cached .env
-#   ディレクトリごとなら: git rm -r --cached tmp/
-
-# 3. 「.env を削除した」コミットとして記録
-git add .gitignore
-git commit -m "Stop tracking .env"</pre>
-        <p>手順 3 のコミットは、git から見れば「<code>.env</code> を削除した」変更である。このため、他のメンバーがこのコミットを <code>git pull</code> すると、そのメンバーの作業ツリーから <code>.env</code> が消える。各自のローカル設定が入ったファイルを外すときは、事前にバックアップを取ってもらうか、<code>.env.example</code> のようなテンプレートを追跡し、実ファイルは各自コピーして作る運用に切り替えるのが gitfaq の勧める形だ。</p>
-        <p>もう 1 つの落とし穴は、<code>git rm --cached</code> が過去のコミットには何もしないことだ。<code>.env</code> の中身は外す前のコミットにそのまま残り、<code>git log -p</code> や GitHub の履歴から読める。GitHub のドキュメントは、機密データをコミットした場合はまず秘密を失効・ローテーションすることを最初の手順に挙げており、履歴の書き換え（<code>git-filter-repo</code>）はクローン済みの全員と調整が必要な重い作業として扱っている。鍵を差し替えれば履歴に残った値は使えなくなる、という順番で考える。</p>
+        <h3>同じ en_US.utf8 でも、OS を上げると規則が変わる</h3>
+        <p>ここで「では本番も手元も <code>en_US.utf8</code> に揃えれば安心だ」と考えたくなる。しかし実際は、同じロケール名でも中身の規則は OS 側のデータであり、OS のアップグレードで変わることがある。<code>libc</code> プロバイダは比較を glibc に丸投げしているので、glibc の規則が変われば Postgres の比較結果も変わる。</p>
+        <p>実例が 2018 年の glibc 2.28 だ。Postgres の Wiki によると、このリリースでロケールデータが大きく更新され、Debian 10・RHEL 8・Ubuntu 18.10 以降がこの新データを使う。古い OS で作った DB を新しい OS で動かすと、ディスク上の B-tree は旧規則で並んだまま、検索は新規則で行われる。その結果、存在する行が検索で見つからない、ユニーク制約をすり抜けて重複行が入る、といった壊れ方をする。</p>
+        <p>Postgres は glibc や ICU のバージョンを collation の版として記録し、使用時に OS 側の版と食い違うと <code>WARNING: ... version mismatch</code> を出す。この警告が出たら、影響を受ける <code>text</code> / <code>varchar</code> のインデックスを <code>REINDEX</code> で作り直し、その後で版の記録を更新する。順序を逆にすると、壊れたインデックスを残したまま警告だけが消える。</p>
+        <pre class="code">REINDEX INDEX CONCURRENTLY users_name_idx;
+-- DB の default collation の場合
+ALTER DATABASE app REFRESH COLLATION VERSION;
+-- 個別の collation の場合
+ALTER COLLATION "en-x-icu" REFRESH VERSION;</pre>
+        <p><code>pg_dump</code> による論理ダンプや論理レプリケーションで移行した場合は、新しい環境でインデックスが作り直されるので、この問題は起きない。問題になるのは、データディレクトリをそのまま新 OS に持っていく物理レプリカや OS のインプレース更新である。</p>
       </section>
 
       <section class="body-section">
-        <h3>「効かない」ときに規則を疑う前に確かめること</h3>
-        <p>ignore が効かない原因は、追跡済みであることのほかに、規則の書き方そのものにもある。どちらなのかを切り分けるのが <code>git check-ignore -v &lt;path&gt;</code> だ。マッチした規則の「ファイル名:行番号:パターン」とパスを表示してくれる。ただし追跡済みファイルは ignore 規則の対象外なので、既定では何も表示されない。<code>--no-index</code> を付けると index を見ずに規則だけで判定するので、「規則は合っているが追跡済み」の状態が見分けられる。</p>
-        <p>規則の書き方でつまずきやすいのは次の 3 点である。末尾に <code>/</code> を付けたパターン（<code>tmp/</code>）はディレクトリにだけマッチする。先頭または途中に <code>/</code> があるパターン（<code>/config/local.yml</code>）はその <code>.gitignore</code> の置き場所からの相対パスに固定され、<code>/</code> を含まないパターン（<code>*.log</code>）は配下のどの階層にもマッチする。そして、親ディレクトリを丸ごと除外すると、その中のファイルを <code>!</code> で再び含めることはできない。git は性能のために除外されたディレクトリの中を見に行かないからだ。</p>
-        <pre class="code"># NG: logs/ 自体を除外しているので !keep は効かない
-logs/
-!logs/.keep
+        <h3>辞書順の DB では LIKE 'abc%' がインデックスを使えない</h3>
+        <p>collation はインデックスの効き方にも影響する。ドキュメントには「<code>C</code> 以外のロケールでは通常のインデックスを <code>LIKE</code> が使えない」とある。前方一致 <code>LIKE 'abc%'</code> をインデックスで処理するには、内部で <code>name &gt;= 'abc' AND name &lt; 'abd'</code> という範囲検索に書き換える必要がある。この書き換えはバイト順でしか成り立たない。辞書順では文字以外の記号を後回しにして比べるなど規則が複雑で、「abc で始まる文字列」が棚の 1 区間に連続して並ぶ保証が無いからだ。</p>
+        <p>前方一致を速くしたいなら、その列だけ <code>C</code> の collation でインデックスを作る。表示用の並び順は DB の default のまま残し、検索用の棚だけをバイト順で作る形になる。<code>text_pattern_ops</code> 演算子クラスでも同じ効果が得られる。</p>
+        <pre class="code">CREATE INDEX users_name_c_idx ON users (name COLLATE "C");
+-- EXPLAIN SELECT * FROM users WHERE name LIKE 'abc%';
+-- → Index Cond: (name &gt;= 'abc') AND (name &lt; 'abd')</pre>
+        <p>逆に、DB を <code>C</code> で作ればこの問題は起きず、比較も速い。その代わり <code>ORDER BY name</code> は大文字が小文字より先に並ぶので、人に見せる一覧では <code>ORDER BY name COLLATE "en-x-icu"</code> のように表示用の規則を明示することになる。</p>
+      </section>
 
-# OK: 中身だけを除外し、.keep を戻す
-logs/*
-!logs/.keep</pre>
-        <p>規則の置き場所も 1 つではない。優先度の高い順に、コマンドラインで渡したパターン、各ディレクトリの <code>.gitignore</code>、リポジトリ内の <code>.git/info/exclude</code>、そして <code>core.excludesFile</code> で指定したファイルである。<code>core.excludesFile</code> の既定は <code>$XDG_CONFIG_HOME/git/ignore</code>（未設定なら <code>~/.config/git/ignore</code>）だ。<code>.DS_Store</code> やエディタの一時ファイルのような「自分の環境だけの都合」はここに書けば、チームの <code>.gitignore</code> を汚さずに済む。</p>
+      <section class="body-section">
+        <h3>どの collation を選ぶか</h3>
+        <p>選び方は「人間向けの並び」と「OS に依存しない安定性」のどちらを優先するかで決まる。<code>C</code> と Postgres 17 以降の <code>builtin</code> は OS や外部ライブラリに依存しないので、OS を上げても並びが変わらない。ICU は言語ごとの自然な並びを提供し、どのプラットフォームでも版情報を記録できる。<code>libc</code> は新規 DB で手間なく使えるが、OS 更新時の注意が最も多い。</p>
+        <p>どれを選んでも、画面の並び順を仕様として保証したい箇所は SQL で <code>COLLATE</code> を明示すると、環境差で結果が変わらなくなる。DB 全体の default に頼るのは、「どこで作られた DB でも同じ結果になる」と言えない書き方だからだ。</p>
       </section>
 
       <div class="practical">
         <div class="box-title">💼 実務でどう出会うか</div>
-        <p>典型は、プロジェクト初期に <code>.gitignore</code> を用意する前に <code>git add .</code> してしまい、<code>node_modules/</code>・<code>log/</code>・<code>.env</code> がまとめて追跡されたケースだ。後から規則を書いても差分に出続け、PR に巨大な diff が混ざる。<code>git ls-files | grep 対象</code> で追跡済みかを確かめ、<code>git rm -r --cached</code> で外すのが正攻法になる。もう 1 つは「ローカルで値を書き換える設定ファイル」をコミットしてしまったケースで、ここで <code>git update-index --assume-unchanged</code> を使う記事がよく見つかる。しかし gitfaq はこの用途での assume-unchanged / skip-worktree の利用を「正しく動かないので使うべきでない」としており、テンプレートを追跡して実ファイルを ignore する構成へ直すほうが後で困らない。</p>
+        <p>典型は「CI では通るテストが手元で落ちる」ケースだ。CI の DB が <code>C</code>、手元の Docker が <code>en_US.utf8</code> だと、並び順を期待値に書いたテストは片方でしか通らない。もう一つは RDB のメジャーアップグレードや OS 移行の計画時で、物理レプリカで新 OS に切り替える手順なら、文字列インデックスの <code>REINDEX</code> を作業に組み込む必要がある。<code>LIKE '前方一致%'</code> が遅いのにインデックスが効かない、という調査も、まず <code>datcollate</code> を確認するところから始まる。</p>
       </div>
 
       <div class="hands-on">
         <div class="box-title">⌨️ 手を動かす（5 分）</div>
-        <p>使い捨てのリポジトリで、追跡済みファイルに ignore が効かないことと、<code>git rm --cached</code> で状態が変わることを確かめる。</p>
-        <pre class="code">cd "$(mktemp -d)" &amp;&amp; git init -q
-echo "SECRET=1" &gt; .env
-git add .env
-git -c user.name=me -c user.email=me@example.com commit -qm "add env"
-
-echo ".env" &gt; .gitignore
-echo "SECRET=2" &gt; .env
-git status --short
-
-git check-ignore -v .env; echo "exit=$?"
-git check-ignore -v --no-index .env
-git ls-files --stage
-
-git rm --cached .env
-git status --short
-ls .env</pre>
-        <p>最初の <code>git status --short</code> では <code> M .env</code>（作業ツリーと index の差）と <code>?? .gitignore</code> が出て、<code>.env</code> が ignore されていないことが分かる。<code>git check-ignore -v .env</code> は追跡済みのため何も出さず exit 1 で終わり、<code>--no-index</code> を付けると <code>.gitignore:1:.env</code> と規則自体はマッチしていることが表示される。<code>git ls-files --stage</code> には index の中身（モード・blob のハッシュ・ステージ番号・パス）が 1 行ずつ見える。<code>git rm --cached</code> の後は <code>D  .env</code>（削除がステージ済み）に変わり、<code>ls</code> でファイル自体は手元に残っていることが確かめられる。</p>
+        <p>公式 Postgres イメージ（<code>en_US.utf8</code>）で、同じデータを default と <code>C</code> で並べ比べる。</p>
+        <pre class="code">docker run -d --name pgcol -e POSTGRES_PASSWORD=pw postgres:17
+sleep 5
+docker exec pgcol psql -U postgres \
+  -c "SELECT datcollate, datlocprovider, datcollversion FROM pg_database WHERE datname='postgres';" \
+  -c "SELECT x FROM (VALUES ('apple'),('Banana'),('cherry'),('b'),('_draft')) t(x) ORDER BY x;" \
+  -c "SELECT x FROM (VALUES ('apple'),('Banana'),('cherry'),('b'),('_draft')) t(x) ORDER BY x COLLATE \"C\";" \
+  -c "SELECT 'a' &lt; 'B' AS default_rule, 'a' &lt; 'B' COLLATE \"C\" AS c_rule;"
+docker rm -f pgcol</pre>
+        <p><code>datcollate</code> は <code>en_US.utf8</code>、<code>datcollversion</code> には glibc の版が入っている。default では <code>apple, b, Banana, cherry, _draft</code> と大文字小文字を混ぜた辞書順、<code>C</code> では <code>Banana, _draft, apple, b, cherry</code> とバイト値順になり、<code>'a' &lt; 'B'</code> の答えが <code>t</code> と <code>f</code> に分かれるはずだ。</p>
       </div>
 
       <div class="misconceptions">
         <div class="box-title">🙅 よくある誤解</div>
         <ul>
-          <li><span class="wrong">.gitignore に書けば、そのファイルは git の管理から外れる</span> — 外れるのは「これから追跡されるかもしれない」未追跡ファイルだけだ。追跡済みのファイルは <code>git rm --cached</code> で index から外すまで、変更が検出され続ける。</li>
-          <li><span class="wrong">git rm --cached で外してコミットすれば、漏れた秘密は消える</span> — 消えるのは以後のコミットからだけで、過去のコミットには中身が残る。秘密情報ならまず失効・ローテーションし、必要なら履歴の書き換えを検討する。</li>
-          <li><span class="wrong">assume-unchanged を立てれば追跡中ファイルの変更を安全に無視できる</span> — gitfaq はこの用途での利用を否定している。checkout などで git がファイルを扱う場面で期待どおりに動く保証が無く、テンプレートを追跡して実ファイルを ignore する構成が推奨される。</li>
+          <li><span class="wrong">ORDER BY の結果は SQL が同じなら DB が変わっても同じ</span> — 文字列の並びは列または DB の collation が決め、DB の default は作成時の環境変数で固定される。</li>
+          <li><span class="wrong">ロケール名を en_US.utf8 に揃えれば永久に同じ並びになる</span> — <code>libc</code> の規則は OS の C ライブラリのデータなので、glibc 2.28 のように OS 更新で中身が変わり、既存インデックスとずれることがある。</li>
+          <li><span class="wrong">LIKE 'abc%' は前方一致なので普通のインデックスが必ず効く</span> — 範囲検索への書き換えはバイト順でしか成り立たず、<code>C</code> 以外の DB では <code>COLLATE "C"</code> か <code>text_pattern_ops</code> のインデックスが要る。</li>
         </ul>
       </div>
 
       <div class="glossary">
         <div class="box-title">📖 用語ミニ辞典</div>
         <dl>
-          <dt>作業ツリー（working tree）</dt><dd>ディスク上に展開された、普段編集している実ファイル群。</dd>
-          <dt>index（ステージングエリア）</dt><dd>次のコミットに入るファイルの一覧と中身を記録した <code>.git/index</code>。ここに行があるファイルが tracked。</dd>
-          <dt>tracked / untracked</dt><dd>index に載っているか否か。.gitignore は untracked なファイルにだけ効く。</dd>
-          <dt>git rm --cached</dt><dd>index からだけパスを取り除き、作業ツリーのファイルは残すコマンド。</dd>
-          <dt>git check-ignore</dt><dd>パスがどの ignore 規則にマッチしたかを表示するコマンド。<code>-v</code> でファイル名・行番号・パターンを出す。</dd>
-          <dt>core.excludesFile</dt><dd>リポジトリ横断で効く個人用 ignore ファイルの場所。既定は <code>~/.config/git/ignore</code>（XDG 未設定時）。</dd>
+          <dt>collation（照合順序）</dt><dd>文字列の大小・並び順を決める規則。ORDER BY・比較演算子・B-tree インデックスが従う。</dd>
+          <dt>C ロケール</dt><dd>文字列をバイト値の順に比べる規則。OS やバージョンに依存せず速いが、大文字が小文字より先に並ぶ。</dd>
+          <dt>プロバイダ</dt><dd>collation の実装元。Postgres では libc（OS の C ライブラリ）・icu・builtin がある。</dd>
+          <dt>glibc</dt><dd>多くの Linux で使われる C ライブラリ。libc プロバイダのロケール規則の出所で、2.28 で照合データが大きく変わった。</dd>
+          <dt>REINDEX</dt><dd>インデックスを現在の規則で作り直すコマンド。collation の規則が変わった後に既存インデックスを正しい並びへ戻す。</dd>
         </dl>
       </div>
 
       <div class="further-reading">
         <div class="box-title">🔗 もっと深く</div>
         <ul>
-          <li><a href="https://git-scm.com/docs/gitignore">Git - gitignore Documentation</a> — パターンの文法、規則の優先順位、親ディレクトリ除外時の再包含不可まで一次情報で確認できる。</li>
-          <li><a href="https://git-scm.com/docs/gitfaq">Git - gitfaq Documentation</a> — 「ignore したのに追跡される」「追跡中ファイルの変更を無視したい」への公式の回答と、その設計理由。</li>
-          <li><a href="https://git-scm.com/docs/git-check-ignore">Git - git-check-ignore Documentation</a> — <code>-v</code> の出力形式と、追跡済みファイルを判定する <code>--no-index</code> の用途。</li>
-          <li><a href="https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/removing-sensitive-data-from-a-repository">Removing sensitive data from a repository - GitHub Docs</a> — 秘密をコミットした後の正しい順番（失効が先、履歴書き換えは調整が要る）を知るために。</li>
+          <li><a href="https://www.postgresql.org/docs/current/collation.html">PostgreSQL Docs: Collation Support</a> — collation の決まり方、COLLATE 句、C・ucs_basic・unicode など標準 collation の一覧</li>
+          <li><a href="https://www.postgresql.org/docs/current/locale.html">PostgreSQL Docs: Locale Support</a> — initdb がロケールを選ぶ順序、LC_COLLATE が変更できない理由、builtin プロバイダの仕様</li>
+          <li><a href="https://wiki.postgresql.org/wiki/Locale_data_changes">PostgreSQL Wiki: Locale data changes</a> — glibc 2.28 で何が起きたか、影響を受けるインデックスを探す SQL とディストリビューション別の状況</li>
+          <li><a href="https://www.postgresql.org/docs/current/sql-altercollation.html">PostgreSQL Docs: ALTER COLLATION</a> — 版の不一致警告の読み方と、REINDEX → REFRESH VERSION の手順</li>
         </ul>
       </div>
     </article>
@@ -177,6 +165,11 @@ ls .env</pre>
     <!-- recent:start -->
     <section class="section recent-articles">
       <div class="section-title">最近の記事</div>
+      <div class="card">
+        <h3><a href="archive/2026-11-27.html">.gitignore に書いたのに、なぜそのファイルは git status に出続けるのか？</a></h3>
+        <div class="summary">.gitignore は index に載っていない未追跡ファイルにしか効かず、一度 add したファイルは追跡され続ける。git status が見ている 3 つの比較、git rm --cached での外し方と pull 時の副作用、check-ignore での切り分け、履歴に残る秘密は失効が先である理由。</div>
+        <div class="meta"><span class="tag tag-dev">Dev</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-27</span></div>
+      </div>
       <div class="card">
         <h3><a href="archive/2026-11-26.html">初めての接続では「yes」で通すのに、なぜ SSH は鍵が変わった途端に接続を拒否するのか？</a></h3>
         <div class="summary">SSH サーバーはホスト鍵で接続ごとに署名し、クライアントは known_hosts の記録と照合する。初回の yes は TOFU による信頼の登録で、鍵の不一致は中間者攻撃と区別できないため拒否される仕組みと、StrictHostKeyChecking の各値・正しい鍵の更新手順。</div>
@@ -191,11 +184,6 @@ ls .env</pre>
         <h3><a href="archive/2026-11-24.html">ターミナルでは動くスクリプトなのに、なぜ cron に登録すると「command not found」で落ちるのか？</a></h3>
         <div class="summary">環境変数は親プロセスからのコピーで、PATH を足すのはシェルの設定ファイルだ。cron は設定ファイルを読まない最小環境でジョブを起動するため node などが見つからない仕組みと、crontab の PATH 行・絶対パスでの直し方。</div>
         <div class="meta"><span class="tag tag-infra">Infra</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-24</span></div>
-      </div>
-      <div class="card">
-        <h3><a href="archive/2026-11-23.html">サーバーは localhost で動いているのに、なぜ「ECONNREFUSED ::1」で繋がらないのか？</a></h3>
-        <div class="summary">localhost は 127.0.0.1 と ::1 の 2 つに解決され OS は ::1 を先に返すため、IPv4 だけで待つサーバーへの接続が拒否される仕組みと、Node の Happy Eyeballs・待受アドレスを揃える対策。</div>
-        <div class="meta"><span class="tag tag-network">Network</span><span>🌿 基礎</span><span>⏱ 約 7 分</span><span>2026-11-23</span></div>
       </div>
       <div class="recent-more"><a href="archive/">アーカイブですべて見る →</a></div>
     </section>

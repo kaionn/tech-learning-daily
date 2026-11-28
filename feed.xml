@@ -4,8 +4,15 @@
   <link href="https://tech-learn.kaion-lab.com/"/>
   <link rel="self" href="https://tech-learn.kaion-lab.com/feed.xml"/>
   <id>https://tech-learn.kaion-lab.com/</id>
-  <updated>2026-11-27T12:43:43+09:00</updated>
+  <updated>2026-11-28T12:26:44+09:00</updated>
   <author><name>Tech Learning Daily</name></author>
+  <entry>
+    <title>同じ ORDER BY name なのに、なぜ手元と本番で並び順が変わるのか？</title>
+    <link href="https://tech-learn.kaion-lab.com/archive/2026-11-28.html"/>
+    <id>https://tech-learn.kaion-lab.com/archive/2026-11-28.html</id>
+    <updated>2026-11-28T12:26:44+09:00</updated>
+    <summary>文字列の並び順は DB 作成時に固定される collation が決め、C はバイト順、en_US は OS のロケール規則に従うため、環境差や OS 更新で ORDER BY とインデックスの結果が変わる。</summary>
+  </entry>
   <entry>
     <title>.gitignore に書いたのに、なぜそのファイルは git status に出続けるのか？</title>
     <link href="https://tech-learn.kaion-lab.com/archive/2026-11-27.html"/>
@@ -96,12 +103,5 @@
     <id>https://tech-learn.kaion-lab.com/archive/2026-11-15.html</id>
     <updated>2026-11-15T10:10:12+09:00</updated>
     <summary>z-index は同じスタッキングコンテキストの兄弟同士でしか比べられず、transform や opacity でも板が生まれ中身が閉じ込められる。数字を上げず、祖先の板を外すか isolation・Portal・dialog で扱う。</summary>
-  </entry>
-  <entry>
-    <title>useEffect に書いた API 呼び出しが、なぜ開発中だけ 2 回飛ぶのか？</title>
-    <link href="https://tech-learn.kaion-lab.com/archive/2026-11-14.html"/>
-    <id>https://tech-learn.kaion-lab.com/archive/2026-11-14.html</id>
-    <updated>2026-11-14T10:32:42+09:00</updated>
-    <summary>開発中に Effect が 2 回走るのは StrictMode の再マウント検査で、本番では起きない。2 回目を止めるのではなく、cleanup で接続を閉じ fetch 結果を無視するのが正しい直し方である。</summary>
   </entry>
 </feed>

@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tech Learning Daily — 同じ ORDER BY name なのに、なぜ手元と本番で並び順が変わるのか？</title>
+  <meta name="description" content="文字列の大小は DB 作成時に固定される collation が決める。C はバイト順、en_US は OS のロケール規則で、OS 更新で規則が変わればインデックスとずれる。">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Tech Learning Daily">
+  <meta property="og:title" content="Tech Learning Daily — 同じ ORDER BY name なのに、なぜ手元と本番で並び順が変わるのか？">
+  <meta property="og:description" content="文字列の大小は DB 作成時に固定される collation が決める。C はバイト順、en_US は OS のロケール規則で、OS 更新で規則が変わればインデックスとずれる。">
+  <meta property="og:url" content="https://tech-learn.kaion-lab.com/archive/2026-11-28.html">
+  <meta property="og:image" content="https://tech-learn.kaion-lab.com/og.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="stylesheet" href="../style.css">
+  <link rel="alternate" type="application/atom+xml" title="Tech Learning Daily" href="../feed.xml">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Tech Learning Daily</h1>
+      <div class="date">2026-11-28 (Sat) — 第 134 号</div>
+      <div class="tagline">AI が毎朝届ける、ソフトウェア技術の基礎解説</div>
+    </header>
+
+    <article class="article">
+      <div class="meta-bar">
+        <span class="tag tag-db">DB</span>
+        <span class="difficulty">🌿 基礎</span>
+        <span class="read-time">⏱ 約 7 分</span>
+      </div>
+      <h2 class="article-title">同じ ORDER BY name なのに、なぜ手元と本番で並び順が変わるのか？</h2>
+      <p class="lead">ユーザー一覧を <code>ORDER BY name</code> で並べ、テストも手元の画面も問題なかった。ところが本番では <code>apple</code> と <code>Banana</code> の順番が逆になっている。SQL は 1 文字も変えていないのに、結果を決めたのは誰なのだろうか。</p>
+
+      <div class="tldr">
+        <div class="box-title">🎯 3 行まとめ</div>
+        <ul>
+          <li>文字列の大小は「collation（照合順序）」という規則で決まり、Postgres では DB を作った瞬間の環境変数で既定値が固定される</li>
+          <li><code>C</code> はバイト値の順、<code>en_US.utf8</code> は OS の C ライブラリが持つ言語規則の順で、OS を上げると同じ名前の規則が変わることがある</li>
+          <li>並び順に依存する画面は <code>COLLATE</code> を明示し、規則変更後は <code>REINDEX</code> でインデックスを並べ直す</li>
+        </ul>
+      </div>
+
+      <section class="body-section">
+        <h3>文字列の「大小」は SQL ではなく規則表が決める</h3>
+        <p>数値の <code>1 &lt; 2</code> は誰が計算しても同じだが、文字列の <code>'a' &lt; 'B'</code> には唯一の正解が無い。文字コード上は <code>B</code> が 0x42、<code>a</code> が 0x61 なので <code>B</code> が先になる。一方、辞書を引く人間の感覚では大文字小文字を区別せず <code>a</code> が先だ。</p>
+        <p>この「文字列をどの順に並べるか」の規則を <strong>collation（照合順序）</strong>と呼ぶ。<code>ORDER BY</code>、<code>&lt;</code> や <code>BETWEEN</code> による比較、そして文字列列の B-tree インデックスは、すべてこの規則を通して大小を判定している。</p>
+        <p>Postgres では collation の実装元を<strong>プロバイダ</strong>と呼び、主に 3 種類ある。<code>libc</code> は OS の C ライブラリ（Linux なら glibc）が持つロケールデータに比較を任せる。<code>icu</code> は ICU というライブラリの Unicode 照合アルゴリズムを使う。Postgres 17 で追加された <code>builtin</code> は外部ライブラリに頼らず、コードポイント順で比較する。</p>
+        <pre class="diagram">
+  SELECT ... ORDER BY name
+        │
+        ▼
+ ┌──────────────────────────┐
+ │ name 列の collation は？ │
+ │ 未指定なら DB の default │
+ └────────────┬─────────────┘
+    ┌─────────┼──────────┐
+    ▼         ▼          ▼
+ ┌──────┐ ┌────────┐ ┌───────┐
+ │  C   │ │  libc  │ │  icu  │
+ │バイト│ │ glibc  │ │  ICU  │
+ │ 値順 │ │ の規則 │ │ の規則│
+ └──────┘ └────────┘ └───────┘
+  不変     OS 更新で  ICU 更新で
+          変わり得る 変わり得る</pre>
+      </section>
+
+      <section class="body-section">
+        <h3>既定の collation は DB を作った瞬間の環境変数で決まる</h3>
+        <p>アプリ側で何も指定しなければ、列の collation は DB の <code>default</code> になる。公式ドキュメントによれば、<code>initdb</code> は実行環境のロケールでクラスタを初期化し、<code>LC_ALL</code> → <code>LC_COLLATE</code> → <code>LANG</code> の順に環境変数を探す。どれも設定されていなければ <code>C</code> になる。</p>
+        <p>つまり並び順は、SQL を書いた人ではなく「DB を作った時のシェルやコンテナに何が入っていたか」で決まる。公式 Docker イメージ <code>postgres</code> の Debian 版は <code>en_US.utf8</code> で初期化されるので、手元の Docker では辞書順になる。一方で <code>LANG</code> を設定しない環境で <code>initdb</code> されたサーバーや、移行時に <code>--locale=C</code> を付けて作った DB はバイト順になる。両者で同じ SQL を流すと、冒頭の現象が起きる。</p>
+        <p>しかも <code>LC_COLLATE</code> は DB 作成後に変更できない。ドキュメントはその理由を「インデックスの並び順に影響するので、固定しておかないとテキスト列のインデックスが壊れる」と説明している。自分の DB がどちらかは次の SQL で分かる。</p>
+        <pre class="code">SELECT datname, datlocprovider, datcollate, datcollversion
+FROM pg_database WHERE datname = current_database();
+-- datlocprovider: c = libc / i = icu / b = builtin</pre>
+      </section>
+
+      <div class="analogy">
+        <div class="box-title">🍱 たとえるなら</div>
+        <p>図書館の本棚だ。棚に本を差す司書は「並べ方の規則書」に従って位置を決め、利用者は同じ規則書で棚を二分探索して本を探す。B-tree インデックスはこの棚にあたる。規則書が「大文字小文字を区別しない版」か「文字コード順の版」かで棚の並びは変わるし、規則書が途中で改訂されると、すでに差した本の位置と探し方が食い違い、棚にある本が「見つからない」ことになる。</p>
+      </div>
+
+      <section class="body-section">
+        <h3>同じ en_US.utf8 でも、OS を上げると規則が変わる</h3>
+        <p>ここで「では本番も手元も <code>en_US.utf8</code> に揃えれば安心だ」と考えたくなる。しかし実際は、同じロケール名でも中身の規則は OS 側のデータであり、OS のアップグレードで変わることがある。<code>libc</code> プロバイダは比較を glibc に丸投げしているので、glibc の規則が変われば Postgres の比較結果も変わる。</p>
+        <p>実例が 2018 年の glibc 2.28 だ。Postgres の Wiki によると、このリリースでロケールデータが大きく更新され、Debian 10・RHEL 8・Ubuntu 18.10 以降がこの新データを使う。古い OS で作った DB を新しい OS で動かすと、ディスク上の B-tree は旧規則で並んだまま、検索は新規則で行われる。その結果、存在する行が検索で見つからない、ユニーク制約をすり抜けて重複行が入る、といった壊れ方をする。</p>
+        <p>Postgres は glibc や ICU のバージョンを collation の版として記録し、使用時に OS 側の版と食い違うと <code>WARNING: ... version mismatch</code> を出す。この警告が出たら、影響を受ける <code>text</code> / <code>varchar</code> のインデックスを <code>REINDEX</code> で作り直し、その後で版の記録を更新する。順序を逆にすると、壊れたインデックスを残したまま警告だけが消える。</p>
+        <pre class="code">REINDEX INDEX CONCURRENTLY users_name_idx;
+-- DB の default collation の場合
+ALTER DATABASE app REFRESH COLLATION VERSION;
+-- 個別の collation の場合
+ALTER COLLATION "en-x-icu" REFRESH VERSION;</pre>
+        <p><code>pg_dump</code> による論理ダンプや論理レプリケーションで移行した場合は、新しい環境でインデックスが作り直されるので、この問題は起きない。問題になるのは、データディレクトリをそのまま新 OS に持っていく物理レプリカや OS のインプレース更新である。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>辞書順の DB では LIKE 'abc%' がインデックスを使えない</h3>
+        <p>collation はインデックスの効き方にも影響する。ドキュメントには「<code>C</code> 以外のロケールでは通常のインデックスを <code>LIKE</code> が使えない」とある。前方一致 <code>LIKE 'abc%'</code> をインデックスで処理するには、内部で <code>name &gt;= 'abc' AND name &lt; 'abd'</code> という範囲検索に書き換える必要がある。この書き換えはバイト順でしか成り立たない。辞書順では文字以外の記号を後回しにして比べるなど規則が複雑で、「abc で始まる文字列」が棚の 1 区間に連続して並ぶ保証が無いからだ。</p>
+        <p>前方一致を速くしたいなら、その列だけ <code>C</code> の collation でインデックスを作る。表示用の並び順は DB の default のまま残し、検索用の棚だけをバイト順で作る形になる。<code>text_pattern_ops</code> 演算子クラスでも同じ効果が得られる。</p>
+        <pre class="code">CREATE INDEX users_name_c_idx ON users (name COLLATE "C");
+-- EXPLAIN SELECT * FROM users WHERE name LIKE 'abc%';
+-- → Index Cond: (name &gt;= 'abc') AND (name &lt; 'abd')</pre>
+        <p>逆に、DB を <code>C</code> で作ればこの問題は起きず、比較も速い。その代わり <code>ORDER BY name</code> は大文字が小文字より先に並ぶので、人に見せる一覧では <code>ORDER BY name COLLATE "en-x-icu"</code> のように表示用の規則を明示することになる。</p>
+      </section>
+
+      <section class="body-section">
+        <h3>どの collation を選ぶか</h3>
+        <p>選び方は「人間向けの並び」と「OS に依存しない安定性」のどちらを優先するかで決まる。<code>C</code> と Postgres 17 以降の <code>builtin</code> は OS や外部ライブラリに依存しないので、OS を上げても並びが変わらない。ICU は言語ごとの自然な並びを提供し、どのプラットフォームでも版情報を記録できる。<code>libc</code> は新規 DB で手間なく使えるが、OS 更新時の注意が最も多い。</p>
+        <p>どれを選んでも、画面の並び順を仕様として保証したい箇所は SQL で <code>COLLATE</code> を明示すると、環境差で結果が変わらなくなる。DB 全体の default に頼るのは、「どこで作られた DB でも同じ結果になる」と言えない書き方だからだ。</p>
+      </section>
+
+      <div class="practical">
+        <div class="box-title">💼 実務でどう出会うか</div>
+        <p>典型は「CI では通るテストが手元で落ちる」ケースだ。CI の DB が <code>C</code>、手元の Docker が <code>en_US.utf8</code> だと、並び順を期待値に書いたテストは片方でしか通らない。もう一つは RDB のメジャーアップグレードや OS 移行の計画時で、物理レプリカで新 OS に切り替える手順なら、文字列インデックスの <code>REINDEX</code> を作業に組み込む必要がある。<code>LIKE '前方一致%'</code> が遅いのにインデックスが効かない、という調査も、まず <code>datcollate</code> を確認するところから始まる。</p>
+      </div>
+
+      <div class="hands-on">
+        <div class="box-title">⌨️ 手を動かす（5 分）</div>
+        <p>公式 Postgres イメージ（<code>en_US.utf8</code>）で、同じデータを default と <code>C</code> で並べ比べる。</p>
+        <pre class="code">docker run -d --name pgcol -e POSTGRES_PASSWORD=pw postgres:17
+sleep 5
+docker exec pgcol psql -U postgres \
+  -c "SELECT datcollate, datlocprovider, datcollversion FROM pg_database WHERE datname='postgres';" \
+  -c "SELECT x FROM (VALUES ('apple'),('Banana'),('cherry'),('b'),('_draft')) t(x) ORDER BY x;" \
+  -c "SELECT x FROM (VALUES ('apple'),('Banana'),('cherry'),('b'),('_draft')) t(x) ORDER BY x COLLATE \"C\";" \
+  -c "SELECT 'a' &lt; 'B' AS default_rule, 'a' &lt; 'B' COLLATE \"C\" AS c_rule;"
+docker rm -f pgcol</pre>
+        <p><code>datcollate</code> は <code>en_US.utf8</code>、<code>datcollversion</code> には glibc の版が入っている。default では <code>apple, b, Banana, cherry, _draft</code> と大文字小文字を混ぜた辞書順、<code>C</code> では <code>Banana, _draft, apple, b, cherry</code> とバイト値順になり、<code>'a' &lt; 'B'</code> の答えが <code>t</code> と <code>f</code> に分かれるはずだ。</p>
+      </div>
+
+      <div class="misconceptions">
+        <div class="box-title">🙅 よくある誤解</div>
+        <ul>
+          <li><span class="wrong">ORDER BY の結果は SQL が同じなら DB が変わっても同じ</span> — 文字列の並びは列または DB の collation が決め、DB の default は作成時の環境変数で固定される。</li>
+          <li><span class="wrong">ロケール名を en_US.utf8 に揃えれば永久に同じ並びになる</span> — <code>libc</code> の規則は OS の C ライブラリのデータなので、glibc 2.28 のように OS 更新で中身が変わり、既存インデックスとずれることがある。</li>
+          <li><span class="wrong">LIKE 'abc%' は前方一致なので普通のインデックスが必ず効く</span> — 範囲検索への書き換えはバイト順でしか成り立たず、<code>C</code> 以外の DB では <code>COLLATE "C"</code> か <code>text_pattern_ops</code> のインデックスが要る。</li>
+        </ul>
+      </div>
+
+      <div class="glossary">
+        <div class="box-title">📖 用語ミニ辞典</div>
+        <dl>
+          <dt>collation（照合順序）</dt><dd>文字列の大小・並び順を決める規則。ORDER BY・比較演算子・B-tree インデックスが従う。</dd>
+          <dt>C ロケール</dt><dd>文字列をバイト値の順に比べる規則。OS やバージョンに依存せず速いが、大文字が小文字より先に並ぶ。</dd>
+          <dt>プロバイダ</dt><dd>collation の実装元。Postgres では libc（OS の C ライブラリ）・icu・builtin がある。</dd>
+          <dt>glibc</dt><dd>多くの Linux で使われる C ライブラリ。libc プロバイダのロケール規則の出所で、2.28 で照合データが大きく変わった。</dd>
+          <dt>REINDEX</dt><dd>インデックスを現在の規則で作り直すコマンド。collation の規則が変わった後に既存インデックスを正しい並びへ戻す。</dd>
+        </dl>
+      </div>
+
+      <div class="further-reading">
+        <div class="box-title">🔗 もっと深く</div>
+        <ul>
+          <li><a href="https://www.postgresql.org/docs/current/collation.html">PostgreSQL Docs: Collation Support</a> — collation の決まり方、COLLATE 句、C・ucs_basic・unicode など標準 collation の一覧</li>
+          <li><a href="https://www.postgresql.org/docs/current/locale.html">PostgreSQL Docs: Locale Support</a> — initdb がロケールを選ぶ順序、LC_COLLATE が変更できない理由、builtin プロバイダの仕様</li>
+          <li><a href="https://wiki.postgresql.org/wiki/Locale_data_changes">PostgreSQL Wiki: Locale data changes</a> — glibc 2.28 で何が起きたか、影響を受けるインデックスを探す SQL とディストリビューション別の状況</li>
+          <li><a href="https://www.postgresql.org/docs/current/sql-altercollation.html">PostgreSQL Docs: ALTER COLLATION</a> — 版の不一致警告の読み方と、REINDEX → REFRESH VERSION の手順</li>
+        </ul>
+      </div>
+    </article>
+
+    <!-- recent:start -->
+    <!-- recent:end -->
+
+    <footer>
+      <p>Generated by Claude Code (GitHub Actions)</p>
+      <a href="./" class="archive-link">過去の記事</a>
+    </footer>
+  </div>
+</body>
+</html>
